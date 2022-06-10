@@ -1,0 +1,107 @@
+{
+  "name": "grizzly-vscode-extension",
+  "description": "Visual Studio Code extension for grizzly projects",
+  "author": "Biometria <opensource@biometria.se>",
+  "license": "MIT",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/biometria-se/grizzly-vscode"
+  },
+  "publisher": "biometria",
+  "categories": [],
+  "keywords": [
+    "grizzly",
+    "load testing",
+    "locust"
+  ],
+  "engines": {
+    "vscode": "^1.63.0"
+  },
+  "activationEvents": [
+    "onLanguage:grizzly-gherkin"
+  ],
+  "main": "./out/extension",
+  "contributes": {
+    "languages": [
+      {
+        "id": "grizzly-gherkin",
+        "aliases": [
+          "gherkin",
+          "feature"
+        ],
+        "extensions": [
+          ".feature",
+          ".grizzly"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "grizzly-gherkin",
+        "scopeName": "text.gherkin.feature",
+        "path": "./syntaxes/feature.tmLanguage"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Grizzly",
+      "properties": {
+        "grizzly.server.connection": {
+          "scope": "resource",
+          "type": "string",
+          "default": "stdio",
+          "enum": [
+            "socket",
+            "stdio"
+          ],
+          "description": "How to connect to language server, with 'socket' the server has to be started manually"
+        },
+        "grizzly.stdio.executable": {
+          "scope": "resource",
+          "type": "string",
+          "default": "grizzly-vscode-ls",
+          "description": "Language server executable"
+        },
+        "grizzly.stdio.args": {
+          "scope": "resource",
+          "type": "array",
+          "default": [],
+          "description": "Additional arguments used by the language server"
+        },
+        "grizzly.socket.host": {
+          "scope": "resource",
+          "type": "string",
+          "default": "127.0.0.1"
+        },
+        "grizzly.socket.port": {
+          "scope": "resource",
+          "type": "number",
+          "default": 4444
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -b",
+    "watch": "tsc -b -w",
+    "lint": "eslint src/ --ext .ts,.tsx",
+    "test": "sh ../scripts/client-e2e.sh"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.63.0",
+    "@types/mocha": "^9.1.0",
+    "@types/node": "^16.11.7",
+    "@typescript-eslint/eslint-plugin": "^5.19.0",
+    "@typescript-eslint/parser": "^5.19.0",
+    "@vscode/test-electron": "^2.1.2",
+    "eslint": "^8.13.0",
+    "mocha": "^9.2.1",
+    "typescript": "^4.7.2"
+  }
+}

@@ -1,65 +1,38 @@
-# grizzly README
+# grizzly-vscode
 
-This is the README for your extension "grizzly". After writing up a brief description, we recommend including the following sections.
+> **NOTE**: This project is currently in development, nothing has been published to the vscode extension marketplace or on pypi
 
-## Features
+This repository contains the `biometria.grizzly-vscode` (vscode extension marketplace) extension and the `grizzly-vscode-ls` (pypi) source code.
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+An extension makes it easier to develop load test scenarios with [`grizzly`](https://biometria-se.github.io) when you have auto-complete on step implementation expressions.
 
-For example if there is an image subfolder under your extension project workspace:
+Goals:
+- [x] syntax highlighting
+- [ ] auto-complete
+- [ ] ...
 
-\!\[feature X\]\(images/feature-x.png\)
+## Development
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+### Environments
+#### Devcontainer
 
-## Requirements
+Install Visual Studio Code and the "Remote - Containers" extension and open the project in the provided devcontainer.
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+#### Locally
 
-## Extension Settings
+- Create a python virtual environment: `python3 -m venv <path>/grizzly-vscode`
+- Activate the virtual environment: `source <path>/grizzly-vscode/bin/activate`
+- Run `scripts/install.sh`
+- Start `code`
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+## Debug extension
 
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: enable/disable this extension
-* `myExtension.thing`: set to `blah` to do something
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
------------------------------------------------------------------------------------------------------------
-
-## Working with Markdown
-
-**Note:** You can author your README using Visual Studio Code.  Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux)
-* Toggle preview (`Shift+CMD+V` on macOS or `Shift+Ctrl+V` on Windows and Linux)
-* Press `Ctrl+Space` (Windows, Linux) or `Cmd+Space` (macOS) to see a list of Markdown snippets
-
-### For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+- Start server with `grizzly-vscode-ls --server --verbose`
+- Press Ctrl+Shift+B to start compiling the client and server in [watch mode](https://code.visualstudio.com/docs/editor/tasks#:~:text=The%20first%20entry%20executes,the%20HelloWorld.js%20file.).
+- Switch to the Run and Debug View in the Sidebar (Ctrl+Shift+D).
+- Select `Launch Client` from the drop down (if it is not already).
+- Press ▷ to run the launch config (F5).
+- In the [Extension Development Host](https://code.visualstudio.com/api/get-started/your-first-extension#:~:text=Then%2C%20inside%20the%20editor%2C%20press%20F5.%20This%20will%20compile%20and%20run%20the%20extension%20in%20a%20new%20Extension%20Development%20Host%20window.) instance of VSCode
+  - Open directory `tests/project`
+  - Open file `features/project.feature`
+  - Watch console output where you started `grizzly-vscode-ls`

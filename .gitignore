@@ -1,2 +1,7 @@
-node_modules
-*.vsix
+**/node_modules
+**/*.vsix
+**/build
+**/out
+**/*.egg-info
+**/*.log
+**/*.pyc
