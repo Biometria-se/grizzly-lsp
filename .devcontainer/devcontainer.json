@@ -21,6 +21,10 @@
     "python.linting.pylintEnabled": true,
     "python.formatting.autopep8Path": "/usr/local/py-utils/bin/autopep8",
     "python.formatting.blackPath": "black",
+    "python.formatting.blackArgs": [
+      "--skip-string-normalization",
+      "--config ${containerWorkspaceFolder}/server/pyproject.toml"
+    ],
     "python.formatting.yapfPath": "/usr/local/py-utils/bin/yapf",
     "python.linting.banditPath": "/usr/local/py-utils/bin/bandit",
     "python.linting.flake8Path": "flake8",
