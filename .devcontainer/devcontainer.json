@@ -19,28 +19,20 @@
     "python.languageServer": "Pylance",
     "python.linting.enabled": true,
     "python.linting.pylintEnabled": true,
-    "python.formatting.autopep8Path": "/usr/local/py-utils/bin/autopep8",
+    "python.formatting.provider": "black",
     "python.formatting.blackPath": "black",
     "python.formatting.blackArgs": [
-      "--skip-string-normalization",
-      "--config ${containerWorkspaceFolder}/server/pyproject.toml"
+      "--config=/workspaces/grizzly-vscode/server/pyproject.toml",
+      "-S",
+      "-l 180"
     ],
-    "python.formatting.yapfPath": "/usr/local/py-utils/bin/yapf",
-    "python.linting.banditPath": "/usr/local/py-utils/bin/bandit",
     "python.linting.flake8Path": "flake8",
     "python.linting.mypyPath": "mypy",
-    "python.linting.pycodestylePath": "/usr/local/py-utils/bin/pycodestyle",
-    "python.linting.pydocstylePath": "/usr/local/py-utils/bin/pydocstyle",
     "python.linting.pylintPath": "pylint",
     "python.linting.pylintArgs": [
       "--rcfile=${containerWorkspaceFolder}/server/pyproject.toml"
     ],
-    "editor.formatOnSave": true,
-    "python.analysis.typeCheckingMode": "strict",
-    "python.analysis.stubPath": "server/typings",
-    "python.analysis.diagnosticSeverityOverrides": {
-      "reportUnusedFunction": "none"
-    }
+    "editor.formatOnSave": true
   },
   // Add the IDs of extensions you want installed when the container is created.
   "extensions": [

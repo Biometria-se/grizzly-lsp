@@ -66,3 +66,4 @@ output-format = 'text'
 
 [tool.black]
 line-lenght = 180
+skip-string-normalization = true

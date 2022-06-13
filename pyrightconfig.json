@@ -1,5 +1,7 @@
 {
+  "typeCheckingMode": "strict",
   "exclude": [
     "tests/project"
-  ]
+  ],
+  "reportUnusedFunction": "none"
 }
