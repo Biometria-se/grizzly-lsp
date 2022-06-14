@@ -15,7 +15,7 @@ def parse_arguments() -> argparse.Namespace:
         action='store_true',
         required=False,
         default=False,
-        help='run server in socket mode'
+        help='run server in socket mode',
     )
 
     parser.add_argument(
@@ -31,7 +31,7 @@ def parse_arguments() -> argparse.Namespace:
         action='store_true',
         required=False,
         default=False,
-        help='verbose output from server'
+        help='verbose output from server',
     )
 
     return parser.parse_args()

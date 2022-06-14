@@ -1,5 +1,8 @@
 {
+  "typeCheckingMode": "strict",
   "exclude": [
     "tests/project"
-  ]
+  ],
+  "reportUnusedFunction": "none",
+  "stubPath": "server/types"
 }
