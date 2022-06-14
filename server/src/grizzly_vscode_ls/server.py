@@ -9,6 +9,7 @@ from behave.matchers import ParseMatcher
 from pip._internal.cli.main import main as pipmain
 from venv import create as venv_create
 from tempfile import gettempdir
+from difflib import get_close_matches
 
 from pygls.server import LanguageServer
 from pygls.lsp.methods import (
@@ -38,14 +39,13 @@ class GrizzlyLanguageServer(LanguageServer):
 
     steps: Dict[str, List[str]]
     keywords: List[str]
+    keywords_once: List[str] = ['Feature', 'Background']
 
     def __init__(self, *args: Tuple[Any, ...], **kwargs: Dict[str, Any]) -> None:
         super().__init__(*args, **kwargs)  # type: ignore
 
         @self.feature(INITIALIZE)
         def initialize(params: InitializeParams) -> None:
-            self.logger.info(f'initialize got: {params}')
-
             assert params.root_path is not None, 'no root_path received from client'
 
             root_path = Path(params.root_path)
@@ -53,12 +53,12 @@ class GrizzlyLanguageServer(LanguageServer):
 
             virtual_environment = Path(gettempdir()) / f'grizzly-vscode-{project_name}'
 
-            self.logger.info(f'looking for venv at {virtual_environment}')
+            self.logger.debug(f'looking for venv at {virtual_environment}')
 
             has_venv = virtual_environment.exists()
 
             if not has_venv:
-                self.logger.info(f'creating virtual environment: {virtual_environment}')
+                self.logger.debug(f'creating virtual environment: {virtual_environment}')
                 venv_create(str(virtual_environment))
 
             if platform.system() == 'Windows':
@@ -77,7 +77,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
             if not has_venv:
                 requirements_file = root_path / 'requirements.txt'
-                self.logger.info(f'installing {requirements_file}')
+                self.logger.debug(f'installing {requirements_file}')
                 pipmain(['install', '-r', str(requirements_file)])
 
             self._make_step_registry(root_path / 'features' / 'steps')
@@ -117,28 +117,51 @@ class GrizzlyLanguageServer(LanguageServer):
             line = self._current_line(params.text_document.uri, params.position)
 
             if len(line.strip()) > 0:
-                keyword, step = line.strip().split(' ', 1)
-                keyword = keyword.strip().lower()
+                try:
+                    keyword, step = line.strip().split(' ', 1)
+                except ValueError:
+                    keyword = line
+                    step = None
+                keyword = keyword.strip()
             else:
                 keyword, step = None, None
 
             items: List[CompletionItem] = []
 
+            document = self.workspace.get_document(params.text_document.uri)
+
+            self.logger.debug(f'{keyword=}, {step=}, {self.keywords=}')
+
+            if keyword == 'And':  # And is an alias for Given, can only be used if preceeded by And or Given
+                keyword = 'Given'
+
             if keyword is None or keyword not in self.keywords:
-                self.logger.info(self.keywords)
+                keywords = self.keywords.copy()
+                for keyword_once in self.keywords_once:
+                    if f'{keyword_once}:' not in document.source:
+                        keywords.append(keyword_once)
+
                 items = list(
                     map(
                         lambda k: CompletionItem(
                             label=k,
                             kind=CompletionItemKind.Keyword,
                         ),
-                        self.keywords,
+                        keywords,
                     )
                 )
-            else:
-                steps = self.steps.get(keyword, [])
+            elif keyword is not None:
+                steps = self.steps.get(keyword.lower(), [])
 
-            self.logger.info(f'{line=}')
+                matched_steps: List[str]
+
+                if step is None:
+                    matched_steps = steps
+                else:
+                    matched_steps = get_close_matches(step, steps, len(steps), 0)
+                    self.logger.debug(f'{matched_steps=}')
+
+                items = list(map(lambda s: CompletionItem(label=s, kind=CompletionItemKind.Function), matched_steps))
 
             return CompletionList(
                 is_incomplete=False,
@@ -160,7 +183,7 @@ class GrizzlyLanguageServer(LanguageServer):
         self.logger.info(self.steps)
 
     def _make_keyword_registry(self) -> None:
-        self.keywords = ['Feature', 'Scenario', 'Background']
+        self.keywords = ['Scenario', 'And']
 
         language_en = languages.get('en', {})
         for keyword in self.steps.keys():
