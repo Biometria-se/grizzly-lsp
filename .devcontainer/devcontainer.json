@@ -17,6 +17,9 @@
   "settings": {
     "python.pythonPath": "/usr/local/bin/python",
     "python.languageServer": "Pylance",
+    "python.analysis.diagnosticSeverityOverrides": {
+      "reportUnusedFunction": "none"
+    },
     "python.linting.enabled": true,
     "python.linting.pylintEnabled": true,
     "python.formatting.provider": "black",
@@ -32,7 +35,17 @@
     "python.linting.pylintArgs": [
       "--rcfile=${containerWorkspaceFolder}/server/pyproject.toml"
     ],
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "python.testing.pytestArgs": [
+      "-o testpaths=tests",
+      "--cov=src/grizzly_vscode_ls",
+      "--cov-report=xml:coverage.xml",
+      "."
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "coverage-gutters.xmlname": "coverage.xml",
+    "coverage-gutters.ignoredPathGlobs": "**/{node_modules,venv,.venv,vendor,tests}/**"
   },
   // Add the IDs of extensions you want installed when the container is created.
   "extensions": [
@@ -40,7 +53,8 @@
     "ms-python.vscode-pylance",
     "EditorConfig.EditorConfig",
     "oderwat.indent-rainbow",
-    "eamodio.gitlens"
+    "eamodio.gitlens",
+    "ryanluker.vscode-coverage-gutters"
   ],
   "mounts": [
     "source=/etc/timezone,target=/etc/timezone,type=bind",

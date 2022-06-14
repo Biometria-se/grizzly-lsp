@@ -5,3 +5,7 @@
 **/*.egg-info
 **/*.log
 **/*.pyc
+**/__pycache__
+**/.pytest_cache
+**/.coverage*
+server/src/grizzly_vscode_ls/__version__.py

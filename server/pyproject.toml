@@ -1,5 +1,5 @@
 [build-system]
-requires = ['setuptools', 'setuptools-scm']
+requires = ['setuptools', 'setuptools-scm', 'wheel']
 build-backend = 'setuptools.build_meta'
 
 [project]
@@ -16,10 +16,34 @@ grizzly-vscode-ls = 'grizzly_vscode_ls.__main__:main'
 [project.optional-dependencies]
 dev = [
     'pytest',
+    'pytest-mock',
+    'pytest-cov',
     'pylint',
     'flake8',
     'black',
     'mypy'
+]
+
+ci = [
+    'build',
+    'twine'
+]
+
+[tool.setuptools_scm]
+write_to = "server/src/grizzly_vscode_ls/__version__.py"
+root = ".."
+relative_to = "pyproject.toml"
+
+[tool.pytest]
+addopts = [
+    "--cov=src/grizzly_vscode_ls",
+    "--cov-report=xml:coverage.xml",
+    "--no-cov-on-fail"
+]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:The distutils.*is deprecated.*:DeprecationWarning"
 ]
 
 [tool.pylint.master]

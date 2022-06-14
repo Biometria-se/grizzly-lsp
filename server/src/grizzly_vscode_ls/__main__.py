@@ -34,7 +34,24 @@ def parse_arguments() -> argparse.Namespace:
         help='verbose output from server',
     )
 
-    return parser.parse_args()
+    parser.add_argument(
+        '--version',
+        action='store_true',
+        required=False,
+        default=False,
+        help='print version and exit',
+    )
+
+    args = parser.parse_args()
+
+    if args.version:
+        from .__version__ import version
+
+        print(version, file=sys.stderr)
+
+        raise SystemExit(0)
+
+    return args
 
 
 def setup_logging(args: argparse.Namespace) -> None:
