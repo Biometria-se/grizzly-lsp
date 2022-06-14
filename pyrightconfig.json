@@ -3,5 +3,6 @@
   "exclude": [
     "tests/project"
   ],
-  "reportUnusedFunction": "none"
+  "reportUnusedFunction": "none",
+  "stubPath": "server/types"
 }

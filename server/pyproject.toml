@@ -5,7 +5,8 @@ build-backend = 'setuptools.build_meta'
 [project]
 name = 'grizzly-vscode-ls'
 dependencies = [
-    'pygls'
+    'pygls',
+    'behave'
 ]
 dynamic = ['version']
 
