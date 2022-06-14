@@ -6,10 +6,21 @@ This repository contains the `biometria.grizzly-vscode` (vscode extension market
 
 An extension makes it easier to develop load test scenarios with [`grizzly`](https://biometria-se.github.io) when you have auto-complete on step implementation expressions.
 
+![Screenshot of keyword auto-complete](./assets/images/screenshot-auto-complete-keywords.png)
+
+![Screenshot of step expressions auto-complete](./assets/images/screenshot-auto-complete-step-expressions.png)
+
+
 Goals:
 - [x] syntax highlighting
-- [ ] auto-complete
-- [ ] ...
+- [x] auto-complete
+- [ ] CI workflows
+- [ ] unit tests
+    - [ ] `client/`
+    - [ ] `server/`
+- [ ] release
+    - `client/` on Visual Studio Code Marketplace
+    - `server/` on pypi.org
 
 ## Development
 
@@ -27,7 +38,7 @@ Install Visual Studio Code and the "Remote - Containers" extension and open the 
 
 ## Debug extension
 
-- Start server with `grizzly-vscode-ls --server --verbose`
+- Start server with `grizzly-vscode-ls --socket --verbose`
 - Press Ctrl+Shift+B to start compiling the client and server in [watch mode](https://code.visualstudio.com/docs/editor/tasks#:~:text=The%20first%20entry%20executes,the%20HelloWorld.js%20file.).
 - Switch to the Run and Debug View in the Sidebar (Ctrl+Shift+D).
 - Select `Launch Client` from the drop down (if it is not already).
