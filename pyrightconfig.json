@@ -1,8 +1,8 @@
 {
   "typeCheckingMode": "strict",
   "exclude": [
-    "tests/project"
+    "grizzly-ls/tests/project"
   ],
   "reportUnusedFunction": "none",
-  "stubPath": "server/types"
+  "stubPath": "grizzly-ls/types"
 }

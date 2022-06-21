@@ -84,5 +84,5 @@ def main() -> NoReturn:  # type: ignore
         server.start_tcp('127.0.0.1', args.socket_port)  # type: ignore
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     sys.exit(main())

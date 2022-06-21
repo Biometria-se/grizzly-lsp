@@ -40,9 +40,31 @@ class GrizzlyLanguageServer(LanguageServer):
     steps: Dict[str, List[str]]
     keywords: List[str]
     keywords_once: List[str] = ['Feature', 'Background']
+    keyword_alias: Dict[str, str] = {
+        'But': 'Then',
+        'And': 'Given',
+    }
 
     def __init__(self, *args: Tuple[Any, ...], **kwargs: Dict[str, Any]) -> None:
         super().__init__(*args, **kwargs)  # type: ignore
+
+        self.steps = {}
+        self.keywords = []
+
+        from inspect import getmembers, ismethod
+
+        for method_name, method in getmembers(self, predicate=ismethod):
+            if method_name.startswith('_'):
+                continue
+
+            feature_type = getattr(method, '__feature_type__', None)
+            if feature_type is None:
+                continue
+
+            feature_options = getattr(method, '__feature_options__', None)
+
+            self.feature(feature_type, feature_options)(staticmethod(method))
+
 
         @self.feature(INITIALIZE)
         def initialize(params: InitializeParams) -> None:
@@ -132,8 +154,8 @@ class GrizzlyLanguageServer(LanguageServer):
 
             self.logger.debug(f'{keyword=}, {step=}, {self.keywords=}')
 
-            if keyword == 'And':  # And is an alias for Given, can only be used if preceeded by And or Given
-                keyword = 'Given'
+            if keyword is not None:
+                keyword = self.keyword_alias.get(keyword, keyword)
 
             if keyword is None or keyword not in self.keywords:
                 keywords = self.keywords.copy()
@@ -171,7 +193,7 @@ class GrizzlyLanguageServer(LanguageServer):
     def _make_step_registry(self, step_path: Path) -> None:
         load_step_modules([str(step_path)])
 
-        self.steps: Dict[str, List[str]] = {}
+        self.steps = {}
         registry_steps: Dict[str, List[ParseMatcher]] = registry.steps
 
         def get_pattern(step: ParseMatcher) -> str:
@@ -180,10 +202,10 @@ class GrizzlyLanguageServer(LanguageServer):
         for keyword, steps in registry_steps.items():
             self.steps.update({keyword: list(map(get_pattern, steps))})
 
-        self.logger.info(self.steps)
+        self.logger.debug(self.steps)
 
     def _make_keyword_registry(self) -> None:
-        self.keywords = ['Scenario', 'And']
+        self.keywords = ['Scenario'] + list(self.keyword_alias.keys())
 
         language_en = languages.get('en', {})
         for keyword in self.steps.keys():

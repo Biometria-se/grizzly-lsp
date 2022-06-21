@@ -22,7 +22,8 @@ dev = [
     'pylint',
     'flake8',
     'black',
-    'mypy'
+    'mypy',
+    'grizzly-loadtester'
 ]
 
 ci = [
@@ -47,6 +48,8 @@ addopts = [
 ]
 filterwarnings = [
     "ignore:The distutils.*is deprecated.*:DeprecationWarning",
+    "ignore:There is no current event loop.*:DeprecationWarning",
+    "ignore:.*:gevent.monkey.MonkeyPatchWarning"
 ]
 
 [tool.pylint.master]
