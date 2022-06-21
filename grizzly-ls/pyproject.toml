@@ -3,7 +3,7 @@ requires = ['setuptools', 'setuptools-scm', 'wheel']
 build-backend = 'setuptools.build_meta'
 
 [project]
-name = 'grizzly-vscode-ls'
+name = 'grizzly-ls'
 dependencies = [
     'pygls',
     'behave'
@@ -11,13 +11,14 @@ dependencies = [
 dynamic = ['version']
 
 [project.scripts]
-grizzly-vscode-ls = 'grizzly_vscode_ls.__main__:main'
+grizzly-ls = 'grizzly_ls.__main__:main'
 
 [project.optional-dependencies]
 dev = [
     'pytest',
     'pytest-mock',
     'pytest-cov',
+    'coverage[toml]',
     'pylint',
     'flake8',
     'black',
@@ -30,20 +31,22 @@ ci = [
 ]
 
 [tool.setuptools_scm]
-write_to = "server/src/grizzly_vscode_ls/__version__.py"
+write_to = "grizzly-ls/src/grizzly_ls/__version__.py"
 root = ".."
 relative_to = "pyproject.toml"
 
-[tool.pytest]
+[tool.pytest.ini_options]
 addopts = [
-    "--cov=src/grizzly_vscode_ls",
-    "--cov-report=xml:coverage.xml",
+    "--rootdir=grizzly-ls/",
+    "-o", "testpaths=tests",
+    "-c", "grizzly-ls/pyproject.toml",
+    "--cov-reset",
+    "--cov=grizzly-ls/src/grizzly_ls",
+    "--cov-report=xml:grizzly-ls/.coverage.xml",
     "--no-cov-on-fail"
 ]
-
-[tool.pytest.ini_options]
 filterwarnings = [
-    "ignore:The distutils.*is deprecated.*:DeprecationWarning"
+    "ignore:The distutils.*is deprecated.*:DeprecationWarning",
 ]
 
 [tool.pylint.master]

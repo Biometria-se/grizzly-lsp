@@ -8,7 +8,7 @@ from .server import GrizzlyLanguageServer
 
 
 def parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog='grizzly-vscode-ls')
+    parser = argparse.ArgumentParser(prog='grizzly-ls')
 
     parser.add_argument(
         '--socket',
@@ -59,8 +59,8 @@ def setup_logging(args: argparse.Namespace) -> None:
     level = logging.INFO if not args.verbose else logging.DEBUG
 
     if not args.socket:
-        if level > logging.INFO:
-            handlers = [logging.FileHandler('grizzly-vscode-ls.log')]
+        if level < logging.INFO:
+            handlers = [logging.FileHandler('grizzly-ls.log')]
     else:
         handlers = [logging.StreamHandler(sys.stderr)]
 

@@ -51,7 +51,7 @@ class GrizzlyLanguageServer(LanguageServer):
             root_path = Path(params.root_path)
             project_name = root_path.stem
 
-            virtual_environment = Path(gettempdir()) / f'grizzly-vscode-{project_name}'
+            virtual_environment = Path(gettempdir()) / f'grizzly-ls-{project_name}'
 
             self.logger.debug(f'looking for venv at {virtual_environment}')
 

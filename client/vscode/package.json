@@ -1,12 +1,12 @@
 {
-  "name": "grizzly-vscode-extension",
+  "name": "grizzly-vscode",
   "description": "Visual Studio Code extension for grizzly projects",
   "author": "Biometria <opensource@biometria.se>",
   "license": "MIT",
   "version": "0.0.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/biometria-se/grizzly-vscode"
+    "url": "https://github.com/biometria-se/grizzly-lsp"
   },
   "publisher": "biometria",
   "categories": [],
@@ -61,7 +61,7 @@
         "grizzly.stdio.executable": {
           "scope": "resource",
           "type": "string",
-          "default": "grizzly-vscode-ls",
+          "default": "grizzly-ls",
           "description": "Language server executable"
         },
         "grizzly.stdio.args": {

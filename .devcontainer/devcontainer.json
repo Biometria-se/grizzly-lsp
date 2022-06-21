@@ -25,7 +25,7 @@
     "python.formatting.provider": "black",
     "python.formatting.blackPath": "black",
     "python.formatting.blackArgs": [
-      "--config=/workspaces/grizzly-vscode/server/pyproject.toml",
+      "--config=/workspaces/grizzly-vscode/grizzly-ls/pyproject.toml",
       "-S",
       "-l 180"
     ],
@@ -33,18 +33,26 @@
     "python.linting.mypyPath": "mypy",
     "python.linting.pylintPath": "pylint",
     "python.linting.pylintArgs": [
-      "--rcfile=${containerWorkspaceFolder}/server/pyproject.toml"
+      "--rcfile=${containerWorkspaceFolder}/grizzly-ls/pyproject.toml"
     ],
     "editor.formatOnSave": true,
+    "python.testing.cwd": "./grizzly-ls",
     "python.testing.pytestArgs": [
-      "-o testpaths=tests",
-      "--cov=src/grizzly_vscode_ls",
-      "--cov-report=xml:coverage.xml",
+      "-c",
+      "./pyproject.toml",
+      "-o",
+      "testpaths=tests",
+      "--cov-reset",
+      "--cov=./src/grizzly_ls",
+      "--cov-report=xml:./.coverage.xml",
       "."
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
-    "coverage-gutters.xmlname": "coverage.xml",
+    "coverage-gutters.coverageFileNames": [],
+    "coverage-gutters.manualCoverageFilePaths": [
+      "${containerWorkspaceFolder}/grizzly-ls/.coverage.xml"
+    ],
     "coverage-gutters.ignoredPathGlobs": "**/{node_modules,venv,.venv,vendor,tests}/**"
   },
   // Add the IDs of extensions you want installed when the container is created.
@@ -64,7 +72,7 @@
     "--add-host=host.docker.internal:host-gateway"
   ],
   "containerEnv": {
-    "PYTHONPATH": "${containerWorkspaceFolder}/server/src"
+    "PYTHONPATH": "${containerWorkspaceFolder}/grizzly-ls/src"
   },
   "remoteEnv": {
     "PATH": "${containerEnv:PATH}:${containerWorkspaceFolder}/client/node_modules/.bin"
