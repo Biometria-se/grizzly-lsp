@@ -18,6 +18,7 @@ dev = [
     'pytest',
     'pytest-mock',
     'pytest-cov',
+    'pytest-timeout',
     'coverage[toml]',
     'pylint',
     'flake8',
@@ -37,6 +38,7 @@ root = ".."
 relative_to = "pyproject.toml"
 
 [tool.pytest.ini_options]
+timeout = 10
 addopts = [
     "--rootdir=grizzly-ls/",
     "-o", "testpaths=tests",
@@ -48,8 +50,7 @@ addopts = [
 ]
 filterwarnings = [
     "ignore:The distutils.*is deprecated.*:DeprecationWarning",
-    "ignore:There is no current event loop.*:DeprecationWarning",
-    "ignore:.*:gevent.monkey.MonkeyPatchWarning"
+    "ignore:There is no current event loop.*:DeprecationWarning"
 ]
 
 [tool.pylint.master]
