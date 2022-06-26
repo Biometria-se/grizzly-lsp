@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+import inspect
 import logging
 import platform
 import warnings
@@ -7,15 +7,16 @@ import re
 
 from os import environ
 from os.path import pathsep
-from typing import Any, Tuple, Dict, List
+from typing import Any, Tuple, Dict, List, Union, Optional
 from types import FrameType
 from pathlib import Path
 from behave.matchers import ParseMatcher
 from pip._internal.cli.main import main as pipmain
 from venv import create as venv_create
 from tempfile import gettempdir
-from difflib import get_close_matches
+from difflib import get_close_matches, SequenceMatcher
 from urllib.parse import urlparse, unquote
+from importlib import import_module
 
 import gevent.monkey  # type: ignore
 
@@ -38,11 +39,15 @@ from behave.runner_util import load_step_modules
 from behave.step_registry import registry
 from behave.i18n import languages
 
+from .text import RegexPermutationResolver, normalize_variables
+
+
 
 class GrizzlyLanguageServer(LanguageServer):
     logger: logging.Logger = logging.getLogger(__name__)
 
     steps: Dict[str, List[str]]
+    custom_types: Dict[str, List[str]]
     keywords: List[str]
     keywords_once: List[str] = ['Feature', 'Background']
     keyword_alias: Dict[str, str] = {
@@ -50,10 +55,14 @@ class GrizzlyLanguageServer(LanguageServer):
         'And': 'Given',
     }
 
+    def show_message(self, message: str, msg_type: Optional[MessageType] = MessageType.Info) -> None:
+        super().show_message(message, msg_type=msg_type)  # type: ignore
+
     def __init__(self, *args: Tuple[Any, ...], **kwargs: Dict[str, Any]) -> None:
         super().__init__(*args, **kwargs)  # type: ignore
 
         self.steps = {}
+        self.custom_types = {}
         self.keywords = []
 
         # monkey patch functions to short-circuit them (causes problems in this context)
@@ -82,6 +91,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
             if not has_venv:
                 self.logger.debug(f'creating virtual environment: {virtual_environment}')
+                self.show_message(f'creating virtual environment for language server, this could take a while')
                 venv_create(str(virtual_environment))
 
             if platform.system() == 'Windows':  # pragma: no cover
@@ -113,18 +123,22 @@ class GrizzlyLanguageServer(LanguageServer):
                 total_steps += len(steps)
             message = f'found {total_steps} steps in grizzly project {project_name}'
             self.logger.debug(message)
-            self.show_message(message)  # type: ignore
+            self.show_message(message)
 
             self._make_keyword_registry()
             message = f'found {len(self.keywords)} keywords in behave'
             self.logger.debug(message)
-            self.show_message(message)  # type: ignore
+            self.show_message(message)
             
         @self.feature(COMPLETION)
         def completion(params: CompletionParams) -> CompletionList:
             assert self.steps is not None, 'no steps in inventory'
 
             line = self._current_line(params.text_document.uri, params.position)
+
+            line = re.sub(r'"[^"]"', '""', line)
+
+            self.logger.debug(f'{line=}')
 
             if len(line.strip()) > 0:
                 try:
@@ -172,8 +186,11 @@ class GrizzlyLanguageServer(LanguageServer):
                 if step is None:
                     matched_steps = steps
                 else:
-                    matched_steps = get_close_matches(step, steps, len(steps), 0)
-                    self.logger.debug(f'{matched_steps=}')
+                    matched_steps = get_close_matches(step, steps, len(steps), 0.2)
+                    self.logger.debug(f'{step=}')
+                    for matched_step in matched_steps:
+                        score = SequenceMatcher(None, step, matched_step).ratio()
+                        self.logger.debug(f'\t{matched_step=} {score=}')
 
                 items = list(map(lambda s: CompletionItem(label=s, kind=CompletionItemKind.Function), matched_steps))
 
@@ -182,74 +199,21 @@ class GrizzlyLanguageServer(LanguageServer):
                 items=items,
             )
 
-    def _get_step_expressions(self, step: ParseMatcher) -> List[str]:
-        pattern = step.pattern
-        patterns: List[str] = []
+    def _normalize_step_expression(self, step: Union[ParseMatcher, str]) -> List[str]:
+        if isinstance(step, ParseMatcher):
+            pattern = step.pattern
+        else:
+            pattern = step
 
-        # replace all non typed variables first, will only result in 1 step
-        regex = r'\{[^\}:]*\}'
-        has_matches = re.search(regex, pattern)
-        if has_matches:
-            matches = re.finditer(regex, pattern)
-            for match in matches:
-                pattern = pattern.replace(match.group(0), '')
+        patterns, errors = normalize_variables(pattern, self.custom_types)
 
-        # replace all typed variables, can result in more than 1 step
-        typed_regex = r'\{[^:]*:([^\}]*)\}'
-
-        @dataclass
-        class Replacement:
-            variations: bool = field(default=False)
-            replacements: List[str] = field(default_factory=list)
-
-        has_typed_matches = re.search(typed_regex, pattern)
-        if has_typed_matches:
-            typed_matches = re.finditer(typed_regex, pattern)
-            replacement_map: Dict[str, Replacement] = {}
-            for match in typed_matches:
-                variable = match.group(0)
-                variable_type = match.group(1)
-
-                if len(variable_type) == 1:  # native types
-                    replacement_map.update({variable: Replacement(variations=False, replacements=[''])})
-                elif variable_type == 'UserGramaticalNumber':
-                    replacement_map.update({variable: Replacement(variations=False, replacements=['user', 'users'])})
-                elif variable_type == 'MessageDirection':
-                    replacement_map.update({variable: Replacement(variations=True, replacements=['client', 'server'])})
-                elif variable_type == 'IterationGramaticalNumber':
-                    replacement_map.update({variable: Replacement(variations=False, replacements=['iteration', 'iterations'])})
-                elif variable_type == 'Direction':
-                    replacement_map.update({variable: Replacement(variations=True, replacements=['to', 'from'])})
-                elif variable_type == 'ResponseTarget':
-                    replacement_map.update({variable: Replacement(variations=False, replacements=['metadata', 'payload'])})
-                elif variable_type == 'Condition':
-                    replacement_map.update({variable: Replacement(variations=False, replacements=['is', 'is not'])})
-                elif variable_type in ['ContentType', 'TransformerContentType']:
-                    replacement_map.update({variable: Replacement(variations=False, replacements=[''])})
-                elif variable_type == 'Method':
-                    replacement_map.update({variable: Replacement(variations=False, replacements=['send', 'post', 'put', 'receive', 'get'])})
-                else:
-                    message = f'unhandled type: {variable=}, {variable_type=}'
-                    self.show_message(message, msg_type=MessageType.Error)  # type: ignore
-                    self.logger.error(message)
-
-            for variable, rule in replacement_map.items():
-                for replacement in rule.replacements:
-                    args = (variable, replacement,)
-                    if rule.variations:
-                        args += (1, )
-
-                    pattern = pattern.replace(*args)  # type: ignore
-
-            patterns.append(pattern) 
-
-        # no variables in step, just add it
-        if not has_matches and not has_typed_matches:
-            patterns.append(pattern)
-        elif len(patterns) > 0:
-            print(patterns)
+        if len(errors) > 0:
+            for message in errors:
+                self.show_message(message, msg_type=MessageType.Error)
+                self.logger.error(message)
 
         return patterns
+
 
     def _make_step_registry(self, step_path: Path) -> None:
         self.logger.debug(f'loading step modules from {step_path}...')
@@ -262,17 +226,42 @@ class GrizzlyLanguageServer(LanguageServer):
         self.steps = {}
         registry_steps: Dict[str, List[ParseMatcher]] = registry.steps
 
+        for custom_type, func in ParseMatcher.custom_types.items():
+            func_code = [line for line in inspect.getsource(func).strip().split('\n') if not line.strip().startswith('@classmethod')]
+
+            if func_code[0].startswith('@parse.with_pattern'):
+                match = re.match(r'@parse.with_pattern\(r\'\(([^\']*)\)\'', func_code[0])
+                if match:
+                    pattern = match.group(1)
+                    self.custom_types.update({custom_type: RegexPermutationResolver.resolve(pattern)})
+            elif 'from_string(' in func_code[-1] or 'from_string(' in func_code[0]:
+                enum_name: str
+
+                match = re.match(r'return ([^\.]*)\.from_string\(', func_code[-1].strip())
+                if match:
+                    enum_name = match.group(1)
+                    module = import_module('grizzly.types')
+                else:
+                    match = re.match(r'def from_string.*?->\s+\'?([^:\']*)\'?:', func_code[0].strip())
+                    if match:
+                        enum_name = match.group(1)
+                        module = inspect.getmodule(func)
+                    else:
+                        raise ValueError(f'could not find a from_string method for custom type {custom_type}')
+
+                enum_class = getattr(module, enum_name)
+                self.custom_types.update({custom_type: [value.name.lower() for value in enum_class]})
+            else:
+                message = f'cannot infere what {func} will return for {custom_type}'
+                self.logger.error(message)
+                self.show_message(message, msg_type=MessageType.Error) 
+
         for keyword, steps in registry_steps.items():
             normalized_steps: List[str] = []
             for step in steps:
-                normalized_steps += self._get_step_expressions(step)
+                normalized_steps += self._normalize_step_expression(step)
 
             self.steps.update({keyword: normalized_steps})
-
-            for keyword, steps in self.steps.items():
-                print(f'{keyword=}')
-                for step in steps:
-                    print('\t' + step)
 
         self.logger.debug(self.steps)
 

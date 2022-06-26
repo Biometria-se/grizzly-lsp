@@ -51,7 +51,7 @@ class TestGrizzlyLanguageServer:
         assert isinstance(server.logger, logging.Logger)
         assert server.logger.name == 'grizzly_ls.server'
 
-    def test__get_step_expressions(self, mocker: MockerFixture) -> None:
+    def test__normalize_step_expression(self, mocker: MockerFixture, caplog: LogCaptureFixture) -> None:
         mocker.patch('parse.Parser.__init__', return_value=None)
         server = GrizzlyLanguageServer()
 
@@ -61,26 +61,97 @@ class TestGrizzlyLanguageServer:
 
         step = ParseMatcher(noop, 'hello world')
 
-        assert server._get_step_expressions(step) == ['hello world']  # type: ignore
+        assert server._normalize_step_expression(step) == ['hello world']  # type: ignore
 
         step = ParseMatcher(noop, 'hello "{world}"! how "{are:d}" you')
 
-        assert server._get_step_expressions(step) == ['hello ""! how "" you']  # type: ignore
+        assert server._normalize_step_expression(step) == ['hello ""! how "" you']  # type: ignore
 
         step = ParseMatcher(noop, 'you have "{count}" {grammar:UserGramaticalNumber}')
 
-        assert sorted(server._get_step_expressions(step)) == sorted([  # type: ignore
+        assert sorted(server._normalize_step_expression(step)) == sorted([  # type: ignore
             'you have "" users',
             'you have "" user',
         ])
 
         step = ParseMatcher(noop, 'send from {from_node:MessageDirection} to {to_node:MessageDirection}')
 
-        assert sorted(server._get_step_expressions(step)) == sorted([  # type: ignore
+        assert sorted(server._normalize_step_expression(step)) == sorted([  # type: ignore
             'send from client to server',
             'send from server to client',
         ])
 
+        assert sorted(server._normalize_step_expression(  # type: ignore
+            'send to {to_node:MessageDirection} from {from_node:MessageDirection} for "{iterations}" {grammar:IterationGramaticalNumber}',
+        )) == sorted([
+            'send to server from client for "" iteration',
+            'send to server from client for "" iterations',
+            'send to client from server for "" iteration',
+            'send to client from server for "" iterations',
+        ])
+
+        assert sorted(server._normalize_step_expression(  # type: ignore
+            'send {direction:Direction} {node:MessageDirection}',
+        )) == sorted([
+            'send from server',
+            'send from client',
+            'send to server',
+            'send to client',
+        ])
+
+        step = ParseMatcher(
+            noop,
+            'Then save {target:ResponseTarget} as "{content_type:ContentType}" "{expression:TransformerContentType}" in "{variable}" for "{count}" {grammar:UserGramaticalNumber}',
+        )
+        assert sorted(server._normalize_step_expression(step)) == sorted([  # type: ignore
+            'Then save payload as "" "" in "" for "" user',
+            'Then save payload as "" "" in "" for "" users',
+            'Then save metadata as "" "" in "" for "" user',
+            'Then save metadata as "" "" in "" for "" users',
+        ])
+
+        assert sorted(server._normalize_step_expression(  # type: ignore
+            'python {condition:Condition} cool',
+        )) == sorted([
+            'python is cool',
+            'python is not cool',
+        ])
+
+        assert sorted(server._normalize_step_expression(  # type: ignore
+            '{method:Method} {direction:Direction} endpoint "{endpoint:s}"'
+        )) == sorted([
+            'send to endpoint ""',
+            'send from endpoint ""',
+            'post to endpoint ""',
+            'post from endpoint ""',
+            'put to endpoint ""',
+            'put from endpoint ""',
+            'receive to endpoint ""',
+            'receive from endpoint ""',
+            'get to endpoint ""',
+            'get from endpoint ""',
+        ])
+
+        caplog.clear()
+
+        show_message_mock = mocker.patch.object(server, 'show_message', autospec=True)
+
+        with caplog.at_level(logging.ERROR):
+            assert sorted(server._normalize_step_expression(  # type: ignore
+                'unhandled type {test:Unknown} for {target:ResponseTarget}',
+            )) == sorted([
+                'unhandled type {test:Unknown} for metadata', 
+                'unhandled type {test:Unknown} for payload', 
+            ])
+        assert len(caplog.messages) == 1
+        assert caplog.messages[-1] == "unhandled type: variable='{test:Unknown}', variable_type='Unknown'"
+
+        assert show_message_mock.call_count == 1
+        args, kwargs = show_message_mock.call_args_list[-1]
+        assert len(args) == 1
+        assert args[0] == "unhandled type: variable='{test:Unknown}', variable_type='Unknown'"
+        assert len(kwargs) == 1
+        assert kwargs.get('msg_type', None) == 1
 
     def test__make_step_registry(self, caplog: LogCaptureFixture) -> None:
         server = GrizzlyLanguageServer()
@@ -100,6 +171,8 @@ class TestGrizzlyLanguageServer:
 
         for keyword in ['given', 'then', 'when']:
             assert keyword in keywords
+
+        assert 0
 
     def test__make_keyword_registry(self) -> None:
         server = GrizzlyLanguageServer()
@@ -289,7 +362,7 @@ class TestGrizzlyLanguageServer:
             for keyword in server.keywords + server.keywords_once + list(server.keyword_alias.keys()):
                 assert keyword in labels
 
-        def test_completion_steps(self, lsp_fixture: LspFixture) -> None:
+        def test_completion_steps(self, lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> None:
             client = lsp_fixture.client
 
             # all Given/And steps
@@ -303,21 +376,23 @@ class TestGrizzlyLanguageServer:
                 assert len(labels) > 0
                 assert all([True if l is not None else False for l in labels])
 
-                assert 'ask for value of variable "{name}"' in labels
-                assert 'spawn rate is "{value}" {grammar:UserGramaticalNumber} per second' in labels
-                assert 'a user of type "{user_class_name}" with weight "{weight_value}" load testing "{host}"' in labels
+                assert 'ask for value of variable ""' in labels
+                assert 'spawn rate is "" user per second' in labels
+                assert 'spawn rate is "" users per second' in labels
+                assert 'a user of type "" with weight "" load testing ""' in labels
 
-            response = self._completion(client, lsp_fixture.datadir, 'Given value')
-            assert not response.get('isIncomplete', True)
-            unexpected_kinds = list(filter(lambda s: s != 3, map(lambda s: s.get('kind', None), response.get('items', []))))
-            assert len(unexpected_kinds) == 0
+            with caplog.at_level(logging.DEBUG, 'grizzly_ls.server'):
+                response = self._completion(client, lsp_fixture.datadir, 'Given value')
+                assert not response.get('isIncomplete', True)
+                unexpected_kinds = list(filter(lambda s: s != 3, map(lambda s: s.get('kind', None), response.get('items', []))))
+                assert len(unexpected_kinds) == 0
 
-            labels = list(map(lambda s: s.get('label', None), response.get('items', [])))
-            print(labels)
-            assert len(labels) > 0
-            assert all([True if l is not None else False for l in labels])
+                labels = list(map(lambda s: s.get('label', None), response.get('items', [])))
+                print(labels)
+                assert len(labels) > 0
+                assert all([True if l is not None else False for l in labels])
 
-            assert 'ask for value of variable "{name}"' in labels
-            assert 'spawn rate is "{value}" {grammar:UserGramaticalNumber} per second' not in labels
-            assert 'a user of type "{user_class_name}" with weight "{weight_value}" load testing "{host}"' in labels
+                assert 'ask for value of variable ""' in labels
+
+            assert 0
 
