@@ -7,7 +7,7 @@ import re
 
 from os import environ
 from os.path import pathsep
-from typing import Any, Tuple, Dict, List, Union, Optional
+from typing import Any, Tuple, Dict, List, Union, Optional, Callable
 from types import FrameType
 from pathlib import Path
 from behave.matchers import ParseMatcher
@@ -39,7 +39,7 @@ from behave.runner_util import load_step_modules
 from behave.step_registry import registry
 from behave.i18n import languages
 
-from .text import RegexPermutationResolver, normalize_variables
+from .text import RegexPermutationResolver, Normalizer
 
 
 
@@ -47,13 +47,14 @@ class GrizzlyLanguageServer(LanguageServer):
     logger: logging.Logger = logging.getLogger(__name__)
 
     steps: Dict[str, List[str]]
-    custom_types: Dict[str, List[str]]
     keywords: List[str]
     keywords_once: List[str] = ['Feature', 'Background']
     keyword_alias: Dict[str, str] = {
         'But': 'Then',
         'And': 'Given',
     }
+
+    normalizer: Normalizer
 
     def show_message(self, message: str, msg_type: Optional[MessageType] = MessageType.Info) -> None:
         super().show_message(message, msg_type=msg_type)  # type: ignore
@@ -62,7 +63,6 @@ class GrizzlyLanguageServer(LanguageServer):
         super().__init__(*args, **kwargs)  # type: ignore
 
         self.steps = {}
-        self.custom_types = {}
         self.keywords = []
 
         # monkey patch functions to short-circuit them (causes problems in this context)
@@ -205,7 +205,7 @@ class GrizzlyLanguageServer(LanguageServer):
         else:
             pattern = step
 
-        patterns, errors = normalize_variables(pattern, self.custom_types)
+        patterns, errors = self.normalizer(pattern)
 
         if len(errors) > 0:
             for message in errors:
@@ -214,26 +214,17 @@ class GrizzlyLanguageServer(LanguageServer):
 
         return patterns
 
+    def _resolve_custom_types(self, custom_types: Dict[str, Callable[[str], Any]]) -> Dict[str, List[str]]:
+        custom_type_permutations: Dict[str, List[str]] = {}
 
-    def _make_step_registry(self, step_path: Path) -> None:
-        self.logger.debug(f'loading step modules from {step_path}...')
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            
-            load_step_modules([str(step_path)])
-        self.logger.debug(f'...done!')
-
-        self.steps = {}
-        registry_steps: Dict[str, List[ParseMatcher]] = registry.steps
-
-        for custom_type, func in ParseMatcher.custom_types.items():
+        for custom_type, func in custom_types.items():
             func_code = [line for line in inspect.getsource(func).strip().split('\n') if not line.strip().startswith('@classmethod')]
 
             if func_code[0].startswith('@parse.with_pattern'):
                 match = re.match(r'@parse.with_pattern\(r\'\(([^\']*)\)\'', func_code[0])
                 if match:
                     pattern = match.group(1)
-                    self.custom_types.update({custom_type: RegexPermutationResolver.resolve(pattern)})
+                    custom_type_permutations.update({custom_type: RegexPermutationResolver.resolve(pattern)})
             elif 'from_string(' in func_code[-1] or 'from_string(' in func_code[0]:
                 enum_name: str
 
@@ -250,11 +241,27 @@ class GrizzlyLanguageServer(LanguageServer):
                         raise ValueError(f'could not find a from_string method for custom type {custom_type}')
 
                 enum_class = getattr(module, enum_name)
-                self.custom_types.update({custom_type: [value.name.lower() for value in enum_class]})
+                custom_type_permutations.update({custom_type: [value.name.lower() for value in enum_class]})
             else:
                 message = f'cannot infere what {func} will return for {custom_type}'
                 self.logger.error(message)
                 self.show_message(message, msg_type=MessageType.Error) 
+
+        self.logger.debug(custom_type_permutations)
+
+        return custom_type_permutations
+
+    def _make_step_registry(self, step_path: Path) -> None:
+        self.logger.debug(f'loading step modules from {step_path}...')
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            load_step_modules([str(step_path)])
+
+        self.logger.debug(f'...done!')
+
+        self.normalizer = Normalizer(self._resolve_custom_types(ParseMatcher.custom_types))
+        self.steps = {}
+        registry_steps: Dict[str, List[ParseMatcher]] = registry.steps
 
         for keyword, steps in registry_steps.items():
             normalized_steps: List[str] = []

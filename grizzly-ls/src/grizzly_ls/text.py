@@ -1,6 +1,7 @@
 import re
 import itertools
 import string
+import inspect
 
 from typing import List, Optional, Dict, Set, Tuple, Union, Generator, Any, Callable, cast
 from dataclasses import dataclass, field
@@ -18,21 +19,52 @@ SreParseValueBranch = Tuple[Optional[Any], List[SubPattern]]
 SreParseValueMaxRepeat = Tuple[int, int, SubPattern]
 SreParseValue = Union[int, SreNamedIntConstant, SreParseValueMaxRepeat, SreParseValueBranch]
 
+class regexp_handler:
+    sre_type: SreNamedIntConstant
+
+    def __init__(self, sre_type: SreNamedIntConstant) -> None:
+        self.sre_type = sre_type
+
+    def __call__(self, func: Callable[['RegexPermutationResolver', SreParseValue], List[str]]) -> Callable[['RegexPermutationResolver', SreParseValue], List[str]]:
+        setattr(func, '__handler_type__', self.sre_type)
+
+        return func
+
+    @classmethod
+    def make_registry(cls, instance: 'RegexPermutationResolver') -> Dict[SreNamedIntConstant, Callable[[SreParseValue], List[str]]]:
+        registry: Dict[SreNamedIntConstant, Callable[[SreParseValue], List[str]]] = {}
+        for name, func in inspect.getmembers(instance, predicate=inspect.ismethod):
+            if name.startswith('_'):
+                continue
+
+            handler_type = getattr(func, '__handler_type__', None)
+
+            if handler_type is None:
+                continue
+
+            registry.update({handler_type: func})
+
+        return registry
 
 class RegexPermutationResolver:
     """
     This code is more or less a typed and stripped down version of:
     https://gist.github.com/Quacky2200/714acad06f3f80f6bdb92d7d49dea4bf
     """
+    _handlers: Dict[SreNamedIntConstant, Callable[[SreParseValue], List[str]]]
+
     def __init__(self, pattern: str) -> None:
         self.pattern = pattern
+        self._handlers = regexp_handler.make_registry(self)
 
+    @regexp_handler(ANY)
     def handle_any(self, _: SreParseValue) -> List[str]:
         printables: List[str] = []
         printables[:0] = string.printable
 
         return printables
 
+    @regexp_handler(BRANCH)
     def handle_branch(self, token_value: SreParseValue) -> List[str]:
         token_value = cast(SreParseValueBranch, token_value)
         _, value = token_value
@@ -44,11 +76,13 @@ class RegexPermutationResolver:
 
         return list(options)
 
+    @regexp_handler(LITERAL)
     def handle_literal(self, value: SreParseValue) -> List[str]:
         value = cast(int, value)
 
         return [chr(value)]
 
+    @regexp_handler(MAX_REPEAT)
     def handle_max_repeat(self, value: SreParseValue) -> List[str]:
         minimum, maximum, subpattern = cast(SreParseValueMaxRepeat, value)
 
@@ -67,15 +101,8 @@ class RegexPermutationResolver:
         return [''.join(it) for it in itertools.chain(*values)]
 
     def handle_token(self, token: SreNamedIntConstant, value: SreParseValue) -> List[str]:
-        handlers: Dict[SreNamedIntConstant, Callable[[SreParseValue], List[str]]] = {
-            ANY: self.handle_any,
-            BRANCH: self.handle_branch,
-            LITERAL: self.handle_literal,
-            MAX_REPEAT: self.handle_max_repeat,
-        }
-
         try:
-            return handlers[token](value)
+            return self._handlers[token](value)
         except KeyError:
             raise ValueError(f'unsupported regular expression construct {token}')
 
@@ -100,7 +127,7 @@ class RegexPermutationResolver:
 
         return rloop(input, [])
 
-    def _resolve(self) -> List[str]:
+    def get_permutations(self) -> List[str]:
         tokens: SreParseTokens = [(token, value,) for token, value in sre_parse(self.pattern)]
 
         return self.permute_tokens(tokens)
@@ -108,14 +135,7 @@ class RegexPermutationResolver:
     @staticmethod
     def resolve(pattern: str) -> List[str]:
         instance = RegexPermutationResolver(pattern)
-        return instance._resolve()
-
-if __name__ == '__main__':
-    for s in RegexPermutationResolver.resolve('user[s]?'):
-        print(s)
-
-    for s in RegexPermutationResolver.resolve('client|server'):
-        print(s)
+        return instance.get_permutations()
 
 @dataclass
 class Coordinate:
@@ -130,115 +150,121 @@ class NormalizeHolder:
     unique: Optional[bool] = field(default=False)
 
 
-def normalize_variables(pattern: str, custom_types: Dict[str, List[str]]) -> Tuple[List[str], List[str]]:
-    patterns: List[str] = []
-    errors: Set[str] = set()
+class Normalizer:
+    custom_types: Dict[str, List[str]]
 
-    # replace all non typed variables first, will only result in 1 step
-    regex = r'\{[^\}:]*\}'
-    has_matches = re.search(regex, pattern)
-    if has_matches:
-        matches = re.finditer(regex, pattern)
-        for match in matches:
-            pattern = pattern.replace(match.group(0), '')
+    def __init__(self, custom_types: Dict[str, List[str]]) -> None:
+        self.custom_types = custom_types
 
-    # replace all typed variables, can result in more than 1 step
-    typed_regex = r'\{[^:]*:([^\}]*)\}'
+    def __call__(self, pattern: str) -> Tuple[List[str], List[str]]:
+        patterns: List[str] = []
+        errors: Set[str] = set()
 
-    normalize: Dict[str, NormalizeHolder] = {}
-    has_typed_matches = re.search(typed_regex, pattern)
-    if has_typed_matches:
-        typed_matches = re.finditer(typed_regex, pattern)
-        for match in typed_matches:
-            variable = match.group(0)
-            variable_type = match.group(1)
+        # replace all non typed variables first, will only result in 1 step
+        regex = r'\{[^\}:]*\}'
+        has_matches = re.search(regex, pattern)
+        if has_matches:
+            matches = re.finditer(regex, pattern)
+            for match in matches:
+                pattern = pattern.replace(match.group(0), '')
 
-            if len(variable_type) == 1:  # native types
-                normalize.update({variable: NormalizeHolder(permutations=Coordinate(), replacements=[''])})
-            elif variable_type == 'UserGramaticalNumber':
-                normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['user', 'users'])})
-            elif variable_type == 'MessageDirection':
-                normalize.update({variable: NormalizeHolder(permutations=Coordinate(x=True, y=True), replacements=['client', 'server'])})
-            elif variable_type == 'IterationGramaticalNumber':
-                normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['iteration', 'iterations'])})
-            elif variable_type == 'Direction':
-                normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['to', 'from'])})
-            elif variable_type == 'ResponseTarget':
-                normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['metadata', 'payload'])})
-            elif variable_type == 'Condition':
-                normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['is', 'is not'])})
-            elif variable_type in ['ContentType', 'TransformerContentType']:
-                normalize.update({variable: NormalizeHolder(permutations=Coordinate(), replacements=[''])})
-            elif variable_type == 'Method':
-                normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['send', 'post', 'put', 'receive', 'get'])})
-            else:
-                errors.add(f'unhandled type: {variable=}, {variable_type=}')
+        # replace all typed variables, can result in more than 1 step
+        typed_regex = r'\{[^:]*:([^\}]*)\}'
 
-        # replace variables that does not create any variations
-        normalize_no_variations = {key: value for key, value in normalize.items() if not value.permutations.x and not value.permutations.y}
-        if len(normalize_no_variations) > 0:
-            for variable, holder in normalize_no_variations.items():
-                for replacement in holder.replacements:
-                    pattern = pattern.replace(variable, replacement)
+        normalize: Dict[str, NormalizeHolder] = {}
+        has_typed_matches = re.search(typed_regex, pattern)
+        if has_typed_matches:
+            typed_matches = re.finditer(typed_regex, pattern)
+            for match in typed_matches:
+                variable = match.group(0)
+                variable_type = match.group(1)
 
-        # round 1, to create possible prenumtations
-        normalize_variations_y = {key: value for key, value in normalize.items() if value.permutations.y}
-        if len(normalize_variations_y) > 0:
-            variation_patterns: Set[str] = set()
-            for variable, holder in normalize_variations_y.items():
-                for replacement in holder.replacements:
-                    variation_patterns.add(pattern.replace(variable, replacement))
+                if len(variable_type) == 1:  # native types
+                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(), replacements=[''])})
+                elif variable_type == 'UserGramaticalNumber':  # regex
+                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['user', 'users'])})
+                elif variable_type == 'MessageDirection':  # enum, check, test
+                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(x=True, y=True), replacements=['client', 'server'])})
+                elif variable_type == 'IterationGramaticalNumber':  # regex
+                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['iteration', 'iterations'])})
+                elif variable_type == 'Direction':  # enum, check, test
+                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['to', 'from'])})
+                elif variable_type == 'ResponseTarget':  # enum, check, test
+                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['metadata', 'payload'])})
+                elif variable_type == 'Condition':  # regex
+                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['is', 'is not'])})
+                elif variable_type in ['ContentType', 'TransformerContentType']:  # enum, check, test
+                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(), replacements=[''])})
+                elif variable_type == 'Method':  # enum, check, test
+                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['send', 'post', 'put', 'receive', 'get'])})
+                else:
+                    errors.add(f'unhandled type: {variable=}, {variable_type=}')
 
-            patterns = list(variation_patterns)
+            # replace variables that does not create any variations
+            normalize_no_variations = {key: value for key, value in normalize.items() if not value.permutations.x and not value.permutations.y}
+            if len(normalize_no_variations) > 0:
+                for variable, holder in normalize_no_variations.items():
+                    for replacement in holder.replacements:
+                        pattern = pattern.replace(variable, replacement)
 
-        normalize_variations_x = {key: value for key, value in normalize.items() if value.permutations.x}
-        if len(normalize_variations_x) > 0:
-            matrix_components: List[List[str]] = []
-            for holder in normalize_variations_x.values():
-                matrix_components.append(holder.replacements)
-
-            # create unique combinations of all replacements
-            matrix = list(filter(lambda p: p.count(p[0]) != len(p), list(itertools.product(*matrix_components))))
-
-            variation_patterns: Set[str] = set()
-            for pattern in patterns:
-                for row in matrix:
-                    for variable in normalize_variations_x.keys():
-                        if variable not in pattern:
-                            continue
-
-                        for replacement in row:
-                            # all variables in pattern has been normalized
-                            if variable not in pattern:
-                                break
-
-                            # x replacements should only occur once in the pattern
-                            if f' {replacement}' in pattern:
-                                continue
-
-                            pattern = pattern.replace(variable, replacement)
-
-                variation_patterns.add(pattern)
-
-            patterns = list(variation_patterns)
-
-        # round 2, to normalize any additional unresolved prenumtations after normalizing x
-        normalize_variations_y = {key: value for key, value in normalize.items() if value.permutations.y}
-        if len(normalize_variations_y) > 0:
-            variation_patterns: Set[str] = set()
-            for pattern in patterns:
+            # round 1, to create possible prenumtations
+            normalize_variations_y = {key: value for key, value in normalize.items() if value.permutations.y}
+            if len(normalize_variations_y) > 0:
+                variation_patterns: Set[str] = set()
                 for variable, holder in normalize_variations_y.items():
-                    if variable not in pattern:
-                        continue
-
                     for replacement in holder.replacements:
                         variation_patterns.add(pattern.replace(variable, replacement))
 
-            if len(variation_patterns) > 0:
                 patterns = list(variation_patterns)
 
-    # no variables in step, just add it
-    if not has_matches and not has_typed_matches or len(patterns) < 1:
-        patterns.append(pattern)
+            normalize_variations_x = {key: value for key, value in normalize.items() if value.permutations.x}
+            if len(normalize_variations_x) > 0:
+                matrix_components: List[List[str]] = []
+                for holder in normalize_variations_x.values():
+                    matrix_components.append(holder.replacements)
 
-    return patterns, list(errors)
+                # create unique combinations of all replacements
+                matrix = list(filter(lambda p: p.count(p[0]) != len(p), list(itertools.product(*matrix_components))))
+
+                variation_patterns: Set[str] = set()
+                for pattern in patterns:
+                    for row in matrix:
+                        for variable in normalize_variations_x.keys():
+                            if variable not in pattern:
+                                continue
+
+                            for replacement in row:
+                                # all variables in pattern has been normalized
+                                if variable not in pattern:
+                                    break
+
+                                # x replacements should only occur once in the pattern
+                                if f' {replacement}' in pattern:
+                                    continue
+
+                                pattern = pattern.replace(variable, replacement)
+
+                    variation_patterns.add(pattern)
+
+                patterns = list(variation_patterns)
+
+            # round 2, to normalize any additional unresolved prenumtations after normalizing x
+            normalize_variations_y = {key: value for key, value in normalize.items() if value.permutations.y}
+            if len(normalize_variations_y) > 0:
+                variation_patterns: Set[str] = set()
+                for pattern in patterns:
+                    for variable, holder in normalize_variations_y.items():
+                        if variable not in pattern:
+                            continue
+
+                        for replacement in holder.replacements:
+                            variation_patterns.add(pattern.replace(variable, replacement))
+
+                if len(variation_patterns) > 0:
+                    patterns = list(variation_patterns)
+
+        # no variables in step, just add it
+        if not has_matches and not has_typed_matches or len(patterns) < 1:
+            patterns.append(pattern)
+
+        return patterns, list(errors)
