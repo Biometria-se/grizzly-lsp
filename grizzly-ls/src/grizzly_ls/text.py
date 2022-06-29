@@ -11,12 +11,14 @@ from sre_constants import (  # pylint: disable=no-name-in-module  # type: ignore
     BRANCH,
     LITERAL,
     MAX_REPEAT,
+    SUBPATTERN,
 )
 from sre_parse import SubPattern, parse as sre_parse
 
 SreParseTokens = Union[List[Tuple[SreNamedIntConstant, Union[int, Tuple[int, int, List[Tuple[SreNamedIntConstant, int]]]]]], SubPattern]
 SreParseValueBranch = Tuple[Optional[Any], List[SubPattern]]
 SreParseValueMaxRepeat = Tuple[int, int, SubPattern]
+SreParseValueSubpattern = Tuple[int, int, int, SreParseTokens]
 SreParseValue = Union[int, SreNamedIntConstant, SreParseValueMaxRepeat, SreParseValueBranch]
 
 class regexp_handler:
@@ -100,6 +102,11 @@ class RegexPermutationResolver:
 
         return [''.join(it) for it in itertools.chain(*values)]
 
+    @regexp_handler(SUBPATTERN)
+    def handle_subpattern(self, value: SreParseValue) -> List[str]:
+        tokens = cast(SreParseValueSubpattern, value)[-1]
+        return list(self.permute_tokens(tokens))
+
     def handle_token(self, token: SreNamedIntConstant, value: SreParseValue) -> List[str]:
         try:
             return self._handlers[token](value)
@@ -147,13 +154,12 @@ class Coordinate:
 class NormalizeHolder:
     permutations: Coordinate
     replacements: List[str]
-    unique: Optional[bool] = field(default=False)
 
 
 class Normalizer:
-    custom_types: Dict[str, List[str]]
+    custom_types: Dict[str, NormalizeHolder]
 
-    def __init__(self, custom_types: Dict[str, List[str]]) -> None:
+    def __init__(self, custom_types: Dict[str, NormalizeHolder]) -> None:
         self.custom_types = custom_types
 
     def __call__(self, pattern: str) -> Tuple[List[str], List[str]]:
@@ -179,24 +185,11 @@ class Normalizer:
                 variable = match.group(0)
                 variable_type = match.group(1)
 
-                if len(variable_type) == 1:  # native types
+                holder = self.custom_types.get(variable_type, None)
+                if holder is not None:
+                    normalize.update({variable: holder})
+                elif len(variable_type) == 1:  # native types
                     normalize.update({variable: NormalizeHolder(permutations=Coordinate(), replacements=[''])})
-                elif variable_type == 'UserGramaticalNumber':  # regex
-                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['user', 'users'])})
-                elif variable_type == 'MessageDirection':  # enum, check, test
-                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(x=True, y=True), replacements=['client', 'server'])})
-                elif variable_type == 'IterationGramaticalNumber':  # regex
-                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['iteration', 'iterations'])})
-                elif variable_type == 'Direction':  # enum, check, test
-                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['to', 'from'])})
-                elif variable_type == 'ResponseTarget':  # enum, check, test
-                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['metadata', 'payload'])})
-                elif variable_type == 'Condition':  # regex
-                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['is', 'is not'])})
-                elif variable_type in ['ContentType', 'TransformerContentType']:  # enum, check, test
-                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(), replacements=[''])})
-                elif variable_type == 'Method':  # enum, check, test
-                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(y=True), replacements=['send', 'post', 'put', 'receive', 'get'])})
                 else:
                     errors.add(f'unhandled type: {variable=}, {variable_type=}')
 

@@ -35,11 +35,11 @@ from pygls.lsp.types import (
 )
 from pygls.lsp.types.basic_structures import Position
 
-from behave.runner_util import load_step_modules
 from behave.step_registry import registry
+from behave.runner_util import load_step_modules
 from behave.i18n import languages
 
-from .text import RegexPermutationResolver, Normalizer
+from .text import Coordinate, NormalizeHolder, RegexPermutationResolver, Normalizer
 
 
 
@@ -214,42 +214,74 @@ class GrizzlyLanguageServer(LanguageServer):
 
         return patterns
 
-    def _resolve_custom_types(self, custom_types: Dict[str, Callable[[str], Any]]) -> Dict[str, List[str]]:
-        custom_type_permutations: Dict[str, List[str]] = {}
+    def _resolve_custom_types(self) -> None:
+        custom_types: Dict[str, Callable[[str], Any]] = ParseMatcher.custom_types
+        custom_type_permutations: Dict[str, NormalizeHolder] = {}
 
         for custom_type, func in custom_types.items():
-            func_code = [line for line in inspect.getsource(func).strip().split('\n') if not line.strip().startswith('@classmethod')]
+            try:
+                func_code = [line for line in inspect.getsource(func).strip().split('\n') if not line.strip().startswith('@classmethod')]
+                message: Optional[str] = None
 
-            if func_code[0].startswith('@parse.with_pattern'):
-                match = re.match(r'@parse.with_pattern\(r\'\(([^\']*)\)\'', func_code[0])
-                if match:
-                    pattern = match.group(1)
-                    custom_type_permutations.update({custom_type: RegexPermutationResolver.resolve(pattern)})
-            elif 'from_string(' in func_code[-1] or 'from_string(' in func_code[0]:
-                enum_name: str
+                if func_code[0].startswith('@parse.with_pattern'):
+                    match = re.match(r'@parse.with_pattern\(r\'\(?(.*?)\)?\'', func_code[0])
+                    if match:
+                        pattern = match.group(1)
+                        vector = getattr(func, '__vector__', None)
+                        if vector is None:
+                            coordinates = Coordinate()
+                        else:
+                            x, y = vector
+                            coordinates = Coordinate(x=x, y=y)
 
-                match = re.match(r'return ([^\.]*)\.from_string\(', func_code[-1].strip())
-                if match:
-                    enum_name = match.group(1)
-                    module = import_module('grizzly.types')
-                else:
-                    match = re.match(r'def from_string.*?->\s+\'?([^:\']*)\'?:', func_code[0].strip())
+                        custom_type_permutations.update({
+                            custom_type: NormalizeHolder(
+                                permutations=coordinates,
+                                replacements=RegexPermutationResolver.resolve(pattern),
+                            ),
+                        })
+                    else:
+                        raise ValueError(f'could not extract pattern from "{func_code[0]}" for custom type {custom_type}')
+                elif 'from_string(' in func_code[-1] or 'from_string(' in func_code[0]:
+                    enum_name: str
+
+                    match = re.match(r'return ([^\.]*)\.from_string\(', func_code[-1].strip())
                     if match:
                         enum_name = match.group(1)
-                        module = inspect.getmodule(func)
+                        module = import_module('grizzly.types')
                     else:
-                        raise ValueError(f'could not find a from_string method for custom type {custom_type}')
+                        match = re.match(r'def from_string.*?->\s+\'?([^:\']*)\'?:', func_code[0].strip())
+                        if match:
+                            enum_name = match.group(1)
+                            module = inspect.getmodule(func)
+                        else:
+                            raise ValueError(f'could not find a from_string method for custom type {custom_type}')
 
-                enum_class = getattr(module, enum_name)
-                custom_type_permutations.update({custom_type: [value.name.lower() for value in enum_class]})
-            else:
-                message = f'cannot infere what {func} will return for {custom_type}'
+                    enum_class = getattr(module, enum_name)
+                    replacements = [value.name.lower() for value in enum_class]
+                    vector = enum_class.get_vector()
+
+                    if vector is None:
+                        coordinates = Coordinate()
+                    else:
+                        x, y = vector
+                        coordinates = Coordinate(x=x, y=y)
+
+                    custom_type_permutations.update({
+                        custom_type: NormalizeHolder(
+                            permutations=coordinates,
+                            replacements=replacements,
+                        ),
+                    })
+                else:
+                    raise ValueError(f'cannot infere what {func} will return for {custom_type}')
+            except ValueError as e: 
+                message = str(e)
                 self.logger.error(message)
                 self.show_message(message, msg_type=MessageType.Error) 
 
         self.logger.debug(custom_type_permutations)
-
-        return custom_type_permutations
+        self.normalizer = Normalizer(custom_type_permutations)
 
     def _make_step_registry(self, step_path: Path) -> None:
         self.logger.debug(f'loading step modules from {step_path}...')
@@ -258,8 +290,7 @@ class GrizzlyLanguageServer(LanguageServer):
             load_step_modules([str(step_path)])
 
         self.logger.debug(f'...done!')
-
-        self.normalizer = Normalizer(self._resolve_custom_types(ParseMatcher.custom_types))
+        self._resolve_custom_types()
         self.steps = {}
         registry_steps: Dict[str, List[ParseMatcher]] = registry.steps
 

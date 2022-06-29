@@ -1,5 +1,5 @@
 [build-system]
-requires = ['setuptools', 'setuptools-scm', 'wheel']
+requires = ['setuptools', 'setuptools-scm >= 7.0.3', 'wheel']
 build-backend = 'setuptools.build_meta'
 
 [project]
@@ -24,7 +24,7 @@ dev = [
     'flake8',
     'black',
     'mypy',
-    'grizzly-loadtester'
+    'grizzly-loadtester @ git+https://git@github.com/biometria-se/grizzly.git@main'
 ]
 
 ci = [
@@ -35,7 +35,6 @@ ci = [
 [tool.setuptools_scm]
 write_to = "grizzly-ls/src/grizzly_ls/__version__.py"
 root = ".."
-relative_to = "pyproject.toml"
 
 [tool.pytest.ini_options]
 timeout = 10

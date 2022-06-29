@@ -57,6 +57,10 @@ class TestGrizzlyLanguageServer:
 
         assert server.steps == {}
 
+        grizzly_project = Path.cwd() / '..' / 'tests' / 'project'
+
+        server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))  # type: ignore
+
         noop = lambda: None
 
         step = ParseMatcher(noop, 'hello world')
@@ -163,16 +167,15 @@ class TestGrizzlyLanguageServer:
         with caplog.at_level(logging.DEBUG, 'grizzly_ls.server'):
             server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))  # type: ignore
 
-        assert len(caplog.messages) == 3
+        assert len(caplog.messages) == 4
 
         assert not server.steps == {}
+        assert len(server.normalizer.custom_types.keys()) >= 8
 
         keywords = list(server.steps.keys())
 
         for keyword in ['given', 'then', 'when']:
             assert keyword in keywords
-
-        assert 0
 
     def test__make_keyword_registry(self) -> None:
         server = GrizzlyLanguageServer()
