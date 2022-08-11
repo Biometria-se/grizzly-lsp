@@ -10,25 +10,30 @@ from pytest_mock import MockerFixture
 
 from pygls.server import LanguageServer
 from pygls.lsp.methods import EXIT
+from behave.runner_util import reset_runtime
 from grizzly_ls.server import GrizzlyLanguageServer
 
 
 class LspFixture:
     client: LanguageServer
     server: GrizzlyLanguageServer
+
+    _server_thread: Thread
+    _client_thread: Thread
+    _mocker: MockerFixture
+
     datadir: Path
 
-    _mocker: MockerFixture
 
     def __init__(self, mocker: MockerFixture) -> None:
         self._mocker = mocker
 
     def __enter__(self) -> 'LspFixture':
+        reset_runtime(reset_matchers=False)
         cstdio, cstdout = os.pipe()
         sstdio, sstdout = os.pipe()
 
         def start(ls: LanguageServer, fdr: int, fdw: int) -> None:
-            # self._mocker.patch.object(ls, 'close', return_value=None)
             ls.start_io(os.fdopen(fdr, 'rb'), os.fdopen(fdw, 'wb'))  # type: ignore
 
         self.server = GrizzlyLanguageServer(asyncio.new_event_loop())  # type: ignore
@@ -44,10 +49,11 @@ class LspFixture:
         return self
 
     def __exit__(self, exc_type: Optional[Type[BaseException]], exc: Optional[BaseException], traceback: Optional[TracebackType]) -> Literal[True]:
-        self.client.send_notification(EXIT)
         self.server.send_notification(EXIT)
-
+        self.client.send_notification(EXIT)
+        
         self._server_thread.join(timeout=2.0)
         self._client_thread.join(timeout=2.0)
 
         return True
+

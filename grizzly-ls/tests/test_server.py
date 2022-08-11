@@ -23,22 +23,21 @@ from pygls.lsp.types import (
     ClientCapabilities,
     CompletionContext,
     CompletionParams,
-    CompletionList,
-    CompletionItem,
-    CompletionItemKind,
+#    CompletionList,
+#    CompletionItem,
+#    CompletionItemKind,
     DidOpenTextDocumentParams,
     InitializeParams,
 )
 from pygls.lsp.types.basic_structures import Position, TextDocumentItem, TextDocumentIdentifier
 from behave.matchers import ParseMatcher
-from grizzly_ls.server import GrizzlyLanguageServer
 
 from .fixtures import LspFixture
 
 
 class TestGrizzlyLanguageServer:
-    def test___init__(self) -> None:
-        server = GrizzlyLanguageServer()
+    def test___init__(self, lsp_fixture: LspFixture) -> None:
+        server = lsp_fixture.server
 
         assert server.steps == {}
         assert server.keywords == []
@@ -51,9 +50,9 @@ class TestGrizzlyLanguageServer:
         assert isinstance(server.logger, logging.Logger)
         assert server.logger.name == 'grizzly_ls.server'
 
-    def test__normalize_step_expression(self, mocker: MockerFixture, caplog: LogCaptureFixture) -> None:
+    def test__normalize_step_expression(self, lsp_fixture: LspFixture, mocker: MockerFixture, caplog: LogCaptureFixture) -> None:
         mocker.patch('parse.Parser.__init__', return_value=None)
-        server = GrizzlyLanguageServer()
+        server = lsp_fixture.server
 
         assert server.steps == {}
 
@@ -105,13 +104,13 @@ class TestGrizzlyLanguageServer:
 
         step = ParseMatcher(
             noop,
-            'Then save {target:ResponseTarget} as "{content_type:ContentType}" "{expression:TransformerContentType}" in "{variable}" for "{count}" {grammar:UserGramaticalNumber}',
+            'Then save {target:ResponseTarget} as "{content_type:ContentType}" "{expression:ContentType}" in "{variable}" for "{count}" {grammar:UserGramaticalNumber}',
         )
         assert sorted(server._normalize_step_expression(step)) == sorted([  # type: ignore
-            'Then save payload as "" "" in "" for "" user',
-            'Then save payload as "" "" in "" for "" users',
-            'Then save metadata as "" "" in "" for "" user',
-            'Then save metadata as "" "" in "" for "" users',
+            'Then save payload as "undefined" "undefined" in "" for "" user',
+            'Then save payload as "undefined" "undefined" in "" for "" users',
+            'Then save metadata as "undefined" "undefined" in "" for "" user',
+            'Then save metadata as "undefined" "undefined" in "" for "" users',
         ])
 
         assert sorted(server._normalize_step_expression(  # type: ignore
@@ -157,8 +156,8 @@ class TestGrizzlyLanguageServer:
         assert len(kwargs) == 1
         assert kwargs.get('msg_type', None) == 1
 
-    def test__make_step_registry(self, caplog: LogCaptureFixture) -> None:
-        server = GrizzlyLanguageServer()
+    def test__make_step_registry(self, lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> None:
+        server = lsp_fixture.server
 
         assert server.steps == {}
 
@@ -177,8 +176,8 @@ class TestGrizzlyLanguageServer:
         for keyword in ['given', 'then', 'when']:
             assert keyword in keywords
 
-    def test__make_keyword_registry(self) -> None:
-        server = GrizzlyLanguageServer()
+    def test__make_keyword_registry(self, lsp_fixture: LspFixture) -> None:
+        server = lsp_fixture.server
 
         assert server.steps == {}
         assert server.keywords == []
@@ -196,8 +195,8 @@ class TestGrizzlyLanguageServer:
         assert 'Given' in server.keywords  # - " -
         assert 'When' in server.keywords
 
-    def test__current_line(self, mocker: MockerFixture) -> None:
-        server = GrizzlyLanguageServer()
+    def test__current_line(self, lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
+        server = lsp_fixture.server
 
         mocker.patch.object(server.lsp, 'workspace', Workspace('', None))
         mocker.patch('tests.test_server.Workspace.get_document', return_value=Document('file://test.feature', '''Feature:
@@ -215,14 +214,27 @@ class TestGrizzlyLanguageServer:
             assert server._current_line('file://test.feature', Position(line=10, character=10)).strip() == 'Then hello world!'  # type: ignore
         assert str(ie.value) == 'list index out of range'
 
+    @pytest.mark.skip
     class TestGrizzlyLangageServerFeatures:
         def _initialize(self, client: LanguageServer, root: Path) -> None:
             retry = 3
             params = InitializeParams(
                 process_id=1337,
-                capabilities=ClientCapabilities(),
                 root_uri=root.as_uri(),
+                capabilities=ClientCapabilities(
+                    workspace=None,
+                    text_document=None,
+                    window=None,
+                    general=None,
+                    experimental=None,
+                ),
+                client_info=None,
+                locale=None,
                 root_path=str(root),
+                initialization_options=None,
+                trace=None,
+                workspace_folders=None,
+                work_done_token=None,
             )
 
             logger = logging.getLogger()
@@ -267,9 +279,13 @@ class TestGrizzlyLanguageServer:
             self._open(client, path, content)
 
             params = CompletionParams(
-                text_document=TextDocumentIdentifier(uri=path.as_uri()),
+                text_document=TextDocumentIdentifier(
+                    uri=path.as_uri(),
+                ),
                 position=Position(line=0, character=len(content)),
                 context=context,
+                partial_result_token=None,
+                work_done_token=None,
             )
 
             if context is None:

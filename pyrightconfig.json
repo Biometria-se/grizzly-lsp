@@ -4,5 +4,10 @@
     "grizzly-ls/tests/project"
   ],
   "reportUnusedFunction": "none",
-  "stubPath": "grizzly-ls/types"
+  "stubPath": "grizzly-ls/types",
+  "executionEnvironments": [
+    {
+      "root": "grizzly-ls/src"
+    }
+  ]
 }

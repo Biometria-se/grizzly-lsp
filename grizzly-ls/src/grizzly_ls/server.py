@@ -174,6 +174,21 @@ class GrizzlyLanguageServer(LanguageServer):
                         lambda k: CompletionItem(
                             label=k,
                             kind=CompletionItemKind.Keyword,
+                            tags=None,
+                            detail=None,
+                            documentation=None,
+                            deprecated=False,
+                            preselect=None,
+                            sort_text=None,
+                            filter_text=None,
+                            insert_text=None,
+                            insert_text_format=None,
+                            insert_text_mode=None,
+                            text_edit=None,
+                            additional_text_edits=None,
+                            commit_characters=None,
+                            command=None,
+                            data=None,
                         ),
                         sorted(keywords),
                     )
@@ -192,7 +207,30 @@ class GrizzlyLanguageServer(LanguageServer):
                         score = SequenceMatcher(None, step, matched_step).ratio()
                         self.logger.debug(f'\t{matched_step=} {score=}')
 
-                items = list(map(lambda s: CompletionItem(label=s, kind=CompletionItemKind.Function), matched_steps))
+                items = list(
+                    map(
+                        lambda s: CompletionItem(
+                            label=s,
+                            kind=CompletionItemKind.Function,
+                            tags=None,
+                            detail=None,
+                            documentation=None,
+                            deprecated=False,
+                            preselect=None,
+                            sort_text=None,
+                            filter_text=None,
+                            insert_text=None,
+                            insert_text_format=None,
+                            insert_text_mode=None,
+                            text_edit=None,
+                            additional_text_edits=None,
+                            commit_characters=None,
+                            command=None,
+                            data=None,
+                        ),
+                        matched_steps,
+                    )
+                )
 
             return CompletionList(
                 is_incomplete=False,
@@ -280,7 +318,6 @@ class GrizzlyLanguageServer(LanguageServer):
                 self.logger.error(message)
                 self.show_message(message, msg_type=MessageType.Error) 
 
-        self.logger.debug(custom_type_permutations)
         self.normalizer = Normalizer(custom_type_permutations)
 
     def _make_step_registry(self, step_path: Path) -> None:
@@ -288,6 +325,7 @@ class GrizzlyLanguageServer(LanguageServer):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             load_step_modules([str(step_path)])
+            self.logger.info(f'{ParseMatcher.custom_types=}')
 
         self.logger.debug(f'...done!')
         self._resolve_custom_types()
@@ -312,7 +350,7 @@ class GrizzlyLanguageServer(LanguageServer):
                 if value in [u'*']:
                     continue
 
-                self.keywords.append(value)
+                self.keywords.append(value.strip())
 
     def _current_line(self, uri: str, position: Position) -> str:
         document = self.workspace.get_document(uri)
