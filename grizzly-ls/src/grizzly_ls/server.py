@@ -34,13 +34,13 @@ from pygls.lsp.types import (
     MessageType,
 )
 from pygls.lsp.types.basic_structures import Position
+from pygls.workspace import Document
 
 from behave.step_registry import registry
 from behave.runner_util import load_step_modules
 from behave.i18n import languages
 
 from .text import Coordinate, NormalizeHolder, RegexPermutationResolver, Normalizer
-
 
 
 class GrizzlyLanguageServer(LanguageServer):
@@ -134,21 +134,8 @@ class GrizzlyLanguageServer(LanguageServer):
         def completion(params: CompletionParams) -> CompletionList:
             assert self.steps is not None, 'no steps in inventory'
 
-            line = self._current_line(params.text_document.uri, params.position)
-
-            line = re.sub(r'"[^"]"', '""', line)
-
-            self.logger.debug(f'{line=}')
-
-            if len(line.strip()) > 0:
-                try:
-                    keyword, step = line.strip().split(' ', 1)
-                except ValueError:
-                    keyword = line
-                    step = None
-                keyword = keyword.strip()
-            else:
-                keyword, step = None, None
+            line = self._current_line(params.text_document.uri, params.position).strip()
+            keyword, step = self._get_step_parts(line)
 
             items: List[CompletionItem] = []
 
@@ -156,43 +143,8 @@ class GrizzlyLanguageServer(LanguageServer):
 
             self.logger.debug(f'{keyword=}, {step=}, {self.keywords=}')
 
-            if keyword is not None:
-                keyword = self.keyword_alias.get(keyword, keyword)
-
             if keyword is None or keyword not in self.keywords:
-                keywords = self.keywords.copy()
-                for keyword_once in self.keywords_once:
-                    if f'{keyword_once}:' not in document.source:
-                        keywords.append(keyword_once)
-
-                # check for partial matches
-                if keyword is not None:
-                    keywords = list(filter(lambda k: keyword.lower() in k.lower(), keywords))
-
-                items = list(
-                    map(
-                        lambda k: CompletionItem(
-                            label=k,
-                            kind=CompletionItemKind.Keyword,
-                            tags=None,
-                            detail=None,
-                            documentation=None,
-                            deprecated=False,
-                            preselect=None,
-                            sort_text=None,
-                            filter_text=None,
-                            insert_text=None,
-                            insert_text_format=None,
-                            insert_text_mode=None,
-                            text_edit=None,
-                            additional_text_edits=None,
-                            commit_characters=None,
-                            command=None,
-                            data=None,
-                        ),
-                        sorted(keywords),
-                    )
-                )
+                items = self._complete_keyword(keyword, document)
             elif keyword is not None:
                 steps = self.steps.get(keyword.lower(), [])
 
@@ -236,6 +188,74 @@ class GrizzlyLanguageServer(LanguageServer):
                 is_incomplete=False,
                 items=items,
             )
+
+    def _get_step_parts(self, line: str) -> Tuple[Optional[str], Optional[str]]:
+        self.logger.info(f'{line=}')
+
+        if len(line) > 0:
+            # remove any user values enclosed with double-quotes
+            line = re.sub(r'"[^"]*"', '""', line)
+
+            # remove multiple white spaces
+            line = re.sub(r'\s+', ' ', line)
+
+            try:
+                keyword, step = line.strip().split(' ', 1)
+                step = step.strip()
+            except ValueError:
+                keyword = line
+                step = None
+            keyword = keyword.strip()
+
+            # get correct keyword if provided was an alias
+            keyword = self.keyword_alias.get(keyword, keyword)
+        else:
+            keyword, step = None, None
+
+        return keyword, step
+
+    def _complete_keyword(self, keyword: Optional[str], document: Document) -> List[CompletionItem]:
+        if len(document.source.strip()) < 1:
+            keywords = ['Feature']
+        else:
+            print(document.source)
+            if 'Scenario:' not in document.source:
+                keywords = ['Scenario']
+            else:
+                keywords = self.keywords.copy()
+
+            for keyword_once in self.keywords_once:
+                if f'{keyword_once}:' not in document.source:
+                    keywords.append(keyword_once)
+
+            # check for partial matches
+            if keyword is not None:
+                keywords = list(filter(lambda k: keyword.lower() in k.lower(), keywords))
+
+        return list(
+            map(
+                lambda k: CompletionItem(
+                    label=k,
+                    kind=CompletionItemKind.Keyword,
+                    tags=None,
+                    detail=None,
+                    documentation=None,
+                    deprecated=False,
+                    preselect=None,
+                    sort_text=None,
+                    filter_text=None,
+                    insert_text=None,
+                    insert_text_format=None,
+                    insert_text_mode=None,
+                    text_edit=None,
+                    additional_text_edits=None,
+                    commit_characters=None,
+                    command=None,
+                    data=None,
+                ),
+                sorted(keywords),
+            )
+        )
 
     def _normalize_step_expression(self, step: Union[ParseMatcher, str]) -> List[str]:
         if isinstance(step, ParseMatcher):
@@ -325,7 +345,6 @@ class GrizzlyLanguageServer(LanguageServer):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             load_step_modules([str(step_path)])
-            self.logger.info(f'{ParseMatcher.custom_types=}')
 
         self.logger.debug(f'...done!')
         self._resolve_custom_types()
@@ -339,14 +358,13 @@ class GrizzlyLanguageServer(LanguageServer):
 
             self.steps.update({keyword: normalized_steps})
 
-        self.logger.debug(self.steps)
-
     def _make_keyword_registry(self) -> None:
         self.keywords = ['Scenario'] + list(self.keyword_alias.keys())
 
         language_en = languages.get('en', {})
         for keyword in self.steps.keys():
             for value in language_en.get(keyword, []):
+                value = value.strip()
                 if value in [u'*']:
                     continue
 

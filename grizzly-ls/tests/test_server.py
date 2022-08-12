@@ -1,6 +1,6 @@
 import logging
 
-from typing import Optional, Dict, Any, cast
+from typing import Optional, Dict, Any, List, cast
 from pathlib import Path
 from concurrent import futures
 from tempfile import gettempdir
@@ -22,6 +22,7 @@ from pygls.lsp.methods import (
 from pygls.lsp.types import (
     ClientCapabilities,
     CompletionContext,
+    CompletionItem,
     CompletionParams,
 #    CompletionList,
 #    CompletionItem,
@@ -49,6 +50,92 @@ class TestGrizzlyLanguageServer:
 
         assert isinstance(server.logger, logging.Logger)
         assert server.logger.name == 'grizzly_ls.server'
+
+    def test__get_step_parts(self, lsp_fixture: LspFixture) -> None:
+        server = lsp_fixture.server
+
+        assert server._get_step_parts('') == (None, None, )  # type: ignore
+        assert server._get_step_parts('Giv') == ('Giv', None, )  # type: ignore
+        assert server._get_step_parts('Given hello world') == ('Given', 'hello world', )  # type: ignore
+        assert server._get_step_parts('And are you "ok"?') == ('Given', 'are you ""?', )  # type: ignore
+        assert server._get_step_parts('Then   make sure   that "value"  is "None"') == (  # type: ignore
+            'Then', 'make sure that "" is ""',
+        )
+
+    def test__complete_keyword(self, lsp_fixture: LspFixture) -> None:
+        def map_keyword_completion_list(completion_list: List[CompletionItem]) -> List[Dict[str, Any]]:
+            return [{'label': completion.label, 'kind': completion.kind.numerator} for completion in completion_list if completion.kind is not None]
+
+        server = lsp_fixture.server
+
+        grizzly_project = Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
+        server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))  # type: ignore
+        server._make_keyword_registry()  # type: ignore
+
+        document = Document(
+            uri='dummy.feature',
+            source='',
+        )
+
+        assert map_keyword_completion_list(server._complete_keyword(None, document)) == [  # type: ignore
+            {'label': 'Feature', 'kind': 14},
+        ]
+
+        document = Document(
+            uri='dummy.feature',
+            source='Feature:',
+        )
+
+        assert map_keyword_completion_list(server._complete_keyword(None, document)) == [  # type: ignore
+            {'label': 'Background', 'kind': 14},
+            {'label': 'Scenario', 'kind': 14},
+        ]
+
+        document = Document(
+            uri='dummy.feature',
+            source='''Feature:
+    Scenario:
+''',
+        )
+
+        assert map_keyword_completion_list(server._complete_keyword(None, document)) == [  # type: ignore
+            {'label': 'And', 'kind': 14},
+            {'label': 'Background', 'kind': 14},
+            {'label': 'But', 'kind': 14},
+            {'label': 'Given', 'kind': 14},
+            {'label': 'Scenario', 'kind': 14},
+            {'label': 'Then', 'kind': 14},
+            {'label': 'When', 'kind': 14},
+        ]
+
+        document = Document(
+            uri='dummy.feature',
+            source='''Feature:
+    Background:
+        Given a bunch of stuff
+    Scenario:
+''',
+        )
+
+        assert map_keyword_completion_list(server._complete_keyword(None, document)) == [  # type: ignore
+            {'label': 'And', 'kind': 14},
+            {'label': 'But', 'kind': 14},
+            {'label': 'Given', 'kind': 14},
+            {'label': 'Scenario', 'kind': 14},
+            {'label': 'Then', 'kind': 14},
+            {'label': 'When', 'kind': 14},
+        ]
+
+        assert map_keyword_completion_list(server._complete_keyword('EN', document)) == [  # type: ignore
+            {'label': 'Given', 'kind': 14},
+            {'label': 'Scenario', 'kind': 14},
+            {'label': 'Then', 'kind': 14},
+            {'label': 'When', 'kind': 14},
+        ]
+
+        assert map_keyword_completion_list(server._complete_keyword('Giv', document)) == [  # type: ignore
+            {'label': 'Given', 'kind': 14},
+        ]
 
     def test__normalize_step_expression(self, lsp_fixture: LspFixture, mocker: MockerFixture, caplog: LogCaptureFixture) -> None:
         mocker.patch('parse.Parser.__init__', return_value=None)
@@ -166,7 +253,7 @@ class TestGrizzlyLanguageServer:
         with caplog.at_level(logging.DEBUG, 'grizzly_ls.server'):
             server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))  # type: ignore
 
-        assert len(caplog.messages) == 4
+        assert len(caplog.messages) == 2
 
         assert not server.steps == {}
         assert len(server.normalizer.custom_types.keys()) >= 8
@@ -214,7 +301,6 @@ class TestGrizzlyLanguageServer:
             assert server._current_line('file://test.feature', Position(line=10, character=10)).strip() == 'Then hello world!'  # type: ignore
         assert str(ie.value) == 'list index out of range'
 
-    @pytest.mark.skip
     class TestGrizzlyLangageServerFeatures:
         def _initialize(self, client: LanguageServer, root: Path) -> None:
             retry = 3
@@ -278,11 +364,15 @@ class TestGrizzlyLanguageServer:
             path = path / 'features' / 'project.feature'
             self._open(client, path, content)
 
+            lines = content.split('\n')
+            line = len(lines) - 1
+            character = len(lines[-1]) - 1
+
             params = CompletionParams(
                 text_document=TextDocumentIdentifier(
                     uri=path.as_uri(),
                 ),
-                position=Position(line=0, character=len(content)),
+                position=Position(line=line, character=character),
                 context=context,
                 partial_result_token=None,
                 work_done_token=None,
@@ -328,14 +418,18 @@ class TestGrizzlyLanguageServer:
 
         def test_completion_keywords(self, lsp_fixture: LspFixture) -> None:
             client = lsp_fixture.client
-            server = lsp_fixture.server
+
+            def filter_keyword_properties(keywords: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+                return [{key: value for key, value in keyword.items() if key in ['label', 'kind']} for keyword in keywords]
 
             # partial match, keyword containing 'B'
-            response = self._completion(client, lsp_fixture.datadir, 'B')
+            response = self._completion(client, lsp_fixture.datadir, ''''Feature:
+    Scenario:
+        B''')
 
             assert not response.get('isIncomplete', True)
             items = response.get('items', [])
-            assert items == [
+            assert filter_keyword_properties(items) == [
                 {
                     'label': 'Background',
                     'kind': 14,
@@ -347,10 +441,12 @@ class TestGrizzlyLanguageServer:
             ]
 
             # partial match, keyword containing 'en'
-            response = self._completion(client, lsp_fixture.datadir, 'en')
+            response = self._completion(client, lsp_fixture.datadir, '''Feature:
+    Scenario:
+        en''')
             assert not response.get('isIncomplete', True)
             items = response.get('items', [])
-            assert items == [
+            assert filter_keyword_properties(items) == [
                 {
                     'label': 'Given',
                     'kind': 14,
@@ -377,9 +473,7 @@ class TestGrizzlyLanguageServer:
             assert len(unexpected_kinds) == 0
             labels = list(map(lambda k: k.get('label', None), items))
             assert all([True if l is not None else False for l in labels])
-
-            for keyword in server.keywords + server.keywords_once + list(server.keyword_alias.keys()):
-                assert keyword in labels
+            assert labels == ['Feature']
 
         def test_completion_steps(self, lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> None:
             client = lsp_fixture.client
