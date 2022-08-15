@@ -88,17 +88,17 @@ class RegexPermutationResolver:
     def handle_max_repeat(self, value: SreParseValue) -> List[str]:
         minimum, maximum, subpattern = cast(SreParseValueMaxRepeat, value)
 
-        sub_token, sub_value = subpattern[0]
-
         if maximum > 5000:
-            raise ValueError(f'too many repetitions requested ({maximum}')
+            raise ValueError(f'too many repetitions requested ({maximum}>5000)')
 
-        options = self.handle_token(sub_token, sub_value)
         values: List[Generator[List[str], None, None]] = []
 
-        for x in range(minimum, maximum + 1):
-            joined = self.cartesian_join([options] * x)
-            values.append(joined)
+        for sub_token, sub_value in subpattern:
+            options = self.handle_token(sub_token, sub_value)
+
+            for x in range(minimum, maximum + 1):
+                joined = self.cartesian_join([options] * x)
+                values.append(joined)
 
         return [''.join(it) for it in itertools.chain(*values)]
 

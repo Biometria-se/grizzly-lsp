@@ -41,9 +41,9 @@ timeout = 10
 addopts = [
     "--rootdir=grizzly-ls/",
     "-o", "testpaths=tests",
-    "-c", "grizzly-ls/pyproject.toml",
+    "-c", "pyproject.toml",
     "--cov-reset",
-    "--cov=grizzly-ls/src/grizzly_ls",
+    "--cov=src/grizzly_ls",
     "--cov-report=xml:grizzly-ls/.coverage.xml",
     "--no-cov-on-fail"
 ]

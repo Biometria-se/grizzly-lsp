@@ -284,7 +284,7 @@ class TestGrizzlyLanguageServer:
 
         assert server.steps == {}
 
-        grizzly_project = Path.cwd() / '..' / 'tests' / 'project'
+        grizzly_project = Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
 
         server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))
 
@@ -506,7 +506,7 @@ class TestGrizzlyLanguageServer:
 
         assert server.steps == {}
 
-        grizzly_project = Path.cwd() / '..' / 'tests' / 'project'
+        grizzly_project = Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
 
         with caplog.at_level(logging.DEBUG, 'grizzly_ls.server'):
             server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))
