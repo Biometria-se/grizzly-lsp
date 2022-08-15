@@ -187,6 +187,9 @@ class Normalizer:
 
                 holder = self.custom_types.get(variable_type, None)
                 if holder is not None:
+                    # @TODO: remove after new version of grizzly has been released
+                    if variable_type == 'ContentType':
+                        holder.permutations.y = True
                     normalize.update({variable: holder})
                 elif len(variable_type) == 1:  # native types
                     normalize.update({variable: NormalizeHolder(permutations=Coordinate(), replacements=[''])})
@@ -244,17 +247,26 @@ class Normalizer:
             # round 2, to normalize any additional unresolved prenumtations after normalizing x
             normalize_variations_y = {key: value for key, value in normalize.items() if value.permutations.y}
             if len(normalize_variations_y) > 0:
-                variation_patterns: Set[str] = set()
-                for pattern in patterns:
-                    for variable, holder in normalize_variations_y.items():
-                        if variable not in pattern:
-                            continue
+                repeat_round_2 = True
 
-                        for replacement in holder.replacements:
-                            variation_patterns.add(pattern.replace(variable, replacement))
+                # all remaining replacements needs to be resolved
+                while repeat_round_2:
+                    repeat_round_2 = False
+                    variation_patterns: Set[str] = set()
+                    for pattern in patterns:
+                        for variable, holder in normalize_variations_y.items():
+                            if variable not in pattern:
+                                continue
 
-                if len(variation_patterns) > 0:
-                    patterns = list(variation_patterns)
+                            for replacement in holder.replacements:
+                                normalized_pattern = pattern.replace(variable, replacement)
+                                variation_patterns.add(normalized_pattern)
+                                # are there any remaining replacements that should be resolved?
+                                if '{' in normalized_pattern and '}' in normalized_pattern:
+                                    repeat_round_2 = True
+
+                    if len(variation_patterns) > 0:
+                        patterns = list(variation_patterns)
 
         # no variables in step, just add it
         if not has_matches and not has_typed_matches or len(patterns) < 1:

@@ -5,8 +5,13 @@ from pathlib import Path
 from concurrent import futures
 from tempfile import gettempdir
 from shutil import rmtree
+from enum import Enum
 
 import pytest
+import gevent.monkey  # type: ignore
+
+# monkey patch functions to short-circuit them (causes problems in this context)
+gevent.monkey.patch_all = lambda: None
 
 from _pytest.logging import LogCaptureFixture
 from pytest_mock import MockerFixture
@@ -29,11 +34,66 @@ from pygls.lsp.types import (
 #    CompletionItemKind,
     DidOpenTextDocumentParams,
     InitializeParams,
+    MessageType,
 )
 from pygls.lsp.types.basic_structures import Position, TextDocumentItem, TextDocumentIdentifier
 from behave.matchers import ParseMatcher
 
 from .fixtures import LspFixture
+
+import parse
+from grizzly_extras.text import permutation, PermutationEnum
+from grizzly.types import MessageDirection
+
+
+@parse.with_pattern(r'(hello|world|foo|bar)')
+@permutation(vector=(False, True, ))
+def parse_with_pattern_and_vector(text: str) -> str:
+    return text
+
+
+@parse.with_pattern(r'(alice|bob)')
+def parse_with_pattern(text: str) -> str:
+    return text
+
+
+@parse.with_pattern('')
+def parse_with_pattern_error(text: str) -> str:
+    return text
+
+
+def parse_enum_indirect(text: str) -> MessageDirection:
+    return MessageDirection.from_string(text)
+
+class DummyEnum(PermutationEnum):
+    HELLO = 0
+    WORLD = 1
+    FOO = 2
+    BAR = 3
+
+    @classmethod
+    def from_string(cls, value: str) -> 'DummyEnum':
+        for enum_value in cls:
+            if enum_value.name.lower() == value.lower():
+                return enum_value
+
+        raise ValueError(f'{value} is not a valid value')
+
+
+class DummyEnumNoFromString(PermutationEnum):
+    ERROR = 0
+
+    @classmethod
+    def magic(cls, value: str) -> str:
+        return value
+
+
+class DummyEnumNoFromStringType(Enum):
+    ERROR = 1
+
+    @classmethod
+    def from_string(cls, value: str):
+        return value
 
 
 class TestGrizzlyLanguageServer:
@@ -54,11 +114,11 @@ class TestGrizzlyLanguageServer:
     def test__get_step_parts(self, lsp_fixture: LspFixture) -> None:
         server = lsp_fixture.server
 
-        assert server._get_step_parts('') == (None, None, )  # type: ignore
-        assert server._get_step_parts('Giv') == ('Giv', None, )  # type: ignore
-        assert server._get_step_parts('Given hello world') == ('Given', 'hello world', )  # type: ignore
-        assert server._get_step_parts('And are you "ok"?') == ('Given', 'are you ""?', )  # type: ignore
-        assert server._get_step_parts('Then   make sure   that "value"  is "None"') == (  # type: ignore
+        assert server._get_step_parts('') == (None, None, )
+        assert server._get_step_parts('Giv') == ('Giv', None, )
+        assert server._get_step_parts('Given hello world') == ('Given', 'hello world', )
+        assert server._get_step_parts('And are you "ok"?') == ('Given', 'are you ""?', )
+        assert server._get_step_parts('Then   make sure   that "value"  is "None"') == (
             'Then', 'make sure that "" is ""',
         )
 
@@ -66,18 +126,17 @@ class TestGrizzlyLanguageServer:
         def map_keyword_completion_list(completion_list: List[CompletionItem]) -> List[Dict[str, Any]]:
             return [{'label': completion.label, 'kind': completion.kind.numerator} for completion in completion_list if completion.kind is not None]
 
-        server = lsp_fixture.server
-
         grizzly_project = Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
-        server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))  # type: ignore
-        server._make_keyword_registry()  # type: ignore
+        server = lsp_fixture.server
+        server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))
+        server._make_keyword_registry()
 
         document = Document(
             uri='dummy.feature',
             source='',
         )
 
-        assert map_keyword_completion_list(server._complete_keyword(None, document)) == [  # type: ignore
+        assert map_keyword_completion_list(server._complete_keyword(None, document)) == [
             {'label': 'Feature', 'kind': 14},
         ]
 
@@ -86,7 +145,7 @@ class TestGrizzlyLanguageServer:
             source='Feature:',
         )
 
-        assert map_keyword_completion_list(server._complete_keyword(None, document)) == [  # type: ignore
+        assert map_keyword_completion_list(server._complete_keyword(None, document)) == [
             {'label': 'Background', 'kind': 14},
             {'label': 'Scenario', 'kind': 14},
         ]
@@ -98,7 +157,7 @@ class TestGrizzlyLanguageServer:
 ''',
         )
 
-        assert map_keyword_completion_list(server._complete_keyword(None, document)) == [  # type: ignore
+        assert map_keyword_completion_list(server._complete_keyword(None, document)) == [
             {'label': 'And', 'kind': 14},
             {'label': 'Background', 'kind': 14},
             {'label': 'But', 'kind': 14},
@@ -117,7 +176,7 @@ class TestGrizzlyLanguageServer:
 ''',
         )
 
-        assert map_keyword_completion_list(server._complete_keyword(None, document)) == [  # type: ignore
+        assert map_keyword_completion_list(server._complete_keyword(None, document)) == [
             {'label': 'And', 'kind': 14},
             {'label': 'But', 'kind': 14},
             {'label': 'Given', 'kind': 14},
@@ -126,16 +185,98 @@ class TestGrizzlyLanguageServer:
             {'label': 'When', 'kind': 14},
         ]
 
-        assert map_keyword_completion_list(server._complete_keyword('EN', document)) == [  # type: ignore
+        assert map_keyword_completion_list(server._complete_keyword('EN', document)) == [
             {'label': 'Given', 'kind': 14},
             {'label': 'Scenario', 'kind': 14},
             {'label': 'Then', 'kind': 14},
             {'label': 'When', 'kind': 14},
         ]
 
-        assert map_keyword_completion_list(server._complete_keyword('Giv', document)) == [  # type: ignore
+        assert map_keyword_completion_list(server._complete_keyword('Giv', document)) == [
             {'label': 'Given', 'kind': 14},
         ]
+
+    def test__complete_step(self, lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> None:
+        def map_step_completion_list(completion_list: List[CompletionItem]) -> List[Dict[str, Any]]:
+            return [{'label': completion.label, 'kind': completion.kind.numerator} for completion in completion_list if completion.kind is not None]
+
+        grizzly_project = Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
+        server = lsp_fixture.server
+        server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))
+        server._make_keyword_registry() 
+
+        with caplog.at_level(logging.DEBUG):
+            matched_steps = map_step_completion_list(server._complete_step('Given', 'variable'))
+            for expected_step in [
+                'set context variable "" to ""',
+                'ask for value of variable ""',
+                'set global context variable "" to ""',
+                'set alias "" for variable ""',
+                'value for variable "" is ""',
+            ]:
+                assert {'kind': 3, 'label': expected_step} in matched_steps
+
+            matched_steps = map_step_completion_list(server._complete_step('Then', 'save'))
+            for expected_step in [
+                'save response metadata "" in variable ""',
+                'save response payload "" in variable ""',
+                'save response payload "" that matches "" in variable ""',
+                'save response metadata "" that matches "" in variable ""',
+                'get "" with name "" and save response in ""',
+                'parse date "" and save in variable ""',
+                'parse "" as "undefined" and save value of "" in variable ""',
+                'parse "" as "plain" and save value of "" in variable ""',
+                'parse "" as "xml" and save value of "" in variable ""',
+                'parse "" as "json" and save value of "" in variable ""',
+            ]:
+                assert {'kind': 3, 'label': expected_step} in matched_steps
+
+            matched_steps = map_step_completion_list(server._complete_step('Then', 'save response metadata "hello"'))
+            for expected_step in [
+                'save response metadata "" in variable ""',
+                'save response metadata "" that matches "" in variable ""',
+            ]:
+                assert {'kind': 3, 'label': expected_step} in matched_steps
+
+            matched_steps = map_step_completion_list(server._complete_step('When', None))
+            for expected_step in [
+                'condition "" with name "" is true, execute these tasks',
+                'fail ratio is greater than ""% fail scenario',
+                'average response time is greater than "" milliseconds fail scenario',
+                'response time percentile ""% is greater than "" milliseconds fail scenario',
+                'response payload "" is not "" fail request',
+                'response payload "" is "" fail request',
+                'response metadata "" is not "" fail request',
+                'response metadata "" is "" fail request',
+            ]:
+                assert {'kind': 3, 'label': expected_step} in matched_steps
+
+            matched_steps = map_step_completion_list(server._complete_step('When', 'response '))
+            for expected_step in [
+                'average response time is greater than "" milliseconds fail scenario',
+                'response time percentile ""% is greater than "" milliseconds fail scenario',
+                'response payload "" is not "" fail request',
+                'response payload "" is "" fail request',
+                'response metadata "" is not "" fail request',
+                'response metadata "" is "" fail request',
+            ]:
+                assert {'kind': 3, 'label': expected_step} in matched_steps
+
+            matched_steps = map_step_completion_list(server._complete_step('When', 'response fail request'))
+            for expected_step in [
+                'response payload "" is not "" fail request',
+                'response payload "" is "" fail request',
+                'response metadata "" is not "" fail request',
+                'response metadata "" is "" fail request',
+            ]:
+                assert {'kind': 3, 'label': expected_step} in matched_steps
+
+            matched_steps = map_step_completion_list(server._complete_step('When', 'response payload "" is fail request'))
+            for expected_step in [
+                'response payload "" is not "" fail request',
+                'response payload "" is "" fail request',
+            ]:
+                assert {'kind': 3, 'label': expected_step} in matched_steps
 
     def test__normalize_step_expression(self, lsp_fixture: LspFixture, mocker: MockerFixture, caplog: LogCaptureFixture) -> None:
         mocker.patch('parse.Parser.__init__', return_value=None)
@@ -145,33 +286,33 @@ class TestGrizzlyLanguageServer:
 
         grizzly_project = Path.cwd() / '..' / 'tests' / 'project'
 
-        server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))  # type: ignore
+        server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))
 
         noop = lambda: None
 
         step = ParseMatcher(noop, 'hello world')
 
-        assert server._normalize_step_expression(step) == ['hello world']  # type: ignore
+        assert server._normalize_step_expression(step) == ['hello world'] 
 
         step = ParseMatcher(noop, 'hello "{world}"! how "{are:d}" you')
 
-        assert server._normalize_step_expression(step) == ['hello ""! how "" you']  # type: ignore
+        assert server._normalize_step_expression(step) == ['hello ""! how "" you']
 
         step = ParseMatcher(noop, 'you have "{count}" {grammar:UserGramaticalNumber}')
 
-        assert sorted(server._normalize_step_expression(step)) == sorted([  # type: ignore
+        assert sorted(server._normalize_step_expression(step)) == sorted([
             'you have "" users',
             'you have "" user',
         ])
 
         step = ParseMatcher(noop, 'send from {from_node:MessageDirection} to {to_node:MessageDirection}')
 
-        assert sorted(server._normalize_step_expression(step)) == sorted([  # type: ignore
+        assert sorted(server._normalize_step_expression(step)) == sorted([
             'send from client to server',
             'send from server to client',
         ])
 
-        assert sorted(server._normalize_step_expression(  # type: ignore
+        assert sorted(server._normalize_step_expression(
             'send to {to_node:MessageDirection} from {from_node:MessageDirection} for "{iterations}" {grammar:IterationGramaticalNumber}',
         )) == sorted([
             'send to server from client for "" iteration',
@@ -180,7 +321,7 @@ class TestGrizzlyLanguageServer:
             'send to client from server for "" iterations',
         ])
 
-        assert sorted(server._normalize_step_expression(  # type: ignore
+        assert sorted(server._normalize_step_expression(
             'send {direction:Direction} {node:MessageDirection}',
         )) == sorted([
             'send from server',
@@ -191,23 +332,36 @@ class TestGrizzlyLanguageServer:
 
         step = ParseMatcher(
             noop,
-            'Then save {target:ResponseTarget} as "{content_type:ContentType}" "{expression:ContentType}" in "{variable}" for "{count}" {grammar:UserGramaticalNumber}',
+            'Then save {target:ResponseTarget} as "{content_type:ContentType}" in "{variable}" for "{count}" {grammar:UserGramaticalNumber}',
         )
-        assert sorted(server._normalize_step_expression(step)) == sorted([  # type: ignore
-            'Then save payload as "undefined" "undefined" in "" for "" user',
-            'Then save payload as "undefined" "undefined" in "" for "" users',
-            'Then save metadata as "undefined" "undefined" in "" for "" user',
-            'Then save metadata as "undefined" "undefined" in "" for "" users',
+        actual = sorted(server._normalize_step_expression(step))
+        assert actual == sorted([
+            'Then save payload as "undefined" in "" for "" user',
+            'Then save payload as "undefined" in "" for "" users',
+            'Then save metadata as "undefined" in "" for "" user',
+            'Then save metadata as "undefined" in "" for "" users',
+            'Then save payload as "json" in "" for "" user',
+            'Then save payload as "json" in "" for "" users',
+            'Then save metadata as "json" in "" for "" user',
+            'Then save metadata as "json" in "" for "" users',
+            'Then save payload as "xml" in "" for "" user',
+            'Then save payload as "xml" in "" for "" users',
+            'Then save metadata as "xml" in "" for "" user',
+            'Then save metadata as "xml" in "" for "" users',
+            'Then save payload as "plain" in "" for "" user',
+            'Then save payload as "plain" in "" for "" users',
+            'Then save metadata as "plain" in "" for "" user',
+            'Then save metadata as "plain" in "" for "" users',
         ])
 
-        assert sorted(server._normalize_step_expression(  # type: ignore
+        assert sorted(server._normalize_step_expression(
             'python {condition:Condition} cool',
         )) == sorted([
             'python is cool',
             'python is not cool',
         ])
 
-        assert sorted(server._normalize_step_expression(  # type: ignore
+        assert sorted(server._normalize_step_expression(
             '{method:Method} {direction:Direction} endpoint "{endpoint:s}"'
         )) == sorted([
             'send to endpoint ""',
@@ -227,7 +381,7 @@ class TestGrizzlyLanguageServer:
         show_message_mock = mocker.patch.object(server, 'show_message', autospec=True)
 
         with caplog.at_level(logging.ERROR):
-            assert sorted(server._normalize_step_expression(  # type: ignore
+            assert sorted(server._normalize_step_expression(
                 'unhandled type {test:Unknown} for {target:ResponseTarget}',
             )) == sorted([
                 'unhandled type {test:Unknown} for metadata', 
@@ -243,6 +397,110 @@ class TestGrizzlyLanguageServer:
         assert len(kwargs) == 1
         assert kwargs.get('msg_type', None) == 1
 
+    def test__resolve_custom_types(self, lsp_fixture: LspFixture, mocker: MockerFixture, caplog: LogCaptureFixture) -> None:
+        server = lsp_fixture.server
+
+        mocker.patch('grizzly_ls.server.ParseMatcher.custom_types', {})
+        show_message_spy = mocker.spy(server, 'show_message')
+
+        server._resolve_custom_types()
+        assert server.normalizer.custom_types == {}
+
+        mocker.patch(
+            'grizzly_ls.server.ParseMatcher.custom_types',
+            {
+                'WithPatternAndVector': parse_with_pattern_and_vector,
+                'WithPattern': parse_with_pattern,
+                'EnumIndirect': parse_enum_indirect,
+                'EnumDirect': DummyEnum.from_string,
+            },
+        )
+        server._resolve_custom_types()
+
+        assert list(sorted(server.normalizer.custom_types.keys())) == sorted([
+            'WithPatternAndVector',
+            'WithPattern',
+            'EnumIndirect',
+            'EnumDirect',
+        ])
+
+        with_pattern_and_vector = server.normalizer.custom_types.get('WithPatternAndVector', None)
+
+        assert with_pattern_and_vector is not None
+        assert not with_pattern_and_vector.permutations.x and with_pattern_and_vector.permutations.y
+        assert sorted(with_pattern_and_vector.replacements) == sorted(['bar', 'hello', 'foo', 'world'])
+
+        with_pattern = server.normalizer.custom_types.get('WithPattern', None)
+
+        assert with_pattern is not None
+        assert not with_pattern.permutations.x and not with_pattern.permutations.y
+        assert sorted(with_pattern.replacements) == sorted(['alice', 'bob'])
+
+        enum_indirect = server.normalizer.custom_types.get('EnumIndirect', None)
+        assert enum_indirect is not None
+        assert enum_indirect.permutations.x and enum_indirect.permutations.y
+        assert sorted(enum_indirect.replacements) == sorted(['client_server', 'server_client'])
+
+        enum_direct = server.normalizer.custom_types.get('EnumDirect', None)
+        assert enum_direct is not None
+        assert not enum_direct.permutations.x and not enum_direct.permutations.y
+        assert sorted(enum_direct.replacements) == sorted(['hello', 'world', 'foo', 'bar'])
+
+        mocker.patch(
+            'grizzly_ls.server.ParseMatcher.custom_types',
+            {
+                'WithPattern': parse_with_pattern_error,
+            },
+        )
+
+        caplog.clear()
+        with caplog.at_level(logging.ERROR):
+            server._resolve_custom_types()
+
+        assert len(caplog.messages) == 1
+        expected_message = 'could not extract pattern from "@parse.with_pattern(\'\')" for custom type WithPattern'
+        assert caplog.messages[-1] == expected_message
+        assert show_message_spy.call_count == 1
+        args, kwargs = show_message_spy.call_args_list[-1]
+        assert args[0] == expected_message
+        assert kwargs.get('msg_type', None) == MessageType.Error
+
+        mocker.patch(
+            'grizzly_ls.server.ParseMatcher.custom_types',
+            {
+                'EnumError': DummyEnumNoFromString.magic,
+            },
+        )
+
+        with caplog.at_level(logging.ERROR):
+            server._resolve_custom_types()
+
+        assert len(caplog.messages) == 2
+        expected_message = 'cannot infere what <bound method DummyEnumNoFromString.magic of <enum \'DummyEnumNoFromString\'>> will return for EnumError'
+        assert caplog.messages[-1] == expected_message
+        assert show_message_spy.call_count == 2
+        args, kwargs = show_message_spy.call_args_list[-1]
+        assert args[0] == expected_message
+        assert kwargs.get('msg_type', None) == MessageType.Error
+
+        mocker.patch(
+            'grizzly_ls.server.ParseMatcher.custom_types',
+            {
+                'EnumError': DummyEnumNoFromStringType.from_string,
+            },
+        )
+
+        with caplog.at_level(logging.ERROR):
+            server._resolve_custom_types()
+
+        assert len(caplog.messages) == 3
+        expected_message = 'could not find the type that from_string method for custom type EnumError returns'
+        assert caplog.messages[-1] == expected_message
+        assert show_message_spy.call_count == 3
+        args, kwargs = show_message_spy.call_args_list[-1]
+        assert args[0] == expected_message
+        assert kwargs.get('msg_type', None) == MessageType.Error
+
     def test__make_step_registry(self, lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> None:
         server = lsp_fixture.server
 
@@ -251,7 +509,7 @@ class TestGrizzlyLanguageServer:
         grizzly_project = Path.cwd() / '..' / 'tests' / 'project'
 
         with caplog.at_level(logging.DEBUG, 'grizzly_ls.server'):
-            server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))  # type: ignore
+            server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))
 
         assert len(caplog.messages) == 2
 
@@ -271,9 +529,8 @@ class TestGrizzlyLanguageServer:
 
         # create pre-requisites
         grizzly_project = Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
-        server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))  # type: ignore
-
-        server._make_keyword_registry()  # type: ignore
+        server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))
+        server._make_keyword_registry()
 
         assert 'Feature' not in server.keywords  # already used once in feature file
         assert 'Background' not in server.keywords  # - " -
@@ -292,13 +549,13 @@ class TestGrizzlyLanguageServer:
         But foo bar
 '''))
 
-        assert server._current_line('file://test.feature', Position(line=0, character=0)).strip() == 'Feature:'  # type: ignore
-        assert server._current_line('file://test.feature', Position(line=1, character=543)).strip() == 'Scenario: test'  # type: ignore
-        assert server._current_line('file://test.feature', Position(line=2, character=435)).strip() == 'Then hello world!'  # type: ignore
-        assert server._current_line('file://test.feature', Position(line=3, character=534)).strip() == 'But foo bar'  # type: ignore
+        assert server._current_line('file://test.feature', Position(line=0, character=0)).strip() == 'Feature:'
+        assert server._current_line('file://test.feature', Position(line=1, character=543)).strip() == 'Scenario: test'
+        assert server._current_line('file://test.feature', Position(line=2, character=435)).strip() == 'Then hello world!'
+        assert server._current_line('file://test.feature', Position(line=3, character=534)).strip() == 'But foo bar'
 
         with pytest.raises(IndexError) as ie:
-            assert server._current_line('file://test.feature', Position(line=10, character=10)).strip() == 'Then hello world!'  # type: ignore
+            assert server._current_line('file://test.feature', Position(line=10, character=10)).strip() == 'Then hello world!'
         assert str(ie.value) == 'list index out of range'
 
     class TestGrizzlyLangageServerFeatures:
@@ -494,18 +751,27 @@ class TestGrizzlyLanguageServer:
                 assert 'spawn rate is "" users per second' in labels
                 assert 'a user of type "" with weight "" load testing ""' in labels
 
-            with caplog.at_level(logging.DEBUG, 'grizzly_ls.server'):
-                response = self._completion(client, lsp_fixture.datadir, 'Given value')
-                assert not response.get('isIncomplete', True)
-                unexpected_kinds = list(filter(lambda s: s != 3, map(lambda s: s.get('kind', None), response.get('items', []))))
-                assert len(unexpected_kinds) == 0
+            response = self._completion(client, lsp_fixture.datadir, 'Given value')
+            assert not response.get('isIncomplete', True)
+            unexpected_kinds = list(filter(lambda s: s != 3, map(lambda s: s.get('kind', None), response.get('items', []))))
+            assert len(unexpected_kinds) == 0
 
-                labels = list(map(lambda s: s.get('label', None), response.get('items', [])))
-                print(labels)
-                assert len(labels) > 0
-                assert all([True if l is not None else False for l in labels])
+            labels = list(map(lambda s: s.get('label', None), response.get('items', [])))
+            assert len(labels) > 0
+            assert all([True if l is not None else False for l in labels])
 
-                assert 'ask for value of variable ""' in labels
+            assert 'ask for value of variable ""' in labels
+            assert 'value for variable "" is ""'
 
-            assert 0
+            response = self._completion(client, lsp_fixture.datadir, 'Given a user of')
+            assert not response.get('isIncomplete', True)
+            unexpected_kinds = list(filter(lambda s: s != 3, map(lambda s: s.get('kind', None), response.get('items', []))))
+            assert len(unexpected_kinds) == 0
+
+            labels = list(map(lambda s: s.get('label', None), response.get('items', [])))
+            assert len(labels) > 0
+            assert all([True if l is not None else False for l in labels])
+
+            assert 'a user of type "" with weight "" load testing ""' in labels
+            assert 'a user of type "" load testing ""' in labels
 

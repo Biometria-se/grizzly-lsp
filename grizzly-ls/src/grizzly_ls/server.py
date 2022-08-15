@@ -1,4 +1,5 @@
 import inspect
+import itertools
 import logging
 import platform
 import warnings
@@ -7,7 +8,7 @@ import re
 
 from os import environ
 from os.path import pathsep
-from typing import Any, Tuple, Dict, List, Union, Optional, Callable
+from typing import Any, Tuple, Dict, List, Union, Optional, Callable, Literal
 from types import FrameType
 from pathlib import Path
 from behave.matchers import ParseMatcher
@@ -146,43 +147,7 @@ class GrizzlyLanguageServer(LanguageServer):
             if keyword is None or keyword not in self.keywords:
                 items = self._complete_keyword(keyword, document)
             elif keyword is not None:
-                steps = self.steps.get(keyword.lower(), [])
-
-                matched_steps: List[str]
-
-                if step is None:
-                    matched_steps = steps
-                else:
-                    matched_steps = get_close_matches(step, steps, len(steps), 0.2)
-                    self.logger.debug(f'{step=}')
-                    for matched_step in matched_steps:
-                        score = SequenceMatcher(None, step, matched_step).ratio()
-                        self.logger.debug(f'\t{matched_step=} {score=}')
-
-                items = list(
-                    map(
-                        lambda s: CompletionItem(
-                            label=s,
-                            kind=CompletionItemKind.Function,
-                            tags=None,
-                            detail=None,
-                            documentation=None,
-                            deprecated=False,
-                            preselect=None,
-                            sort_text=None,
-                            filter_text=None,
-                            insert_text=None,
-                            insert_text_format=None,
-                            insert_text_mode=None,
-                            text_edit=None,
-                            additional_text_edits=None,
-                            commit_characters=None,
-                            command=None,
-                            data=None,
-                        ),
-                        matched_steps,
-                    )
-                )
+                items = self._complete_step(keyword, step)
 
             return CompletionList(
                 is_incomplete=False,
@@ -257,6 +222,61 @@ class GrizzlyLanguageServer(LanguageServer):
             )
         )
 
+    def _complete_step(self, keyword: str, expression: Optional[str]) -> List[CompletionItem]:
+        steps = self.steps.get(keyword.lower(), [])
+
+        matched_steps: List[str]
+
+        if expression is None or len(expression) < 1:
+            matched_steps = steps
+        else:
+            # 1. exact matching
+            matched_steps_1 = set(filter(lambda s: s.startswith(expression), steps))
+
+            # 2. close enough matching
+            matched_steps_2 = set(filter(lambda s: expression in s, steps))
+
+            # 3. "fuzzy" matching
+            matched_steps_3 = set(get_close_matches(expression, steps, len(steps), 0.6))
+
+            # keep order so that 1. matches comes before 2. matches etc.
+            matched_steps_container: Dict[str, Literal[None]] = {}
+
+            for matched_step in itertools.chain(matched_steps_1, matched_steps_2, matched_steps_3):
+                matched_steps_container.update({matched_step: None})
+
+            matched_steps = list(matched_steps_container.keys())
+
+            self.logger.debug(f'{expression=}')
+            for matched_step in matched_steps:
+                score = SequenceMatcher(None, expression, matched_step).ratio()
+                self.logger.debug(f'\t{matched_step=} {score=}')
+
+        return list(
+            map(
+                lambda s: CompletionItem(
+                    label=s,
+                    kind=CompletionItemKind.Function,
+                    tags=None,
+                    detail=None,
+                    documentation=None,
+                    deprecated=False,
+                    preselect=None,
+                    sort_text=None,
+                    filter_text=None,
+                    insert_text=None,
+                    insert_text_format=None,
+                    insert_text_mode=None,
+                    text_edit=None,
+                    additional_text_edits=None,
+                    commit_characters=None,
+                    command=None,
+                    data=None,
+                ),
+                matched_steps,
+            )
+        )
+
     def _normalize_step_expression(self, step: Union[ParseMatcher, str]) -> List[str]:
         if isinstance(step, ParseMatcher):
             pattern = step.pattern
@@ -280,6 +300,8 @@ class GrizzlyLanguageServer(LanguageServer):
             try:
                 func_code = [line for line in inspect.getsource(func).strip().split('\n') if not line.strip().startswith('@classmethod')]
                 message: Optional[str] = None
+
+                print(func_code)
 
                 if func_code[0].startswith('@parse.with_pattern'):
                     match = re.match(r'@parse.with_pattern\(r\'\(?(.*?)\)?\'', func_code[0])
@@ -313,7 +335,7 @@ class GrizzlyLanguageServer(LanguageServer):
                             enum_name = match.group(1)
                             module = inspect.getmodule(func)
                         else:
-                            raise ValueError(f'could not find a from_string method for custom type {custom_type}')
+                            raise ValueError(f'could not find the type that from_string method for custom type {custom_type} returns')
 
                     enum_class = getattr(module, enum_name)
                     replacements = [value.name.lower() for value in enum_class]

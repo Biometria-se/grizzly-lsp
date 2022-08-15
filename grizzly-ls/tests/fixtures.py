@@ -34,7 +34,10 @@ class LspFixture:
         sstdio, sstdout = os.pipe()
 
         def start(ls: LanguageServer, fdr: int, fdw: int) -> None:
-            ls.start_io(os.fdopen(fdr, 'rb'), os.fdopen(fdw, 'wb'))  # type: ignore
+            try:
+                ls.start_io(os.fdopen(fdr, 'rb'), os.fdopen(fdw, 'wb'))  # type: ignore
+            except:
+                pass
 
         self.server = GrizzlyLanguageServer(asyncio.new_event_loop())  # type: ignore
         self._server_thread = Thread(target=start, args=(self.server, cstdio, sstdout), daemon=True)

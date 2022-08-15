@@ -4,6 +4,7 @@
     "grizzly-ls/tests/project"
   ],
   "reportUnusedFunction": "none",
+  "reportPrivateUsage": false,
   "stubPath": "grizzly-ls/types",
   "executionEnvironments": [
     {
