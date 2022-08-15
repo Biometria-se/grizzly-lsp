@@ -19,8 +19,8 @@ RUN python3 -m pip install --upgrade pip
 ENV PATH=$PATH:/home/vscode/.local/bin
 
 # [Optional] Uncomment this section to install additional OS packages.
-# RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-#     && apt-get -y install --no-install-recommends <your-package-list-here>
+RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get -y install xvfb libatk1.0-0 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2
 
 # [Optional] Uncomment this line to install global node packages.
-# RUN su vscode -c "source /usr/local/share/nvm/nvm.sh && npm install -g <your-package-here>" 2>&1
+RUN su vscode -c "source /usr/local/share/nvm/nvm.sh && npm install -g xvfb-maybe" 2>&1

@@ -8,7 +8,7 @@
     "type": "git",
     "url": "https://github.com/biometria-se/grizzly-lsp"
   },
-  "publisher": "biometria",
+  "publisher": "biometria-se",
   "categories": [],
   "keywords": [
     "grizzly",
@@ -88,7 +88,7 @@
     "compile": "tsc -b",
     "watch": "tsc -b -w",
     "lint": "eslint src/ --ext .ts,.tsx",
-    "test": "sh ../scripts/client-e2e.sh"
+    "test": "npm run compile && sh -c ../../scripts/client-e2e.sh"
   },
   "dependencies": {
     "vscode-languageclient": "^7.0.0"

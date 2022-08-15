@@ -10,3 +10,4 @@
 **/.coverage*
 **/src/grizzly_ls/__version__.py
 **/setup.cfg
+**/.vscode-test
