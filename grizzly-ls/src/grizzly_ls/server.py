@@ -8,7 +8,7 @@ import re
 
 from os import environ
 from os.path import pathsep
-from typing import Any, Tuple, Dict, List, Union, Optional, Callable, Literal
+from typing import Any, Tuple, Dict, List, Union, Optional, Callable, Literal, cast
 from types import FrameType
 from pathlib import Path
 from behave.matchers import ParseMatcher
@@ -25,6 +25,7 @@ from pygls.server import LanguageServer
 from pygls.lsp.methods import (
     COMPLETION,
     INITIALIZE,
+    WORKSPACE_DID_CHANGE_CONFIGURATION,
 )
 from pygls.lsp.types import (
     CompletionParams,
@@ -34,6 +35,7 @@ from pygls.lsp.types import (
     InitializeParams,
     MessageType,
 )
+from pygls.lsp.types.workspace import DidChangeConfigurationParams as WorkspaceDidChangeConfigurationParams
 from pygls.lsp.types.basic_structures import Position
 from pygls.workspace import Document
 
@@ -76,11 +78,13 @@ class GrizzlyLanguageServer(LanguageServer):
 
         @self.feature(INITIALIZE)
         def initialize(params: InitializeParams) -> None:
-            assert params.root_path is not None or params.root_uri is not None, f'neither root_path or root_uri was received from client'
+            self.logger.debug(params)
+            if params.root_path is None and params.root_uri is None:
+                error_message = 'neither root_path or root uri was received from client'
+                self.logger.error(error_message)
+                self.show_message(error_message, msg_type=MessageType.Error)
 
-            root_path = Path(params.root_path) if params.root_path is not None else Path(unquote(urlparse(params.root_uri).path)) if params.root_uri is not None else None
-
-            assert root_path is not None
+            root_path = Path(unquote(urlparse(params.root_uri).path)) if params.root_uri is not None else Path(cast(str, params.root_path))
 
             project_name = root_path.stem
 
@@ -149,10 +153,16 @@ class GrizzlyLanguageServer(LanguageServer):
             elif keyword is not None:
                 items = self._complete_step(keyword, step)
 
+            self.logger.debug(f'completion: {items=}')
+
             return CompletionList(
                 is_incomplete=False,
                 items=items,
             )
+
+        @self.feature(WORKSPACE_DID_CHANGE_CONFIGURATION)
+        def workspace_did_change_configuration(params: WorkspaceDidChangeConfigurationParams) -> None:
+            self.logger.debug(params)
 
     def _get_step_parts(self, line: str) -> Tuple[Optional[str], Optional[str]]:
         self.logger.info(f'{line=}')
