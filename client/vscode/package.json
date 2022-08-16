@@ -21,7 +21,7 @@
   "activationEvents": [
     "onLanguage:grizzly-gherkin"
   ],
-  "main": "./out/extension",
+  "main": "./out/src/extension",
   "contributes": {
     "languages": [
       {
@@ -84,11 +84,13 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run build",
+    "build": "tsc --project tsconfig.build.json",
     "compile": "tsc -b",
     "watch": "tsc -b -w",
     "lint": "eslint src/ --ext .ts,.tsx",
-    "test": "npm run compile && sh -c ../../scripts/client-e2e.sh"
+    "pretest": "npm run compile",
+    "test": "sh -c ../../scripts/client-e2e.sh"
   },
   "dependencies": {
     "vscode-languageclient": "^7.0.0"
