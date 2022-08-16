@@ -53,7 +53,7 @@ function getOuterMostWorkspaceFolder(folder: WorkspaceFolder): WorkspaceFolder {
         }
 
         if (folderUri.startsWith(folderSorted)) {
-            return workspace.getWorkspaceFolder(Uri.parse(folderSorted));
+            return workspace.getWorkspaceFolder(Uri.parse(folderSorted)) || folder;
         }
     }
 
@@ -114,16 +114,16 @@ function createLanguageClient(): LanguageClient {
     switch (connectionType) {
         case "stdio":
             languageClient = createStdioLanguageServer(
-                configuration.get<string>("stdio.executable"),
-                configuration.get<Array<string>>("stdio.args"),
+                configuration.get<string>("stdio.executable") || "grizzly-ls",
+                configuration.get<Array<string>>("stdio.args") || [],
                 documentSelector,
                 outputChannel,
             );
             break;
         case "socket":
             languageClient = createSocketLanguageServer(
-                configuration.get<string>("socket.host"),
-                configuration.get<number>("socket.port"),
+                configuration.get<string>("socket.host") || "localhost",
+                configuration.get<number>("socket.port") || 4444,
                 documentSelector,
                 outputChannel,
             );

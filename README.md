@@ -15,12 +15,17 @@ Goals:
 - [x] syntax highlighting
 - [x] auto-complete
 - [ ] CI workflows
-- [ ] unit tests
-    - [ ] `client/vscode`
-    - [ ] `grizzly-ls/`
-- [ ] release
-    - `client/vscode` on Visual Studio Code Marketplace
-    - `grizzly-ls/` on pypi.org
+    - [ ] client
+        - [ ] test
+        - [ ] build
+        - [ ] publish `client/vscode` on Visual Studio Code Marketplace
+    - [ ] server
+        - [ ] test
+        - [ ] build
+        - [ ] publish `grizzly-ls/` on pypi.org
+- [x] unit tests
+    - [x] `client/vscode`
+    - [x] `grizzly-ls/`
 
 ## Development
 
