@@ -15,14 +15,18 @@
   },
   // Set *default* container specific settings.json values on container create.
   "settings": {
+    "python.defaultInterpreterPath": "/usr/local/bin/python",
     "python.pythonPath": "/usr/local/bin/python",
     "python.languageServer": "Pylance",
+    "python.analysis.diagnosticSeverityOverrides": {
+      "reportUnusedFunction": "none"
+    },
     "python.linting.enabled": true,
     "python.linting.pylintEnabled": true,
     "python.formatting.provider": "black",
     "python.formatting.blackPath": "black",
     "python.formatting.blackArgs": [
-      "--config=/workspaces/grizzly-vscode/server/pyproject.toml",
+      "--config=/workspaces/grizzly-vscode/grizzly-ls/pyproject.toml",
       "-S",
       "-l 180"
     ],
@@ -30,9 +34,27 @@
     "python.linting.mypyPath": "mypy",
     "python.linting.pylintPath": "pylint",
     "python.linting.pylintArgs": [
-      "--rcfile=${containerWorkspaceFolder}/server/pyproject.toml"
+      "--rcfile=${containerWorkspaceFolder}/grizzly-ls/pyproject.toml"
     ],
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "python.testing.cwd": "./grizzly-ls",
+    "python.testing.pytestArgs": [
+      "-c",
+      "./pyproject.toml",
+      "-o",
+      "testpaths=tests",
+      "--cov-reset",
+      "--cov=./src/grizzly_ls",
+      "--cov-report=xml:./.coverage.xml",
+      "."
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "coverage-gutters.coverageFileNames": [],
+    "coverage-gutters.manualCoverageFilePaths": [
+      "${containerWorkspaceFolder}/grizzly-ls/.coverage.xml"
+    ],
+    "coverage-gutters.ignoredPathGlobs": "**/{node_modules,venv,.venv,vendor,tests}/**"
   },
   // Add the IDs of extensions you want installed when the container is created.
   "extensions": [
@@ -40,7 +62,8 @@
     "ms-python.vscode-pylance",
     "EditorConfig.EditorConfig",
     "oderwat.indent-rainbow",
-    "eamodio.gitlens"
+    "eamodio.gitlens",
+    "ryanluker.vscode-coverage-gutters"
   ],
   "mounts": [
     "source=/etc/timezone,target=/etc/timezone,type=bind",
@@ -50,7 +73,7 @@
     "--add-host=host.docker.internal:host-gateway"
   ],
   "containerEnv": {
-    "PYTHONPATH": "${containerWorkspaceFolder}/server/src"
+    "PYTHONPATH": "${containerWorkspaceFolder}/grizzly-ls/src"
   },
   "remoteEnv": {
     "PATH": "${containerEnv:PATH}:${containerWorkspaceFolder}/client/node_modules/.bin"

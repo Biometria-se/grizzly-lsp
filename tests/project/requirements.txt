@@ -1,1 +1,2 @@
-grizzly-loadtester
+#grizzly-loadtester
+git+https://git@github.com/biometria-se/grizzly.git@main#egg=grizzly-loadtester[mq]

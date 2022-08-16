@@ -1,25 +1,55 @@
 [build-system]
-requires = ['setuptools', 'setuptools-scm']
+requires = ['setuptools', 'setuptools-scm >= 7.0.3', 'wheel']
 build-backend = 'setuptools.build_meta'
 
 [project]
-name = 'grizzly-vscode-ls'
+name = 'grizzly-ls'
 dependencies = [
     'pygls',
-    'behave'
+    'behave @ git+https://github.com/mgor/behave.git@bug/parser_object___init___not_called_after_reset_runtime'
 ]
 dynamic = ['version']
 
 [project.scripts]
-grizzly-vscode-ls = 'grizzly_vscode_ls.__main__:main'
+grizzly-ls = 'grizzly_ls.__main__:main'
 
 [project.optional-dependencies]
 dev = [
     'pytest',
+    'pytest-mock',
+    'pytest-cov',
+    'pytest-timeout',
+    'coverage[toml]',
     'pylint',
     'flake8',
     'black',
-    'mypy'
+    'mypy',
+    'grizzly-loadtester @ git+https://github.com/biometria-se/grizzly.git@main'
+]
+
+ci = [
+    'build',
+    'twine'
+]
+
+[tool.setuptools_scm]
+write_to = "grizzly-ls/src/grizzly_ls/__version__.py"
+root = ".."
+
+[tool.pytest.ini_options]
+timeout = 10
+addopts = [
+    "--rootdir=grizzly-ls/",
+    "-o", "testpaths=tests",
+    "-c", "pyproject.toml",
+    "--cov-reset",
+    "--cov=src/grizzly_ls",
+    "--cov-report=xml:grizzly-ls/.coverage.xml",
+    "--no-cov-on-fail"
+]
+filterwarnings = [
+    "ignore:The distutils.*is deprecated.*:DeprecationWarning",
+    "ignore:There is no current event loop.*:DeprecationWarning"
 ]
 
 [tool.pylint.master]

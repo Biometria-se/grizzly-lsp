@@ -8,7 +8,7 @@ from .server import GrizzlyLanguageServer
 
 
 def parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog='grizzly-vscode-ls')
+    parser = argparse.ArgumentParser(prog='grizzly-ls')
 
     parser.add_argument(
         '--socket',
@@ -34,7 +34,24 @@ def parse_arguments() -> argparse.Namespace:
         help='verbose output from server',
     )
 
-    return parser.parse_args()
+    parser.add_argument(
+        '--version',
+        action='store_true',
+        required=False,
+        default=False,
+        help='print version and exit',
+    )
+
+    args = parser.parse_args()
+
+    if args.version:
+        from .__version__ import version
+
+        print(version, file=sys.stderr)
+
+        raise SystemExit(0)
+
+    return args
 
 
 def setup_logging(args: argparse.Namespace) -> None:
@@ -42,8 +59,8 @@ def setup_logging(args: argparse.Namespace) -> None:
     level = logging.INFO if not args.verbose else logging.DEBUG
 
     if not args.socket:
-        if level > logging.INFO:
-            handlers = [logging.FileHandler('grizzly-vscode-ls.log')]
+        if level < logging.INFO:
+            handlers = [logging.FileHandler('grizzly-ls.log')]
     else:
         handlers = [logging.StreamHandler(sys.stderr)]
 
@@ -67,5 +84,5 @@ def main() -> NoReturn:  # type: ignore
         server.start_tcp('127.0.0.1', args.socket_port)  # type: ignore
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     sys.exit(main())

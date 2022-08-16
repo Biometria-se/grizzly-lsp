@@ -1,14 +1,14 @@
 {
-  "name": "grizzly-vscode-extension",
+  "name": "grizzly-vscode",
   "description": "Visual Studio Code extension for grizzly projects",
   "author": "Biometria <opensource@biometria.se>",
   "license": "MIT",
   "version": "0.0.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/biometria-se/grizzly-vscode"
+    "url": "https://github.com/biometria-se/grizzly-lsp"
   },
-  "publisher": "biometria",
+  "publisher": "biometria-se",
   "categories": [],
   "keywords": [
     "grizzly",
@@ -21,7 +21,7 @@
   "activationEvents": [
     "onLanguage:grizzly-gherkin"
   ],
-  "main": "./out/extension",
+  "main": "./out/src/extension",
   "contributes": {
     "languages": [
       {
@@ -61,7 +61,7 @@
         "grizzly.stdio.executable": {
           "scope": "resource",
           "type": "string",
-          "default": "grizzly-vscode-ls",
+          "default": "grizzly-ls",
           "description": "Language server executable"
         },
         "grizzly.stdio.args": {
@@ -84,22 +84,26 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run build",
+    "build": "tsc --project tsconfig.build.json",
     "compile": "tsc -b",
     "watch": "tsc -b -w",
     "lint": "eslint src/ --ext .ts,.tsx",
-    "test": "sh ../scripts/client-e2e.sh"
+    "pretest": "npm run compile",
+    "test": "sh -c ../../scripts/client-e2e.sh"
   },
   "dependencies": {
     "vscode-languageclient": "^7.0.0"
   },
   "devDependencies": {
-    "@types/vscode": "^1.63.0",
+    "@types/chai": "^4.3.3",
     "@types/mocha": "^9.1.0",
     "@types/node": "^16.11.7",
+    "@types/vscode": "^1.63.0",
     "@typescript-eslint/eslint-plugin": "^5.19.0",
     "@typescript-eslint/parser": "^5.19.0",
     "@vscode/test-electron": "^2.1.2",
+    "chai": "^4.3.6",
     "eslint": "^8.13.0",
     "mocha": "^9.2.1",
     "typescript": "^4.7.2"
