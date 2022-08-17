@@ -60,7 +60,7 @@ function getOuterMostWorkspaceFolder(folder: WorkspaceFolder): WorkspaceFolder {
 }
 
 function createStdioLanguageServer(command: string, args: string[], documentSelector: string[], outputChannel: OutputChannel): LanguageClient {
-    if (process.env.CODE_TESTS_PATH && !args.includes('--verbose')) {
+    if (process.env.VERBOSE && !args.includes('--verbose')) {
         args = [...args, '--verbose'];
     }
 

@@ -20,6 +20,9 @@ main() {
     fi
 
     if [[ -z "${what}" || "${what}" == "client/"* ]]; then
+        if [[ -z "${what}" ]]; then
+            what="client/vscode"
+        fi
         pushd "${script_dir}/../${what}" &> /dev/null
         npm install
         popd &> /dev/null

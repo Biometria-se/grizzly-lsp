@@ -92,6 +92,7 @@ jobs:
     - uses: actions/setup-node@v3
       with:
         cache: "npm"
+        cache-dependency-path: "${{ matrix.client }}/package-lock.json"
 
     - name: install dependencies
       id: install
@@ -102,10 +103,19 @@ jobs:
     - name: test
       id: test
       uses: GabrielBB/xvfb-action@v1
+      env:
+        VERBOSE: true
       with:
         run: |
           npm test
         working-directory: "./${{ matrix.client }}"
+
+    - name: server logs
+      id: server-logs
+      if: always()
+      run: |
+        pwd
+        cat tests/project/grizzly-ls.log
 
   releaseable:
     name: releasable

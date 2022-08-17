@@ -55,6 +55,9 @@
       "${containerWorkspaceFolder}/grizzly-ls/.coverage.xml"
     ],
     "coverage-gutters.ignoredPathGlobs": "**/{node_modules,venv,.venv,vendor,tests}/**",
+    "[typescript]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode"
+    }
   },
   // Add the IDs of extensions you want installed when the container is created.
   "extensions": [
@@ -64,7 +67,8 @@
     "oderwat.indent-rainbow",
     "eamodio.gitlens",
     "ryanluker.vscode-coverage-gutters",
-    "dbaeumer.vscode-eslint"
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode"
   ],
   "mounts": [
     "source=/etc/timezone,target=/etc/timezone,type=bind",
