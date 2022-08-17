@@ -17,6 +17,7 @@ from venv import create as venv_create
 from tempfile import gettempdir
 from difflib import get_close_matches, SequenceMatcher
 from urllib.parse import urlparse, unquote
+from urllib.request import url2pathname
 from importlib import import_module
 
 import gevent.monkey  # type: ignore
@@ -84,7 +85,7 @@ class GrizzlyLanguageServer(LanguageServer):
                 self.logger.error(error_message)
                 self.show_message(error_message, msg_type=MessageType.Error)
 
-            root_path = Path(unquote(urlparse(params.root_uri).path)) if params.root_uri is not None else Path(cast(str, params.root_path))
+            root_path = Path(unquote(url2pathname(urlparse(params.root_uri).path))) if params.root_uri is not None else Path(cast(str, params.root_path))
 
             project_name = root_path.stem
 
@@ -134,7 +135,7 @@ class GrizzlyLanguageServer(LanguageServer):
             message = f'found {len(self.keywords)} keywords in behave'
             self.logger.debug(message)
             self.show_message(message)
-            
+
         @self.feature(COMPLETION)
         def completion(params: CompletionParams) -> CompletionList:
             assert self.steps is not None, 'no steps in inventory'
@@ -365,10 +366,10 @@ class GrizzlyLanguageServer(LanguageServer):
                     })
                 else:
                     raise ValueError(f'cannot infere what {func} will return for {custom_type}')
-            except ValueError as e: 
+            except ValueError as e:
                 message = str(e)
                 self.logger.error(message)
-                self.show_message(message, msg_type=MessageType.Error) 
+                self.show_message(message, msg_type=MessageType.Error)
 
         self.normalizer = Normalizer(custom_type_permutations)
 

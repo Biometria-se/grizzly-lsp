@@ -33,7 +33,7 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-        cache: 'pip'
+        cache: "pip"
 
     - name: install dependencies
       id: pip
@@ -67,11 +67,12 @@ jobs:
       matrix: ${{ steps.create-inventory.outputs.matrix }}
 
   client-code-quality:
-    name: ${{ matrix.script }}
+    name: "${{ matrix.client }} (${{ matrix.runs-on }})"
     runs-on: ${{ matrix.runs-on }}
     needs: clients
 
     strategy:
+      fail-fast: false
       matrix:
         client: ${{ fromJson(needs.clients.outputs.matrix) }}
         runs-on: ['ubuntu-latest', 'windows-latest']
@@ -81,9 +82,18 @@ jobs:
       id: checkout
       uses: actions/checkout@v3
 
+    - name: setup python
+      id: setup-python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+        cache: "pip"
+
     - name: install dependencies
       id: install
-      run: bash ./scripts/install.sh "${{ matrix.client }}"
+      run: |
+        bash ./scripts/install.sh "${{ matrix.client }}"
+        bash ./scripts/install.sh server +e
 
     - name: test
       id: test

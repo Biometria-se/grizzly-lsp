@@ -8,9 +8,13 @@ main() {
     script_dir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
     if [[ -z "${what}" || "${what}" == "server" ]]; then
+        local args="-e"
         pushd "${script_dir}/../grizzly-ls" &> /dev/null
         touch setup.cfg
-        python3 -m pip install -e .[dev] || { rm setup.cfg; exit 1; }
+        if [[ -n "${*}" && "${*}" == *"+e"* ]]; then
+            args=""
+        fi
+        python3 -m pip install $args .[dev] || { rm setup.cfg; exit 1; }
         rm setup.cfg
         popd &> /dev/null
     fi
