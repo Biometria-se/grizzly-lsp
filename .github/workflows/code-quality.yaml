@@ -1,0 +1,91 @@
+name: code quality
+
+on:
+  pull_request:
+    branches:
+    - main
+  workflow_dispatch:
+
+jobs:
+  server-code-quality:
+    name: "LSP server"
+    runs-on: ${{ matrix.runs-on }}
+    defaults:
+      run:
+        working-directory: ./grizzly-ls
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.8', '3.9', '3.10']
+        runs-on: ['ubuntu-latest']
+        include:
+          - python-version: '3.10'
+            runs-on: windows-latest
+
+    steps:
+    - name: checkout
+      id: checkout
+      uses: actions/checkout@v3
+
+    - name: setup python
+      id: setup-python-with-cache
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: install dependencies
+      id: pip
+      run: |
+        bash ../scripts/install.sh server
+
+    - name: pytest
+      id: pytest
+      run: python -m pytest
+
+    - name: coverage
+      id: coverage
+      run: python -m coverage report
+
+  pre-client:
+    name: "LSP client inventory"
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: checkout
+      id: checkout
+      uses: actions/checkout@v3
+    
+    - name: create client inventory
+      id: create-inventory
+      run: |
+        echo "::set-output name=matrix::$(ls -1d client/* | awk 'BEGIN {printf "["} {printf "\""$0"\", "} END {print "]"}' | sed -r 's|", \]$|"\]|')"
+
+    outputs:
+      matrix: ${{ steps.create-inventory.outputs.matrix }}
+
+  client-code-quality:
+    name: "LSP ${{ matrix.script }} code quality"
+    runs-on: ${{ matrix.runs-on }}
+
+    strategy:
+      matrix:
+        script: ${{ fromJson(needs.pre-client.outputs.matrix) }}
+        runs-on: ['ubuntu-latest', 'windows-latest']
+
+    steps:
+    - name: checkout
+      id: checkout
+      uses: actions/checkout@v3
+
+    - name: install dependencies
+      id: install
+      run: bash ./scripts/install.sh client
+
+    - name: test
+      id: test
+      uses: GabrielBB/xvfb-action@v1
+      with:
+        run: npm test
+        working-directory: "./${{ matrix.script }}"

@@ -22,5 +22,8 @@ ENV PATH=$PATH:/home/vscode/.local/bin
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install xvfb libatk1.0-0 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2
 
+# run github workflows locally
+RUN curl https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash
+
 # [Optional] Uncomment this line to install global node packages.
 RUN su vscode -c "source /usr/local/share/nvm/nvm.sh && npm install -g xvfb-maybe" 2>&1
