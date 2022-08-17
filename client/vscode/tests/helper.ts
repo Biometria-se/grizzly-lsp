@@ -11,6 +11,8 @@ export let editor: vscode.TextEditor;
 export let documentEol: string;
 export let platformEol: string;
 
+const testWorkspace: string = path.resolve(__dirname, '../../../../tests/project');
+
 /**
  * Activates the vscode.lsp-sample extension
  */
@@ -32,7 +34,7 @@ async function sleep(ms: number) {
 }
 
 export const getDocPath = (p: string) => {
-    return path.resolve(process.env.CODE_TESTS_WORKSPACE, p);
+    return path.resolve(testWorkspace, p);
 };
 export const getDocUri = (p: string) => {
     return vscode.Uri.file(getDocPath(p));

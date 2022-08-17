@@ -10,13 +10,13 @@ async function main() {
     try {
         // The folder containing the Extension Manifest package.json
         // Passed to `--extensionDevelopmentPath`
-        const extensionDevelopmentPath = path.resolve(__dirname, '../../../');
+        const extensionDevelopmentPath = path.resolve(__dirname, '../../');
 
         // The path to test runner
         // Passed to --extensionTestsPath
         const extensionTestsPath = path.resolve(__dirname, './index');
 
-        const testWorkspace = path.resolve(process.env.CODE_TESTS_WORKSPACE)
+        const testWorkspace: string = path.resolve(__dirname, '../../../../tests/project');
 
         // Download VS Code, unzip it and run the integration test
         await runTests({

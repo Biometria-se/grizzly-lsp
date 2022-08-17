@@ -4,7 +4,6 @@ import * as net from 'net';
 
 import {
     workspace,
-    ExtensionContext,
     OutputChannel,
     window as Window,
     TextDocument,
@@ -26,8 +25,8 @@ function sortedWorkspaceFolders(): string[] {
     if (_sortedWorkspaceFolders === void 0) {
         _sortedWorkspaceFolders = workspace.workspaceFolders ? workspace.workspaceFolders.map(folder => {
             let result = folder.uri.toString();
-            if (result.charAt(result.length - 1) !== "/") {
-                result = result + "/";
+            if (result.charAt(result.length - 1) !== '/') {
+                result = result + '/';
             }
 
             return result;
@@ -48,8 +47,8 @@ function getOuterMostWorkspaceFolder(folder: WorkspaceFolder): WorkspaceFolder {
     let folderUri = folder.uri.toString();
 
     for (const folderSorted of foldersSorted) {
-        if (folderUri.charAt(folderUri.length - 1) !== "/") {
-            folderUri = folderUri + "/";
+        if (folderUri.charAt(folderUri.length - 1) !== '/') {
+            folderUri = folderUri + '/';
         }
 
         if (folderUri.startsWith(folderSorted)) {
@@ -61,8 +60,8 @@ function getOuterMostWorkspaceFolder(folder: WorkspaceFolder): WorkspaceFolder {
 }
 
 function createStdioLanguageServer(command: string, args: string[], documentSelector: string[], outputChannel: OutputChannel): LanguageClient {
-    if (process.env.CODE_TESTS_PATH && !args.includes("--verbose")) {
-        args = [...args, "--verbose"];
+    if (process.env.CODE_TESTS_PATH && !args.includes('--verbose')) {
+        args = [...args, '--verbose'];
     }
 
     const serverOptions: ServerOptions = {
@@ -73,23 +72,23 @@ function createStdioLanguageServer(command: string, args: string[], documentSele
     const clientOptions: LanguageClientOptions = {
         documentSelector: documentSelector,
         synchronize: {
-            configurationSection: "grizzly",  // @TODO: should be implemented using a pull workspace/section thingy
+            configurationSection: 'grizzly',  // @TODO: should be implemented using a pull workspace/section thingy
         },
         outputChannel,
-    }
+    };
 
     return new LanguageClient(command, serverOptions, clientOptions);
 }
 
 function createSocketLanguageServer(host: string, port: number, documentSelector: string[], outputChannel: OutputChannel): LanguageClient {
     const serverOptions: ServerOptions = () => {
-        return new Promise((resolve, reject) => {
-            let client = new net.Socket();
+        return new Promise((resolve) => {
+            const client = new net.Socket();
             client.connect(port, host, () => {
                 resolve({
                     reader: client,
                     writer: client,
-                })
+                });
             });
         });
     };
@@ -103,27 +102,27 @@ function createSocketLanguageServer(host: string, port: number, documentSelector
 }
 
 function createLanguageClient(): LanguageClient {
-    const configuration = workspace.getConfiguration("grizzly");
-    const documentSelector = ["grizzly-gherkin"];
+    const configuration = workspace.getConfiguration('grizzly');
+    const documentSelector = ['grizzly-gherkin'];
     const outputChannel: OutputChannel = Window.createOutputChannel('grizzly language server');
-    let languageClient: LanguageClient
+    let languageClient: LanguageClient;
 
 
-    let connectionType = configuration.get<string>("server.connection");
+    const connectionType = configuration.get<string>('server.connection');
 
     switch (connectionType) {
-        case "stdio":
+        case 'stdio':
             languageClient = createStdioLanguageServer(
-                configuration.get<string>("stdio.executable") || "grizzly-ls",
-                configuration.get<Array<string>>("stdio.args") || [],
+                configuration.get<string>('stdio.executable') || 'grizzly-ls',
+                configuration.get<Array<string>>('stdio.args') || [],
                 documentSelector,
                 outputChannel,
             );
             break;
-        case "socket":
+        case 'socket':
             languageClient = createSocketLanguageServer(
-                configuration.get<string>("socket.host") || "localhost",
-                configuration.get<number>("socket.port") || 4444,
+                configuration.get<string>('socket.host') || 'localhost',
+                configuration.get<number>('socket.port') || 4444,
                 documentSelector,
                 outputChannel,
             );
@@ -135,9 +134,9 @@ function createLanguageClient(): LanguageClient {
     return languageClient;
 }
 
-export function activate(context: ExtensionContext) {
+export function activate() {
     const didOpenTextDocument = (document: TextDocument): void => {
-        if (document.languageId !== "grizzly-gherkin") {
+        if (document.languageId !== 'grizzly-gherkin') {
             return;
         }
 
@@ -155,7 +154,7 @@ export function activate(context: ExtensionContext) {
             client.start();
             clients.set(folderUri, client);
         }
-    }
+    };
 
     workspace.onDidOpenTextDocument(didOpenTextDocument);
     workspace.textDocuments.forEach(didOpenTextDocument);

@@ -54,7 +54,7 @@
     "coverage-gutters.manualCoverageFilePaths": [
       "${containerWorkspaceFolder}/grizzly-ls/.coverage.xml"
     ],
-    "coverage-gutters.ignoredPathGlobs": "**/{node_modules,venv,.venv,vendor,tests}/**"
+    "coverage-gutters.ignoredPathGlobs": "**/{node_modules,venv,.venv,vendor,tests}/**",
   },
   // Add the IDs of extensions you want installed when the container is created.
   "extensions": [
@@ -63,7 +63,8 @@
     "EditorConfig.EditorConfig",
     "oderwat.indent-rainbow",
     "eamodio.gitlens",
-    "ryanluker.vscode-coverage-gutters"
+    "ryanluker.vscode-coverage-gutters",
+    "dbaeumer.vscode-eslint"
   ],
   "mounts": [
     "source=/etc/timezone,target=/etc/timezone,type=bind",
