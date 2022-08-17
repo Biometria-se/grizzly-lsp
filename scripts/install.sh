@@ -15,8 +15,8 @@ main() {
         popd &> /dev/null
     fi
 
-    if [[ -z "${what}" || "${what}" == "client" ]]; then
-        pushd "${script_dir}/../client/vscode" &> /dev/null
+    if [[ -z "${what}" || "${what}" == "client/"* ]]; then
+        pushd "${script_dir}/../${what}" &> /dev/null
         npm install
         popd &> /dev/null
     fi
