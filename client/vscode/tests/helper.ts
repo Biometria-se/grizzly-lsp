@@ -21,7 +21,7 @@ const docUriActivated: Map<string, boolean> = new Map();
 export async function activate(docUri: vscode.Uri) {
     // @TODO: fugly, first time a virtual environment needs to be created, which takes time
     const activated = docUriActivated.get(docUri.toString());
-    let sleep_time = 5000;
+    let sleep_time = 6000;
 
     if (activated) {
         sleep_time = 500;

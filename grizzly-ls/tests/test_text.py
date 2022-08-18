@@ -4,7 +4,7 @@ import string
 
 from sre_constants import (  # pylint: disable=no-name-in-module  # type: ignore
     _NamedIntConstant as SreNamedIntConstant,  # type: ignore
-    ANY,  
+    ANY,
     BRANCH,
     LITERAL,
     MAX_REPEAT,
@@ -14,20 +14,26 @@ from sre_constants import (  # pylint: disable=no-name-in-module  # type: ignore
 
 import pytest
 
-from grizzly_ls.text import RegexPermutationResolver, SreParseValue, SreParseValueMaxRepeat
+from grizzly_ls.text import (
+    RegexPermutationResolver,
+    SreParseValue,
+    SreParseValueMaxRepeat,
+)
 
 
 class TestRegexPermutationResolver:
     def test__init__(self) -> None:
         resolver = RegexPermutationResolver('(hello|world)')
 
-        assert list(sorted(resolver._handlers.keys())) == sorted([
-            ANY,
-            BRANCH,
-            LITERAL,
-            MAX_REPEAT,
-            SUBPATTERN,
-        ])
+        assert list(sorted(resolver._handlers.keys())) == sorted(
+            [
+                ANY,
+                BRANCH,
+                LITERAL,
+                MAX_REPEAT,
+                SUBPATTERN,
+            ]
+        )
         assert resolver.pattern == '(hello|world)'
 
     def test_handle_any(self) -> None:
@@ -39,15 +45,62 @@ class TestRegexPermutationResolver:
     def test_handle_branch(self) -> None:
         resolver = RegexPermutationResolver('(hello|world)')
 
-        assert sorted(resolver.handle_branch(cast(SreParseValue,
-            (
-                None,
-                [
-                    [(LITERAL, 104,), (LITERAL, 101,), (LITERAL, 108, ), (LITERAL, 108, ), (LITERAL, 111,)],
-                    [(LITERAL, 119,), (LITERAL, 111,), (LITERAL, 114,), (LITERAL, 108,), (LITERAL, 100,)],
-                ],
+        assert sorted(
+            resolver.handle_branch(
+                cast(
+                    SreParseValue,
+                    (
+                        None,
+                        [
+                            [
+                                (
+                                    LITERAL,
+                                    104,
+                                ),
+                                (
+                                    LITERAL,
+                                    101,
+                                ),
+                                (
+                                    LITERAL,
+                                    108,
+                                ),
+                                (
+                                    LITERAL,
+                                    108,
+                                ),
+                                (
+                                    LITERAL,
+                                    111,
+                                ),
+                            ],
+                            [
+                                (
+                                    LITERAL,
+                                    119,
+                                ),
+                                (
+                                    LITERAL,
+                                    111,
+                                ),
+                                (
+                                    LITERAL,
+                                    114,
+                                ),
+                                (
+                                    LITERAL,
+                                    108,
+                                ),
+                                (
+                                    LITERAL,
+                                    100,
+                                ),
+                            ],
+                        ],
+                    ),
+                )
             )
-        ))) == sorted(['hello', 'world'])
+        ) == sorted(['hello', 'world'])
 
     def test_handle_literal(self) -> None:
         resolver = RegexPermutationResolver('(hello|world)')
@@ -59,15 +112,77 @@ class TestRegexPermutationResolver:
         resolver = RegexPermutationResolver('(world[s]?)')
 
         with pytest.raises(ValueError) as ve:
-            resolver.handle_max_repeat(cast(SreParseValueMaxRepeat, (0, 5001, [(LITERAL, 104,), (LITERAL, 105,)])))
+            resolver.handle_max_repeat(
+                cast(
+                    SreParseValueMaxRepeat,
+                    (
+                        0,
+                        5001,
+                        [
+                            (
+                                LITERAL,
+                                104,
+                            ),
+                            (
+                                LITERAL,
+                                105,
+                            ),
+                        ],
+                    ),
+                )
+            )
         assert str(ve.value) == 'too many repetitions requested (5001>5000)'
 
-        assert resolver.handle_max_repeat(cast(SreParseValueMaxRepeat, (1, 2, [(LITERAL, 104,), (LITERAL, 105,)]))) == ['h', 'hh', 'i', 'ii']
+        assert resolver.handle_max_repeat(
+            cast(
+                SreParseValueMaxRepeat,
+                (
+                    1,
+                    2,
+                    [
+                        (
+                            LITERAL,
+                            104,
+                        ),
+                        (
+                            LITERAL,
+                            105,
+                        ),
+                    ],
+                ),
+            )
+        ) == ['h', 'hh', 'i', 'ii']
 
     def test_handle_subpattern(self) -> None:
         resolver = RegexPermutationResolver('(world[s]?)')
 
-        assert resolver.handle_subpattern(cast(SreParseValue, [[(LITERAL, 119,), (LITERAL, 111,)], [(LITERAL, 104,), (LITERAL, 105,)]])) == ['hi']
+        assert resolver.handle_subpattern(
+            cast(
+                SreParseValue,
+                [
+                    [
+                        (
+                            LITERAL,
+                            119,
+                        ),
+                        (
+                            LITERAL,
+                            111,
+                        ),
+                    ],
+                    [
+                        (
+                            LITERAL,
+                            104,
+                        ),
+                        (
+                            LITERAL,
+                            105,
+                        ),
+                    ],
+                ],
+            )
+        ) == ['hi']
 
     def test_handle_token(self) -> None:
         resolver = RegexPermutationResolver('(world[s]?)')
@@ -89,8 +204,15 @@ class TestRegexPermutationResolver:
         assert list(result) == [['hello', 'foo'], ['world', 'foo']]
 
         result = resolver.cartesian_join([['hello', 'world'], ['foo', 'bar']])
-        assert list(result) == [['hello', 'foo'], ['hello', 'bar'], ['world', 'foo'], ['world', 'bar']]
+        assert list(result) == [
+            ['hello', 'foo'],
+            ['hello', 'bar'],
+            ['world', 'foo'],
+            ['world', 'bar'],
+        ]
 
     def test_resolve(self) -> None:
         assert RegexPermutationResolver.resolve('(world[s]?)') == ['world', 'worlds']
-        assert sorted(RegexPermutationResolver.resolve('(foo|bar)?')) == sorted(['', 'foo', 'bar'])
+        assert sorted(RegexPermutationResolver.resolve('(foo|bar)?')) == sorted(
+            ['', 'foo', 'bar']
+        )

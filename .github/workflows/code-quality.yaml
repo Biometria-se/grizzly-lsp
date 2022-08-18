@@ -49,32 +49,13 @@ jobs:
         id: coverage
         run: python -m coverage report
 
-  clients:
-    name: clients
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: checkout
-        id: checkout
-        uses: actions/checkout@v3
-
-      - name: create client inventory
-        id: create-inventory
-        run: |
-          echo "::set-output name=matrix::$(ls -1d client/* | awk 'BEGIN {printf "["} {printf "\""$0"\", "} END {print "]"}' | sed -r 's|", \]$|"\]|')"
-
-    outputs:
-      matrix: ${{ steps.create-inventory.outputs.matrix }}
-
-  client:
-    name: '${{ matrix.client }} (${{ matrix.runs-on }})'
+  client-vscode:
+    name: 'client/vscode (${{ matrix.runs-on }})'
     runs-on: ${{ matrix.runs-on }}
-    needs: clients
 
     strategy:
       fail-fast: false
       matrix:
-        client: ${{ fromJson(needs.clients.outputs.matrix) }}
         runs-on: ['ubuntu-latest', 'windows-latest']
 
     steps:
@@ -92,12 +73,12 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           cache: 'npm'
-          cache-dependency-path: '${{ matrix.client }}/package-lock.json'
+          cache-dependency-path: 'client/vscode/package-lock.json'
 
       - name: install dependencies
         id: install
         run: |
-          bash ./scripts/install.sh "${{ matrix.client }}"
+          bash ./scripts/install.sh client/vscode
           bash ./scripts/install.sh server +e
 
       - name: test
@@ -108,7 +89,7 @@ jobs:
         with:
           run: |
             npm test
-          working-directory: './${{ matrix.client }}'
+          working-directory: './client/vscode'
 
       - name: server logs
         id: server-logs
@@ -116,13 +97,70 @@ jobs:
         run: |
           cat tests/project/grizzly-ls.log
 
+  linting:
+    name: linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: setup python
+        id: setup-python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+          cache: 'pip'
+
+      - uses: actions/setup-node@v3
+        with:
+          cache: 'npm'
+          cache-dependency-path: './client/vscode/package-lock.json'
+
+      - name: install dependencies
+        id: install
+        run: |
+          bash ./scripts/install.sh
+
+      - name: 'server: pylint'
+        id: server-pylint
+        if: always()
+        working-directory: ./grizzly-ls
+        run: python3 -m pylint --jobs=0 --fail-under=10 src/ tests/
+
+      - name: 'server: mypy'
+        id: server-mypy
+        if: always()
+        working-directory: ./grizzly-ls
+        run: python3 -m mypy src/ tests/
+
+      - name: 'server: flake8'
+        id: server-flake8
+        if: always()
+        working-directory: ./grizzly-ls
+        run: python3 -m flake518
+
+      - name: 'server: black'
+        id: server-black
+        if: always()
+        working-directory: ./grizzly-ls
+        run: python3 -m black --check .
+
+      - name: 'client: eslint'
+        id: client-eslint
+        if: always()
+        working-directory: ./client/vscode
+        run: npm run lint
+
   releaseable:
     name: releasable
     runs-on: 'ubuntu-latest'
     if: always()
     needs:
       - server
-      - client
+      - client-vscode
+      - linting
 
     steps:
       - uses: technote-space/workflow-conclusion-action@v2

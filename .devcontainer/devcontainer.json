@@ -30,7 +30,7 @@
       "-S",
       "-l 180"
     ],
-    "python.linting.flake8Path": "flake8",
+    "python.linting.flake8Path": "flake518",
     "python.linting.mypyPath": "mypy",
     "python.linting.pylintPath": "pylint",
     "python.linting.pylintArgs": [

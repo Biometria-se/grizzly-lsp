@@ -89,6 +89,7 @@
     "compile": "tsc -b",
     "watch": "tsc -b -w",
     "lint": "eslint src/ --ext .ts,.tsx",
+    "lint-fix": "eslint src/ --ext .ts,.tsx --fix",
     "pretest": "npm run compile",
     "test": "node out/tests/runTest"
   },

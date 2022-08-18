@@ -21,7 +21,7 @@ dev = [
     'pytest-timeout',
     'coverage[toml]',
     'pylint',
-    'flake8',
+    'flake518',
     'black',
     'mypy',
     'grizzly-loadtester @ git+https://github.com/biometria-se/grizzly.git@main'
@@ -37,7 +37,7 @@ write_to = "grizzly-ls/src/grizzly_ls/__version__.py"
 root = ".."
 
 [tool.pytest.ini_options]
-timeout = 30
+timeout = 40
 addopts = [
     "--rootdir=grizzly-ls/",
     "-o", "testpaths=tests",
@@ -98,3 +98,17 @@ output-format = 'text'
 [tool.black]
 line-lenght = 180
 skip-string-normalization = true
+
+[tool.flake8]
+max-line-length = 180
+ignore = ['E722', 'W503', 'E402', 'F405', 'F403']
+exclude = ['.git', '__pycache__', 'docs', 'old', 'build', 'dist']
+
+[tool.mypy]
+[[tool.mypy.overrides]]
+module = "behave.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "parse.*"
+ignore_missing_imports = true
