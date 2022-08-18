@@ -7,7 +7,7 @@ import signal
 import re
 
 from os import environ
-from os.path import pathsep
+from os.path import pathsep, sep
 from typing import Any, Tuple, Dict, List, Union, Optional, Callable, Literal, cast
 from types import FrameType
 from pathlib import Path
@@ -87,6 +87,12 @@ class GrizzlyLanguageServer(LanguageServer):
 
             root_path = Path(unquote(url2pathname(urlparse(params.root_uri).path))) if params.root_uri is not None else Path(cast(str, params.root_path))
 
+            # fugly as hell
+            if not root_path.exists() and str(root_path)[0:1] == sep and str(root_path)[2] == ':':
+                root_path = Path(str(root_path)[1:])
+
+            self.logger.debug(f'workspace root: {root_path}')
+
             project_name = root_path.stem
 
             virtual_environment = Path(gettempdir()) / f'grizzly-ls-{project_name}'
@@ -117,10 +123,23 @@ class GrizzlyLanguageServer(LanguageServer):
 
             if not has_venv:
                 requirements_file = root_path / 'requirements.txt'
+                assert requirements_file.exists()
                 self.logger.debug(f'installing {requirements_file}')
                 with warnings.catch_warnings():
                     warnings.simplefilter('ignore')
-                    pipmain(['install', '-r', str(requirements_file)])
+                    args = ['install', '--verbose', '--no-cache-dir', '-r', str(requirements_file)]
+                    self.logger.debug(f'pip {args=}')
+                    rc = 1
+                    try:
+                        rc = pipmain(args)
+                    except:
+                        import traceback
+                        traceback.print_exc()
+
+                    if rc == 0:
+                        self.show_message(f'virtual environment done')
+                    else:
+                        self.show_message(f'failed to install {requirements_file}', msg_type=MessageType.Error)
 
             self.logger.debug('creating step registry')
             self._make_step_registry(root_path / 'features' / 'steps')

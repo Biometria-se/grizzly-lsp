@@ -11,11 +11,7 @@ import {
     WorkspaceFolder,
     Uri,
 } from 'vscode';
-import {
-    LanguageClient,
-    LanguageClientOptions,
-    ServerOptions,
-} from 'vscode-languageclient/node';
+import { LanguageClient, LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
 
 const clients: Map<string, LanguageClient> = new Map();
 
@@ -23,24 +19,26 @@ let _sortedWorkspaceFolders: string[] | undefined;
 
 function sortedWorkspaceFolders(): string[] {
     if (_sortedWorkspaceFolders === void 0) {
-        _sortedWorkspaceFolders = workspace.workspaceFolders ? workspace.workspaceFolders.map(folder => {
-            let result = folder.uri.toString();
-            if (result.charAt(result.length - 1) !== '/') {
-                result = result + '/';
-            }
+        _sortedWorkspaceFolders = workspace.workspaceFolders
+            ? workspace.workspaceFolders
+                  .map((folder) => {
+                      let result = folder.uri.toString();
+                      if (result.charAt(result.length - 1) !== '/') {
+                          result = result + '/';
+                      }
 
-            return result;
-        }).sort(
-            (a, b) => {
-                return a.length - b.length;
-            }
-        ) : [];
+                      return result;
+                  })
+                  .sort((a, b) => {
+                      return a.length - b.length;
+                  })
+            : [];
     }
 
     return _sortedWorkspaceFolders;
 }
 
-workspace.onDidChangeWorkspaceFolders(() => _sortedWorkspaceFolders = undefined);
+workspace.onDidChangeWorkspaceFolders(() => (_sortedWorkspaceFolders = undefined));
 
 function getOuterMostWorkspaceFolder(folder: WorkspaceFolder): WorkspaceFolder {
     const foldersSorted = sortedWorkspaceFolders();
@@ -59,7 +57,12 @@ function getOuterMostWorkspaceFolder(folder: WorkspaceFolder): WorkspaceFolder {
     return folder;
 }
 
-function createStdioLanguageServer(command: string, args: string[], documentSelector: string[], outputChannel: OutputChannel): LanguageClient {
+function createStdioLanguageServer(
+    command: string,
+    args: string[],
+    documentSelector: string[],
+    outputChannel: OutputChannel
+): LanguageClient {
     if (process.env.VERBOSE && !args.includes('--verbose')) {
         args = [...args, '--verbose'];
     }
@@ -72,7 +75,7 @@ function createStdioLanguageServer(command: string, args: string[], documentSele
     const clientOptions: LanguageClientOptions = {
         documentSelector: documentSelector,
         synchronize: {
-            configurationSection: 'grizzly',  // @TODO: should be implemented using a pull workspace/section thingy
+            configurationSection: 'grizzly', // @TODO: should be implemented using a pull workspace/section thingy
         },
         outputChannel,
     };
@@ -80,7 +83,12 @@ function createStdioLanguageServer(command: string, args: string[], documentSele
     return new LanguageClient(command, serverOptions, clientOptions);
 }
 
-function createSocketLanguageServer(host: string, port: number, documentSelector: string[], outputChannel: OutputChannel): LanguageClient {
+function createSocketLanguageServer(
+    host: string,
+    port: number,
+    documentSelector: string[],
+    outputChannel: OutputChannel
+): LanguageClient {
     const serverOptions: ServerOptions = () => {
         return new Promise((resolve) => {
             const client = new net.Socket();
@@ -107,7 +115,6 @@ function createLanguageClient(): LanguageClient {
     const outputChannel: OutputChannel = Window.createOutputChannel('grizzly language server');
     let languageClient: LanguageClient;
 
-
     const connectionType = configuration.get<string>('server.connection');
 
     switch (connectionType) {
@@ -116,7 +123,7 @@ function createLanguageClient(): LanguageClient {
                 configuration.get<string>('stdio.executable') || 'grizzly-ls',
                 configuration.get<Array<string>>('stdio.args') || [],
                 documentSelector,
-                outputChannel,
+                outputChannel
             );
             break;
         case 'socket':
@@ -124,7 +131,7 @@ function createLanguageClient(): LanguageClient {
                 configuration.get<string>('socket.host') || 'localhost',
                 configuration.get<number>('socket.port') || 4444,
                 documentSelector,
-                outputChannel,
+                outputChannel
             );
             break;
         default:
@@ -135,7 +142,7 @@ function createLanguageClient(): LanguageClient {
 }
 
 export function activate() {
-    const didOpenTextDocument = (document: TextDocument): void => {
+    const didOpenTextDocument = async (document: TextDocument): Promise<void> => {
         if (document.languageId !== 'grizzly-gherkin') {
             return;
         }
@@ -152,6 +159,7 @@ export function activate() {
         if (!clients.has(folderUri)) {
             const client = createLanguageClient();
             client.start();
+            await client.onReady(); // first initialize might take some time
             clients.set(folderUri, client);
         }
     };
