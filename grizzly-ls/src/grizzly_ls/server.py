@@ -5,6 +5,8 @@ import platform
 import warnings
 import signal
 import re
+import subprocess
+import sys
 
 from os import environ
 from os.path import pathsep, sep
@@ -12,7 +14,6 @@ from typing import Any, Tuple, Dict, List, Union, Optional, Callable, Literal, c
 from types import FrameType
 from pathlib import Path
 from behave.matchers import ParseMatcher
-from pip._internal.cli.main import main as pipmain
 from venv import create as venv_create
 from tempfile import gettempdir
 from difflib import get_close_matches, SequenceMatcher
@@ -125,21 +126,21 @@ class GrizzlyLanguageServer(LanguageServer):
                 requirements_file = root_path / 'requirements.txt'
                 assert requirements_file.exists()
                 self.logger.debug(f'installing {requirements_file}')
-                with warnings.catch_warnings():
-                    warnings.simplefilter('ignore')
-                    args = ['install', '--verbose', '--no-cache-dir', '-r', str(requirements_file)]
-                    self.logger.debug(f'pip {args=}')
-                    rc = 1
-                    try:
-                        rc = pipmain(args)
-                    except:
-                        import traceback
-                        traceback.print_exc()
+                try:
+                    output = subprocess.check_output(
+                        [sys.executable, '-m', 'pip', 'install', '-r', str(requirements_file)],
+                        env=environ,
+                    ).decode(sys.stdout.encoding)
+                    self.logger.debug(output)
+                    rc = 0
+                except subprocess.CalledProcessError as e:
+                    self.logger.error(e.output)
+                    rc = e.returncode
 
-                    if rc == 0:
-                        self.show_message(f'virtual environment done')
-                    else:
-                        self.show_message(f'failed to install {requirements_file}', msg_type=MessageType.Error)
+                if rc == 0:
+                    self.show_message(f'virtual environment done')
+                else:
+                    self.show_message(f'failed to install {requirements_file}', msg_type=MessageType.Error)
 
             self.logger.debug('creating step registry')
             self._make_step_registry(root_path / 'features' / 'steps')
