@@ -3,7 +3,7 @@ name: code quality
 on:
   pull_request:
     branches:
-    - main
+      - main
   workflow_dispatch:
 
 jobs:
@@ -24,50 +24,50 @@ jobs:
             runs-on: windows-latest
 
     steps:
-    - name: checkout
-      id: checkout
-      uses: actions/checkout@v3
+      - name: checkout
+        id: checkout
+        uses: actions/checkout@v3
 
-    - name: setup python
-      id: setup-python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: "pip"
+      - name: setup python
+        id: setup-python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
 
-    - name: install dependencies
-      id: pip
-      working-directory: ./
-      run: |
-        bash ./scripts/install.sh server
+      - name: install dependencies
+        id: pip
+        working-directory: ./
+        run: |
+          bash ./scripts/install.sh server
 
-    - name: pytest
-      id: pytest
-      run: python -m pytest
+      - name: pytest
+        id: pytest
+        run: python -m pytest
 
-    - name: coverage
-      id: coverage
-      run: python -m coverage report
+      - name: coverage
+        id: coverage
+        run: python -m coverage report
 
   clients:
     name: clients
     runs-on: ubuntu-latest
 
     steps:
-    - name: checkout
-      id: checkout
-      uses: actions/checkout@v3
+      - name: checkout
+        id: checkout
+        uses: actions/checkout@v3
 
-    - name: create client inventory
-      id: create-inventory
-      run: |
-        echo "::set-output name=matrix::$(ls -1d client/* | awk 'BEGIN {printf "["} {printf "\""$0"\", "} END {print "]"}' | sed -r 's|", \]$|"\]|')"
+      - name: create client inventory
+        id: create-inventory
+        run: |
+          echo "::set-output name=matrix::$(ls -1d client/* | awk 'BEGIN {printf "["} {printf "\""$0"\", "} END {print "]"}' | sed -r 's|", \]$|"\]|')"
 
     outputs:
       matrix: ${{ steps.create-inventory.outputs.matrix }}
 
   client:
-    name: "${{ matrix.client }} (${{ matrix.runs-on }})"
+    name: '${{ matrix.client }} (${{ matrix.runs-on }})'
     runs-on: ${{ matrix.runs-on }}
     needs: clients
 
@@ -78,54 +78,53 @@ jobs:
         runs-on: ['ubuntu-latest', 'windows-latest']
 
     steps:
-    - name: checkout
-      id: checkout
-      uses: actions/checkout@v3
+      - name: checkout
+        id: checkout
+        uses: actions/checkout@v3
 
-    - name: setup python
-      id: setup-python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.x"
-        cache: "pip"
+      - name: setup python
+        id: setup-python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+          cache: 'pip'
 
-    - uses: actions/setup-node@v3
-      with:
-        cache: "npm"
-        cache-dependency-path: "${{ matrix.client }}/package-lock.json"
+      - uses: actions/setup-node@v3
+        with:
+          cache: 'npm'
+          cache-dependency-path: '${{ matrix.client }}/package-lock.json'
 
-    - name: install dependencies
-      id: install
-      run: |
-        bash ./scripts/install.sh "${{ matrix.client }}"
-        bash ./scripts/install.sh server +e
-
-    - name: test
-      id: test
-      uses: GabrielBB/xvfb-action@v1
-      env:
-        VERBOSE: true
-      with:
+      - name: install dependencies
+        id: install
         run: |
-          npm test
-        working-directory: "./${{ matrix.client }}"
+          bash ./scripts/install.sh "${{ matrix.client }}"
+          bash ./scripts/install.sh server +e
 
-    - name: server logs
-      id: server-logs
-      if: always()
-      run: |
-        pwd
-        cat tests/project/grizzly-ls.log
+      - name: test
+        id: test
+        uses: GabrielBB/xvfb-action@v1
+        env:
+          VERBOSE: true
+        with:
+          run: |
+            npm test
+          working-directory: './${{ matrix.client }}'
+
+      - name: server logs
+        id: server-logs
+        if: always()
+        run: |
+          cat tests/project/grizzly-ls.log
 
   releaseable:
     name: releasable
     runs-on: 'ubuntu-latest'
     if: always()
     needs:
-    - server
-    - client
+      - server
+      - client
 
     steps:
-    - uses: technote-space/workflow-conclusion-action@v2
-    - run: |
-        [[ "${{ env.WORKFLOW_CONCLUSION }}" == "success" ]] || exit 1
+      - uses: technote-space/workflow-conclusion-action@v2
+      - run: |
+          [[ "${{ env.WORKFLOW_CONCLUSION }}" == "success" ]] || exit 1

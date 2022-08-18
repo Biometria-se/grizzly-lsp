@@ -13,17 +13,29 @@ export let platformEol: string;
 
 const testWorkspace: string = path.resolve(__dirname, '../../../../tests/project');
 
+const docUriActivated: Map<string, boolean> = new Map();
+
 /**
  * Activates the vscode.lsp-sample extension
  */
 export async function activate(docUri: vscode.Uri) {
+    // @TODO: fugly, first time a virtual environment needs to be created, which takes time
+    const activated = docUriActivated.get(docUri.toString());
+    let sleep_time = 5000;
+
+    if (activated) {
+        sleep_time = 500;
+    } else {
+        docUriActivated.set(docUri.toString(), true);
+    }
+
     // The extensionId is `publisher.name` from package.json
     const ext = vscode.extensions.getExtension('biometria-se.grizzly-vscode');
     await ext.activate();
     try {
         doc = await vscode.workspace.openTextDocument(docUri);
         editor = await vscode.window.showTextDocument(doc);
-        await sleep(2000); // Wait for server activation
+        await sleep(sleep_time); // Wait for server activation
     } catch (e) {
         console.error(e);
     }

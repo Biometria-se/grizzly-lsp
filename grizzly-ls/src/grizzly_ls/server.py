@@ -20,6 +20,7 @@ from difflib import get_close_matches, SequenceMatcher
 from urllib.parse import urlparse, unquote
 from urllib.request import url2pathname
 from importlib import import_module
+from time import perf_counter
 
 import gevent.monkey  # type: ignore
 
@@ -126,6 +127,7 @@ class GrizzlyLanguageServer(LanguageServer):
                 requirements_file = root_path / 'requirements.txt'
                 assert requirements_file.exists()
                 self.logger.debug(f'installing {requirements_file}')
+                start = perf_counter()
                 try:
                     output = subprocess.check_output(
                         [sys.executable, '-m', 'pip', 'install', '-r', str(requirements_file)],
@@ -136,6 +138,9 @@ class GrizzlyLanguageServer(LanguageServer):
                 except subprocess.CalledProcessError as e:
                     self.logger.error(e.output)
                     rc = e.returncode
+                finally:
+                    delta = (perf_counter() - start) * 1000;
+                    self.logger.debug(f'pip install took {delta} ms')
 
                 if rc == 0:
                     self.show_message(f'virtual environment done')
@@ -214,7 +219,6 @@ class GrizzlyLanguageServer(LanguageServer):
         if len(document.source.strip()) < 1:
             keywords = ['Feature']
         else:
-            print(document.source)
             if 'Scenario:' not in document.source:
                 keywords = ['Scenario']
             else:
@@ -331,8 +335,6 @@ class GrizzlyLanguageServer(LanguageServer):
             try:
                 func_code = [line for line in inspect.getsource(func).strip().split('\n') if not line.strip().startswith('@classmethod')]
                 message: Optional[str] = None
-
-                print(func_code)
 
                 if func_code[0].startswith('@parse.with_pattern'):
                     match = re.match(r'@parse.with_pattern\(r\'\(?(.*?)\)?\'', func_code[0])

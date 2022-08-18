@@ -37,7 +37,7 @@ write_to = "grizzly-ls/src/grizzly_ls/__version__.py"
 root = ".."
 
 [tool.pytest.ini_options]
-timeout = 10
+timeout = 30
 addopts = [
     "--rootdir=grizzly-ls/",
     "-o", "testpaths=tests",

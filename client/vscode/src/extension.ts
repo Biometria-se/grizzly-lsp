@@ -159,7 +159,7 @@ export function activate() {
         if (!clients.has(folderUri)) {
             const client = createLanguageClient();
             client.start();
-            await client.onReady(); // first initialize might take some time
+            await client.onReady();
             clients.set(folderUri, client);
         }
     };
