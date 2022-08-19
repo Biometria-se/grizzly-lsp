@@ -3,12 +3,12 @@ name: code quality
 on:
   pull_request:
     branches:
-    - main
+      - main
   workflow_dispatch:
 
 jobs:
-  server-code-quality:
-    name: "LSP server"
+  server:
+    name: server
     runs-on: ${{ matrix.runs-on }}
     defaults:
       run:
@@ -17,76 +17,152 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.8', '3.9', '3.10']
+        python-version: ['3.8', '3.9', '3.10']
         runs-on: ['ubuntu-latest']
         include:
           - python-version: '3.10'
             runs-on: windows-latest
 
     steps:
-    - name: checkout
-      id: checkout
-      uses: actions/checkout@v3
+      - name: checkout
+        id: checkout
+        uses: actions/checkout@v3
 
-    - name: setup python
-      id: setup-python-with-cache
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: 'pip'
+      - name: setup python
+        id: setup-python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
 
-    - name: install dependencies
-      id: pip
-      run: |
-        bash ../scripts/install.sh server
+      - name: install dependencies
+        id: pip
+        working-directory: ./
+        run: |
+          bash ./scripts/install.sh server
 
-    - name: pytest
-      id: pytest
-      run: python -m pytest
+      - name: pytest
+        id: pytest
+        run: python -m pytest
 
-    - name: coverage
-      id: coverage
-      run: python -m coverage report
+      - name: coverage
+        id: coverage
+        run: python -m coverage report
 
-  pre-client:
-    name: "LSP client inventory"
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: checkout
-      id: checkout
-      uses: actions/checkout@v3
-
-    - name: create client inventory
-      id: create-inventory
-      run: |
-        echo "::set-output name=matrix::$(ls -1d client/* | awk 'BEGIN {printf "["} {printf "\""$0"\", "} END {print "]"}' | sed -r 's|", \]$|"\]|')"
-
-    outputs:
-      matrix: ${{ steps.create-inventory.outputs.matrix }}
-
-  client-code-quality:
-    name: "LSP ${{ matrix.script }} code quality"
+  client-vscode:
+    name: 'client/vscode (${{ matrix.runs-on }})'
     runs-on: ${{ matrix.runs-on }}
 
     strategy:
+      fail-fast: false
       matrix:
-        script: ${{ fromJson(needs.pre-client.outputs.matrix) }}
         runs-on: ['ubuntu-latest', 'windows-latest']
 
     steps:
-    - name: checkout
-      id: checkout
-      uses: actions/checkout@v3
+      - name: checkout
+        id: checkout
+        uses: actions/checkout@v3
 
-    - name: install dependencies
-      id: install
-      run: bash ./scripts/install.sh client
+      - name: setup python
+        id: setup-python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+          cache: 'pip'
 
-    - name: test
-      id: test
-      uses: GabrielBB/xvfb-action@v1
-      with:
+      - uses: actions/setup-node@v3
+        with:
+          cache: 'npm'
+          cache-dependency-path: 'client/vscode/package-lock.json'
+
+      - name: install dependencies
+        id: install
         run: |
-          npm test
-        working-directory: "./${{ matrix.script }}"
+          bash ./scripts/install.sh client/vscode
+          bash ./scripts/install.sh server +e
+
+      - name: test
+        id: test
+        uses: GabrielBB/xvfb-action@v1
+        env:
+          VERBOSE: true
+        with:
+          run: |
+            npm test
+          working-directory: './client/vscode'
+
+      - name: server logs
+        id: server-logs
+        if: always()
+        run: |
+          cat tests/project/grizzly-ls.log
+
+  linting:
+    name: linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: setup python
+        id: setup-python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+          cache: 'pip'
+
+      - uses: actions/setup-node@v3
+        with:
+          cache: 'npm'
+          cache-dependency-path: './client/vscode/package-lock.json'
+
+      - name: install dependencies
+        id: install
+        run: |
+          bash ./scripts/install.sh
+
+      - name: 'server: pylint'
+        id: server-pylint
+        if: always()
+        working-directory: ./grizzly-ls
+        run: python3 -m pylint --jobs=0 --fail-under=10 src/ tests/
+
+      - name: 'server: mypy'
+        id: server-mypy
+        if: always()
+        working-directory: ./grizzly-ls
+        run: python3 -m mypy src/ tests/
+
+      - name: 'server: flake8'
+        id: server-flake8
+        if: always()
+        working-directory: ./grizzly-ls
+        run: python3 -m flake518
+
+      - name: 'server: black'
+        id: server-black
+        if: always()
+        working-directory: ./grizzly-ls
+        run: python3 -m black --check .
+
+      - name: 'client: eslint'
+        id: client-eslint
+        if: always()
+        working-directory: ./client/vscode
+        run: npm run lint
+
+  releaseable:
+    name: releasable
+    runs-on: 'ubuntu-latest'
+    if: always()
+    needs:
+      - server
+      - client-vscode
+      - linting
+
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v2
+      - run: |
+          [[ "${{ env.WORKFLOW_CONCLUSION }}" == "success" ]] || exit 1

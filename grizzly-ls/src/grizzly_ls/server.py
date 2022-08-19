@@ -5,19 +5,22 @@ import platform
 import warnings
 import signal
 import re
+import subprocess
+import sys
 
 from os import environ
-from os.path import pathsep
+from os.path import pathsep, sep
 from typing import Any, Tuple, Dict, List, Union, Optional, Callable, Literal, cast
-from types import FrameType
+from types import FrameType, ModuleType
 from pathlib import Path
 from behave.matchers import ParseMatcher
-from pip._internal.cli.main import main as pipmain
 from venv import create as venv_create
 from tempfile import gettempdir
 from difflib import get_close_matches, SequenceMatcher
 from urllib.parse import urlparse, unquote
+from urllib.request import url2pathname
 from importlib import import_module
+from time import perf_counter
 
 import gevent.monkey  # type: ignore
 
@@ -35,7 +38,9 @@ from pygls.lsp.types import (
     InitializeParams,
     MessageType,
 )
-from pygls.lsp.types.workspace import DidChangeConfigurationParams as WorkspaceDidChangeConfigurationParams
+from pygls.lsp.types.workspace import (
+    DidChangeConfigurationParams as WorkspaceDidChangeConfigurationParams,
+)
 from pygls.lsp.types.basic_structures import Position
 from pygls.workspace import Document
 
@@ -59,7 +64,9 @@ class GrizzlyLanguageServer(LanguageServer):
 
     normalizer: Normalizer
 
-    def show_message(self, message: str, msg_type: Optional[MessageType] = MessageType.Info) -> None:
+    def show_message(
+        self, message: str, msg_type: Optional[MessageType] = MessageType.Info
+    ) -> None:
         super().show_message(message, msg_type=msg_type)  # type: ignore
 
     def __init__(self, *args: Tuple[Any, ...], **kwargs: Dict[str, Any]) -> None:
@@ -71,10 +78,10 @@ class GrizzlyLanguageServer(LanguageServer):
         # monkey patch functions to short-circuit them (causes problems in this context)
         gevent.monkey.patch_all = lambda: None
 
-        def _signal(signum: int, frame: FrameType) -> None:
+        def _signal(signum: Union[int, signal.Signals], frame: FrameType) -> None:
             return
 
-        signal.signal = _signal
+        signal.signal = _signal  # type: ignore
 
         @self.feature(INITIALIZE)
         def initialize(params: InitializeParams) -> None:
@@ -84,7 +91,21 @@ class GrizzlyLanguageServer(LanguageServer):
                 self.logger.error(error_message)
                 self.show_message(error_message, msg_type=MessageType.Error)
 
-            root_path = Path(unquote(urlparse(params.root_uri).path)) if params.root_uri is not None else Path(cast(str, params.root_path))
+            root_path = (
+                Path(unquote(url2pathname(urlparse(params.root_uri).path)))
+                if params.root_uri is not None
+                else Path(cast(str, params.root_path))
+            )
+
+            # fugly as hell
+            if (
+                not root_path.exists()
+                and str(root_path)[0:1] == sep
+                and str(root_path)[2] == ':'
+            ):
+                root_path = Path(str(root_path)[1:])
+
+            self.logger.debug(f'workspace root: {root_path}')
 
             project_name = root_path.stem
 
@@ -95,8 +116,12 @@ class GrizzlyLanguageServer(LanguageServer):
             has_venv = virtual_environment.exists()
 
             if not has_venv:
-                self.logger.debug(f'creating virtual environment: {virtual_environment}')
-                self.show_message(f'creating virtual environment for language server, this could take a while')
+                self.logger.debug(
+                    f'creating virtual environment: {virtual_environment}'
+                )
+                self.show_message(
+                    f'creating virtual environment for language server, this could take a while'
+                )
                 venv_create(str(virtual_environment))
 
             if platform.system() == 'Windows':  # pragma: no cover
@@ -116,10 +141,37 @@ class GrizzlyLanguageServer(LanguageServer):
 
             if not has_venv:
                 requirements_file = root_path / 'requirements.txt'
+                assert requirements_file.exists()
                 self.logger.debug(f'installing {requirements_file}')
-                with warnings.catch_warnings():
-                    warnings.simplefilter('ignore')
-                    pipmain(['install', '-r', str(requirements_file)])
+                start = perf_counter()
+                try:
+                    output = subprocess.check_output(
+                        [
+                            sys.executable,
+                            '-m',
+                            'pip',
+                            'install',
+                            '-r',
+                            str(requirements_file),
+                        ],
+                        env=environ,
+                    ).decode(sys.stdout.encoding)
+                    self.logger.debug(output)
+                    rc = 0
+                except subprocess.CalledProcessError as e:
+                    self.logger.error(e.output)
+                    rc = e.returncode
+                finally:
+                    delta = (perf_counter() - start) * 1000
+                    self.logger.debug(f'pip install took {delta} ms')
+
+                if rc == 0:
+                    self.show_message(f'virtual environment done')
+                else:
+                    self.show_message(
+                        f'failed to install {requirements_file}',
+                        msg_type=MessageType.Error,
+                    )
 
             self.logger.debug('creating step registry')
             self._make_step_registry(root_path / 'features' / 'steps')
@@ -134,7 +186,7 @@ class GrizzlyLanguageServer(LanguageServer):
             message = f'found {len(self.keywords)} keywords in behave'
             self.logger.debug(message)
             self.show_message(message)
-            
+
         @self.feature(COMPLETION)
         def completion(params: CompletionParams) -> CompletionList:
             assert self.steps is not None, 'no steps in inventory'
@@ -161,7 +213,9 @@ class GrizzlyLanguageServer(LanguageServer):
             )
 
         @self.feature(WORKSPACE_DID_CHANGE_CONFIGURATION)
-        def workspace_did_change_configuration(params: WorkspaceDidChangeConfigurationParams) -> None:
+        def workspace_did_change_configuration(
+            params: WorkspaceDidChangeConfigurationParams,
+        ) -> None:
             self.logger.debug(params)
 
     def _get_step_parts(self, line: str) -> Tuple[Optional[str], Optional[str]]:
@@ -189,11 +243,12 @@ class GrizzlyLanguageServer(LanguageServer):
 
         return keyword, step
 
-    def _complete_keyword(self, keyword: Optional[str], document: Document) -> List[CompletionItem]:
+    def _complete_keyword(
+        self, keyword: Optional[str], document: Document
+    ) -> List[CompletionItem]:
         if len(document.source.strip()) < 1:
             keywords = ['Feature']
         else:
-            print(document.source)
             if 'Scenario:' not in document.source:
                 keywords = ['Scenario']
             else:
@@ -205,7 +260,12 @@ class GrizzlyLanguageServer(LanguageServer):
 
             # check for partial matches
             if keyword is not None:
-                keywords = list(filter(lambda k: keyword.lower() in k.lower(), keywords))
+                keywords = cast(
+                    List[str],
+                    list(
+                        filter(lambda k: keyword.lower() in k.lower(), keywords)  # type: ignore
+                    ),
+                )
 
         return list(
             map(
@@ -232,7 +292,11 @@ class GrizzlyLanguageServer(LanguageServer):
             )
         )
 
-    def _complete_step(self, keyword: str, expression: Optional[str]) -> List[CompletionItem]:
+    def _complete_step(
+        self,
+        keyword: str,
+        expression: Optional[str],
+    ) -> List[CompletionItem]:
         steps = self.steps.get(keyword.lower(), [])
 
         matched_steps: List[str]
@@ -241,10 +305,10 @@ class GrizzlyLanguageServer(LanguageServer):
             matched_steps = steps
         else:
             # 1. exact matching
-            matched_steps_1 = set(filter(lambda s: s.startswith(expression), steps))
+            matched_steps_1 = set(filter(lambda s: s.startswith(expression), steps))  # type: ignore
 
             # 2. close enough matching
-            matched_steps_2 = set(filter(lambda s: expression in s, steps))
+            matched_steps_2 = set(filter(lambda s: expression in s, steps))  # type: ignore
 
             # 3. "fuzzy" matching
             matched_steps_3 = set(get_close_matches(expression, steps, len(steps), 0.6))
@@ -252,8 +316,10 @@ class GrizzlyLanguageServer(LanguageServer):
             # keep order so that 1. matches comes before 2. matches etc.
             matched_steps_container: Dict[str, Literal[None]] = {}
 
-            for matched_step in itertools.chain(matched_steps_1, matched_steps_2, matched_steps_3):
-                matched_steps_container.update({matched_step: None})
+            for matched_step in itertools.chain(
+                matched_steps_1, matched_steps_2, matched_steps_3
+            ):
+                matched_steps_container.update({matched_step: None})  # type: ignore
 
             matched_steps = list(matched_steps_container.keys())
 
@@ -308,13 +374,17 @@ class GrizzlyLanguageServer(LanguageServer):
 
         for custom_type, func in custom_types.items():
             try:
-                func_code = [line for line in inspect.getsource(func).strip().split('\n') if not line.strip().startswith('@classmethod')]
+                func_code = [
+                    line
+                    for line in inspect.getsource(func).strip().split('\n')
+                    if not line.strip().startswith('@classmethod')
+                ]
                 message: Optional[str] = None
 
-                print(func_code)
-
                 if func_code[0].startswith('@parse.with_pattern'):
-                    match = re.match(r'@parse.with_pattern\(r\'\(?(.*?)\)?\'', func_code[0])
+                    match = re.match(
+                        r'@parse.with_pattern\(r\'\(?(.*?)\)?\'', func_code[0]
+                    )
                     if match:
                         pattern = match.group(1)
                         vector = getattr(func, '__vector__', None)
@@ -324,28 +394,42 @@ class GrizzlyLanguageServer(LanguageServer):
                             x, y = vector
                             coordinates = Coordinate(x=x, y=y)
 
-                        custom_type_permutations.update({
-                            custom_type: NormalizeHolder(
-                                permutations=coordinates,
-                                replacements=RegexPermutationResolver.resolve(pattern),
-                            ),
-                        })
+                        custom_type_permutations.update(
+                            {
+                                custom_type: NormalizeHolder(
+                                    permutations=coordinates,
+                                    replacements=RegexPermutationResolver.resolve(
+                                        pattern
+                                    ),
+                                ),
+                            }
+                        )
                     else:
-                        raise ValueError(f'could not extract pattern from "{func_code[0]}" for custom type {custom_type}')
+                        raise ValueError(
+                            f'could not extract pattern from "{func_code[0]}" for custom type {custom_type}'
+                        )
                 elif 'from_string(' in func_code[-1] or 'from_string(' in func_code[0]:
                     enum_name: str
 
-                    match = re.match(r'return ([^\.]*)\.from_string\(', func_code[-1].strip())
+                    match = re.match(
+                        r'return ([^\.]*)\.from_string\(', func_code[-1].strip()
+                    )
+                    module: Optional[ModuleType]
                     if match:
                         enum_name = match.group(1)
                         module = import_module('grizzly.types')
                     else:
-                        match = re.match(r'def from_string.*?->\s+\'?([^:\']*)\'?:', func_code[0].strip())
+                        match = re.match(
+                            r'def from_string.*?->\s+\'?([^:\']*)\'?:',
+                            func_code[0].strip(),
+                        )
                         if match:
                             enum_name = match.group(1)
                             module = inspect.getmodule(func)
                         else:
-                            raise ValueError(f'could not find the type that from_string method for custom type {custom_type} returns')
+                            raise ValueError(
+                                f'could not find the type that from_string method for custom type {custom_type} returns'
+                            )
 
                     enum_class = getattr(module, enum_name)
                     replacements = [value.name.lower() for value in enum_class]
@@ -357,18 +441,22 @@ class GrizzlyLanguageServer(LanguageServer):
                         x, y = vector
                         coordinates = Coordinate(x=x, y=y)
 
-                    custom_type_permutations.update({
-                        custom_type: NormalizeHolder(
-                            permutations=coordinates,
-                            replacements=replacements,
-                        ),
-                    })
+                    custom_type_permutations.update(
+                        {
+                            custom_type: NormalizeHolder(
+                                permutations=coordinates,
+                                replacements=replacements,
+                            ),
+                        }
+                    )
                 else:
-                    raise ValueError(f'cannot infere what {func} will return for {custom_type}')
-            except ValueError as e: 
+                    raise ValueError(
+                        f'cannot infere what {func} will return for {custom_type}'
+                    )
+            except ValueError as e:
                 message = str(e)
                 self.logger.error(message)
-                self.show_message(message, msg_type=MessageType.Error) 
+                self.show_message(message, msg_type=MessageType.Error)
 
         self.normalizer = Normalizer(custom_type_permutations)
 

@@ -24,7 +24,6 @@ class LspFixture:
 
     datadir: Path
 
-
     def __init__(self, mocker: MockerFixture) -> None:
         self._mocker = mocker
 
@@ -40,23 +39,33 @@ class LspFixture:
                 pass
 
         self.server = GrizzlyLanguageServer(asyncio.new_event_loop())  # type: ignore
-        self._server_thread = Thread(target=start, args=(self.server, cstdio, sstdout), daemon=True)
+        self._server_thread = Thread(
+            target=start, args=(self.server, cstdio, sstdout), daemon=True
+        )
         self._server_thread.start()
 
         self.client = LanguageServer(asyncio.new_event_loop())
-        self._client_thread = Thread(target=start, args=(self.client, sstdio, cstdout), daemon=True)
+        self._client_thread = Thread(
+            target=start, args=(self.client, sstdio, cstdout), daemon=True
+        )
         self._client_thread.start()
 
-        self.datadir = (Path(__file__) / '..' / '..' / '..' / 'tests' / 'project').resolve()
+        self.datadir = (
+            Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
+        ).resolve()
 
         return self
 
-    def __exit__(self, exc_type: Optional[Type[BaseException]], exc: Optional[BaseException], traceback: Optional[TracebackType]) -> Literal[True]:
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> Literal[True]:
         self.server.send_notification(EXIT)
         self.client.send_notification(EXIT)
-        
+
         self._server_thread.join(timeout=2.0)
         self._client_thread.join(timeout=2.0)
 
         return True
-
