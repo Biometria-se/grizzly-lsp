@@ -9,6 +9,7 @@ dependencies = [
     'behave @ git+https://github.com/mgor/behave.git@bug/parser_object___init___not_called_after_reset_runtime'
 ]
 dynamic = ['version']
+requires-python = ">=3.8"
 
 [project.scripts]
 grizzly-ls = 'grizzly_ls.__main__:main'
@@ -33,7 +34,6 @@ ci = [
 ]
 
 [tool.setuptools_scm]
-write_to = "grizzly-ls/src/grizzly_ls/__version__.py"
 root = ".."
 
 [tool.pytest.ini_options]

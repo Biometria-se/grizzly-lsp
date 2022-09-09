@@ -2,6 +2,7 @@
 **/*.vsix
 **/build
 **/out
+**/dist
 **/*.egg-info
 **/*.log
 **/*.pyc

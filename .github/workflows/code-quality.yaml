@@ -20,8 +20,10 @@ jobs:
         python-version: ['3.8', '3.9', '3.10']
         runs-on: ['ubuntu-latest']
         include:
-          - python-version: '3.10'
+          - python-version: '3.x'
             runs-on: windows-latest
+          - python-version: '3.x'
+            runs-on: macos-latest
 
     steps:
       - name: checkout
@@ -56,7 +58,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runs-on: ['ubuntu-latest', 'windows-latest']
+        runs-on: ['ubuntu-latest', 'windows-latest', 'macos-latest']
 
     steps:
       - name: checkout
