@@ -21,7 +21,20 @@ const docUriActivated: Map<string, boolean> = new Map();
 export async function activate(docUri: vscode.Uri) {
     // @TODO: fugly, first time a virtual environment needs to be created, which takes time
     const activated = docUriActivated.get(docUri.toString());
-    let sleep_time = process.platform === 'darwin' ? 10000 : 6000;
+
+    let sleep_time = 0;
+
+    switch (process.platform) {
+        case 'darwin':
+            sleep_time = 15000;
+            break;
+        case 'win32':
+            sleep_time = 10000;
+            break;
+        default:
+            sleep_time = 6000;
+            break;
+    }
 
     if (activated) {
         sleep_time = 500;
