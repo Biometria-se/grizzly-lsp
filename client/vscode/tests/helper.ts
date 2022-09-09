@@ -16,12 +16,12 @@ const testWorkspace: string = path.resolve(__dirname, '../../../../tests/project
 const docUriActivated: Map<string, boolean> = new Map();
 
 /**
- * Activates the vscode.lsp-sample extension
+ * Activates the biometria-se.vscode-grizzly extension
  */
 export async function activate(docUri: vscode.Uri) {
     // @TODO: fugly, first time a virtual environment needs to be created, which takes time
     const activated = docUriActivated.get(docUri.toString());
-    let sleep_time = 6000;
+    let sleep_time = process.platform === 'darwin' ? 10000 : 6000;
 
     if (activated) {
         sleep_time = 500;

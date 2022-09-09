@@ -6,26 +6,9 @@ This repository contains the `biometria.grizzly-vscode` (vscode extension market
 
 An extension makes it easier to develop load test scenarios with [`grizzly`](https://biometria-se.github.io) when you have auto-complete on step implementation expressions.
 
-![Screenshot of keyword auto-complete](./assets/images/screenshot-auto-complete-keywords.png)
+![Screenshot of keyword auto-complete](https://github.com/Biometria-se/grizzly-lsp/raw/main/assets/images/screenshot-auto-complete-keywords.png)
 
-![Screenshot of step expressions auto-complete](./assets/images/screenshot-auto-complete-step-expressions.png)
-
-Goals:
-
--   [x] syntax highlighting
--   [x] auto-complete
--   [ ] CI workflows
-    -   [ ] client
-        -   [x] test
-        -   [ ] build
-        -   [ ] publish `client/vscode` on Visual Studio Code Marketplace
-    -   [ ] server
-        -   [x] test
-        -   [ ] build
-        -   [ ] publish `grizzly-ls/` on pypi.org
--   [x] unit tests
-    -   [x] `client/vscode`
-    -   [x] `grizzly-ls/`
+![Screenshot of step expressions auto-complete](https://github.com/Biometria-se/grizzly-lsp/raw/main/assets/images/screenshot-auto-complete-step-expressions.png)
 
 ## Development
 

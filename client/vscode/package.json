@@ -84,10 +84,11 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run build",
-    "build": "tsc --project tsconfig.build.json",
+    "vscode:prepublish": "npm run build-base -- --minify",
+    "build-base": "esbuild ./src/extension.ts --bundle --outfile=out/src/extension.js --external:vscode --format=cjs --platform=node",
+    "build": "npm run build-base -- --sourcemap",
+    "watch": "npm run build-base -- --sourcemap --watch",
     "compile": "tsc -b",
-    "watch": "tsc -b -w",
     "lint": "eslint src/ --ext .ts,.tsx",
     "lint-fix": "eslint src/ --ext .ts,.tsx --fix",
     "pretest": "npm run compile",
@@ -105,6 +106,7 @@
     "@typescript-eslint/parser": "^5.33.1",
     "@vscode/test-electron": "^2.1.2",
     "chai": "^4.3.6",
+    "esbuild": "^0.15.7",
     "eslint": "^8.22.0",
     "eslint-config-standard-with-typescript": "^22.0.0",
     "eslint-plugin-import": "^2.26.0",
