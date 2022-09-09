@@ -21,10 +21,10 @@ on:
           - major
         default: 'patch'
         required: true
-      dry-run:
+      publish:
         type: boolean
-        description: 'Dry run (do not publish)'
-        default: true
+        description: 'Publish packages'
+        default: false
         required: true
 
 defaults:
@@ -32,7 +32,8 @@ defaults:
     shell: bash
 
 jobs:
-  pre-common:
+  version:
+    name: get release version
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.next-version.outputs.new_version }}
@@ -46,7 +47,7 @@ jobs:
         id: get-latest-tag
         with:
           semver_only: true
-          initial_version: '1.0.0'
+          initial_version: '0.0.0'
           with_initial_version: true
 
       - name: next version
@@ -62,8 +63,9 @@ jobs:
           echo "next version is ${{ steps.next-version.outputs.new_version }}"
 
   server:
+    name: build and publish server
     runs-on: ubuntu-latest
-    needs: [pre-common]
+    needs: [version]
     if: ${{ github.event.inputs.component == 'both' || github.event.inputs.component == 'server' }}
 
     defaults:
@@ -82,7 +84,9 @@ jobs:
 
       - name: create temporary release tag
         run: |
-          git tag -a "v${{ needs.pre-common.outputs.version }}"
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git tag -a "${{ needs.version.outputs.version }}" -m "Release ${{ needs.version.outputs.version }}"
 
       - name: install dependencies
         run: |
@@ -92,21 +96,23 @@ jobs:
         run: |
           python -m build
 
-      - name: 'publish (${{ github.event.inputs.dry-run }})'
+      - name: 'publish (${{ github.event.inputs.publish }})'
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
           TWINE_NON_INTERACTIVE: true
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          if [[ "${{ github.event.inputs.dry-run }}" != "true "]]; then
-            python -m twine upload dist/grizzly?ls-${{ needs.pre-common.outputs.version }}*
+          if [[ "${{ github.event.inputs.publish }}" == "true" ]]; then
+            python -m twine upload dist/grizzly?ls-${VERSION#v}*
           else
-            ls -l dist/grizzly?ls-${{ needs.pre-common.outputs.version }}*
+            ls -l dist/grizzly?ls-${VERSION#v}*
           fi
 
   client:
+    name: build and publish client
     runs-on: ubuntu-latest
-    needs: [pre-common]
+    needs: [version]
     if: ${{ github.event.inputs.component == 'both' || github.event.inputs.component == 'client' }}
 
     defaults:
@@ -120,11 +126,13 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           cache: 'npm'
-          cache-dependency-path: './package-lock.json'
+          cache-dependency-path: './client/vscode/package-lock.json'
 
       - name: bump version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          npm version "${{ needs.pre-common.outputs.version }}"
+          npm version "${VERSION#v}"
 
       - name: install dependencies
         run: |
@@ -133,23 +141,24 @@ jobs:
 
       - name: build
         run: |
-          vsce package --out out/
+          vsce package
 
-      - name: publish (${{ github.event.inputs.dry-run }})
+      - name: publish (${{ github.event.inputs.publish }})
         env:
           VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
         run: |
-          if [[ "${{ github.event.inputs.dry-run }}" != "true "]]; then
+          if [[ "${{ github.event.inputs.publish }}" == "true" ]]; then
             vsce publish -p $VSCE_TOKEN
           else
-            ls -l out/*.vsix
-            unzip -t out/*.vsix || true
+            ls -l *.vsix
+            unzip -t *.vsix || true
           fi
 
-  post-common:
+  tag-release:
+    name: create and push release tag
     runs-on: ubuntu-latest
-    needs: [pre-common, server, client]
-    if: ${{ github.event.inputs.dry-run != 'true' }}
+    needs: [version, server, client]
+    if: ${{ github.event.inputs.publish == 'true' }}
 
     steps:
       - name: checkout
@@ -157,5 +166,5 @@ jobs:
 
       - uses: actions-ecosystem/action-push-tag@v1
         with:
-          tag: ${{ needs.pre-common.outputs.version }}
-          message: 'Release ${{ needs.pre-common.outputs.version }}'
+          tag: ${{ needs.version.outputs.version }}
+          message: 'Release ${{ needs.version.outputs.version }}'
