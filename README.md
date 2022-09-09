@@ -1,7 +1,5 @@
 # grizzly-lsp
 
-> **NOTE**: This project is currently in development, nothing has been published to the vscode extension marketplace or on pypi
-
 This repository contains the `biometria.grizzly-vscode` (vscode extension marketplace) extension and the `grizzly-ls` (pypi) source code.
 
 An extension makes it easier to develop load test scenarios with [`grizzly`](https://biometria-se.github.io) when you have auto-complete on step implementation expressions.
