@@ -165,7 +165,15 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
 
-      - uses: actions-ecosystem/action-push-tag@v1
-        with:
-          tag: ${{ needs.version.outputs.version }}
-          message: 'Release ${{ needs.version.outputs.version }}'
+      - name: create and push release tag
+        run: |
+          set -e
+
+          tag="${{ needs.version.outputs.version }}"
+          message="Release ${tag}"
+
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+
+          git tag -a "${tag}" -m "${message}"
+          git push origin "${tag}"
