@@ -1,9 +1,9 @@
 {
-  "name": "grizzly-vscode",
+  "name": "grizzly-loadtester-vscode",
   "description": "Visual Studio Code extension for grizzly projects",
   "author": "Biometria <opensource@biometria.se>",
   "license": "MIT",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/biometria-se/grizzly-lsp"
