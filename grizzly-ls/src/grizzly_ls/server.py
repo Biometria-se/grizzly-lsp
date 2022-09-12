@@ -178,12 +178,9 @@ class GrizzlyLanguageServer(LanguageServer):
             total_steps = 0
             for steps in self.steps.values():
                 total_steps += len(steps)
-            message = f'found {total_steps} steps in grizzly project {project_name}'
-            self.logger.debug(message)
-            self.show_message(message)
 
             self._make_keyword_registry()
-            message = f'found {len(self.keywords)} keywords in behave'
+            message = f'found {len(self.keywords)} keywords and {total_steps} steps for grizzly project {project_name}'
             self.logger.debug(message)
             self.show_message(message)
 

@@ -15,4 +15,4 @@ Install it with:
 python -m pip install grizzly-loadtester-ls
 ```
 
-And make sure it's in your in a directory that is part of your `PATH` environment variable.
+And make sure it's in a directory that is part of your `PATH` environment variable.

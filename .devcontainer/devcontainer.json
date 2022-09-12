@@ -83,7 +83,7 @@
   "remoteEnv": {
     "PATH": "${containerEnv:PATH}:${containerWorkspaceFolder}/client/node_modules/.bin"
   },
-  "postCreateCommand": "./scripts/install.sh",
+  "postCreateCommand": "./script/install.sh",
   // Use 'forwardPorts' to make a list of ports inside the container available locally.
   // "forwardPorts": [],
   // Use 'postCreateCommand' to run commands after the container is created.

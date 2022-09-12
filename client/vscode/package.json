@@ -10,6 +10,10 @@
     "type": "git",
     "url": "https://github.com/biometria-se/grizzly-lsp"
   },
+  "bugs": {
+    "url": "https://github.com/Biometria-se/grizzly/issues"
+  },
+  "homepage": "https://biometria-se.github.io/grizzly/",
   "publisher": "biometria-se",
   "categories": ["Testing", "Programming Languages"],
   "keywords": [
