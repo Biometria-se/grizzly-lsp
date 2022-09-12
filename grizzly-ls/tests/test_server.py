@@ -16,7 +16,6 @@ gevent.monkey.patch_all = lambda: None
 from _pytest.logging import LogCaptureFixture
 from pytest_mock import MockerFixture
 
-from pygls.lsp.types.basic_structures import Position
 from pygls.workspace import Workspace, Document
 from pygls.server import LanguageServer
 from pygls.lsp.methods import (
@@ -353,7 +352,7 @@ class TestGrizzlyLanguageServer:
 
         server._make_step_registry((grizzly_project.resolve() / 'features' / 'steps'))
 
-        noop = lambda: None
+        noop = lambda: None  # noqa: E731
 
         step = ParseMatcher(noop, 'hello world')
 
@@ -908,7 +907,7 @@ class TestGrizzlyLanguageServer:
             )
             assert len(unexpected_kinds) == 0
             labels = list(map(lambda k: k.get('label', None), items))
-            assert all([True if l is not None else False for l in labels])
+            assert all([True if label is not None else False for label in labels])
             assert labels == ['Feature']
 
         def test_completion_steps(
@@ -932,7 +931,7 @@ class TestGrizzlyLanguageServer:
                     map(lambda s: s.get('label', None), response.get('items', []))
                 )
                 assert len(labels) > 0
-                assert all([True if l is not None else False for l in labels])
+                assert all([True if label is not None else False for label in labels])
 
                 assert 'ask for value of variable ""' in labels
                 assert 'spawn rate is "" user per second' in labels
@@ -953,7 +952,7 @@ class TestGrizzlyLanguageServer:
                 map(lambda s: s.get('label', None), response.get('items', []))
             )
             assert len(labels) > 0
-            assert all([True if l is not None else False for l in labels])
+            assert all([True if label is not None else False for label in labels])
 
             assert 'ask for value of variable ""' in labels
             assert 'value for variable "" is ""'
@@ -972,7 +971,7 @@ class TestGrizzlyLanguageServer:
                 map(lambda s: s.get('label', None), response.get('items', []))
             )
             assert len(labels) > 0
-            assert all([True if l is not None else False for l in labels])
+            assert all([True if label is not None else False for label in labels])
 
             assert 'a user of type "" with weight "" load testing ""' in labels
             assert 'a user of type "" load testing ""' in labels

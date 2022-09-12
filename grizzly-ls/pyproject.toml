@@ -6,7 +6,7 @@ build-backend = 'setuptools.build_meta'
 name = 'grizzly-loadtester-ls'
 dependencies = [
     'pygls',
-    'behave @ git+https://github.com/mgor/behave.git@bug/parser_object___init___not_called_after_reset_runtime'
+    'behave'
 ]
 dynamic = ['version']
 requires-python = ">=3.8"
@@ -25,7 +25,7 @@ dev = [
     'flake518',
     'black',
     'mypy',
-    'grizzly-loadtester @ git+https://github.com/biometria-se/grizzly.git@main'
+    'grizzly-loadtester'
 ]
 
 ci = [
