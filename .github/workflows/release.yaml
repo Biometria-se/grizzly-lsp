@@ -104,9 +104,9 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           if [[ "${{ github.event.inputs.publish }}" == "true" ]]; then
-            python -m twine upload dist/grizzly?ls-${VERSION#v}*
+            python -m twine upload dist/grizzly?loadtester?ls-${VERSION#v}*
           else
-            ls -l dist/grizzly?ls-${VERSION#v}*
+            ls -l dist/grizzly?loadtester?ls-${VERSION#v}*
           fi
 
   client:
@@ -146,12 +146,13 @@ jobs:
       - name: publish (${{ github.event.inputs.publish }})
         env:
           VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
           if [[ "${{ github.event.inputs.publish }}" == "true" ]]; then
             vsce publish -p $VSCE_TOKEN
           else
-            ls -l *.vsix
-            unzip -t *.vsix || true
+            ls -l grizzly-loadtester-vscode-${VERSION#v}.vsix
+            unzip -t grizzly-loadtester-vscode-${VERSION#v}.vsix || true
           fi
 
   tag-release:

@@ -3,7 +3,7 @@ requires = ['setuptools', 'setuptools-scm >= 7.0.3', 'wheel']
 build-backend = 'setuptools.build_meta'
 
 [project]
-name = 'grizzly-ls'
+name = 'grizzly-loadtester-ls'
 dependencies = [
     'pygls',
     'behave @ git+https://github.com/mgor/behave.git@bug/parser_object___init___not_called_after_reset_runtime'
@@ -37,7 +37,7 @@ ci = [
 root = ".."
 
 [tool.pytest.ini_options]
-timeout = 60
+timeout = 90
 addopts = [
     "--rootdir=grizzly-ls/",
     "-o", "testpaths=tests",

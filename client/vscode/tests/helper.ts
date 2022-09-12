@@ -43,7 +43,7 @@ export async function activate(docUri: vscode.Uri) {
     }
 
     // The extensionId is `publisher.name` from package.json
-    const ext = vscode.extensions.getExtension('biometria-se.grizzly-vscode');
+    const ext = vscode.extensions.getExtension('biometria-se.grizzly-loadtester-vscode');
     await ext.activate();
     try {
         doc = await vscode.workspace.openTextDocument(docUri);
