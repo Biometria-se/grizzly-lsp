@@ -26,7 +26,7 @@ export async function activate(docUri: vscode.Uri) {
 
     switch (process.platform) {
         case 'darwin':
-            sleep_time = 15000;
+            sleep_time = 20000;
             break;
         case 'win32':
             sleep_time = 10000;

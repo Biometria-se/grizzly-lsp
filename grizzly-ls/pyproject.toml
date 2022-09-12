@@ -57,7 +57,11 @@ dev = [
     'flake518',
     'black',
     'mypy',
-    'grizzly-loadtester'
+    'grizzly-loadtester',
+    'requests',
+    'types-requests',
+    'pip-licenses',
+    'pytablewriter'
 ]
 
 ci = [
@@ -143,4 +147,12 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "parse.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "piplicenses.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pytablewriter.*"
 ignore_missing_imports = true
