@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import sys
+import subprocess
 
 from typing import List, Dict
 from os import path
@@ -17,7 +18,46 @@ URL_MAP: Dict[str, str] = {}
 REPO_ROOT = path.realpath(path.join(path.dirname(__file__), '..'))
 
 
-def generate_license_table() -> List[str]:
+def client_vscode_generate_license_table() -> List[str]:
+    output = subprocess.check_output(
+        ['npm', 'run', 'licenses'],
+        shell=False,
+        encoding='utf-8',
+        cwd='./client/vscode',
+    ).split('\n')
+
+    licenses = jsonloads(output[4])
+
+    headers = ['Name', 'Version', 'License']
+    table_contents: List[List[str]] = []
+
+    for license in licenses:
+        name = license['name']
+        name = f'[{name}]({license["link"]})'
+
+        table_contents.append(
+            [
+                name,
+                license['installedVersion'],
+                license['licenseType'],
+            ]
+        )
+
+    writer = MarkdownTableWriter(
+        headers=headers,
+        value_matrix=table_contents,
+        margin=1,
+    )
+
+    writer.stream = StringIO()
+    writer.write_table()  # type: ignore
+
+    license_table = [f'{row}\n' for row in writer.stream.getvalue().strip().split('\n')]  # type: ignore
+
+    return license_table
+
+
+def server_generate_license_table() -> List[str]:
     args = CustomNamespace()
     args.format_ = FormatArg.JSON
     args.from_ = FromArg.MIXED
@@ -103,7 +143,7 @@ def generate_license_table() -> List[str]:
     writer.stream = StringIO()
     writer.write_table()  # type: ignore
 
-    license_table = ['### Python dependencies\n'] + [f'{row}\n' for row in writer.stream.getvalue().strip().split('\n')]  # type: ignore
+    license_table = [f'{row}\n' for row in writer.stream.getvalue().strip().split('\n')]  # type: ignore
 
     return license_table
 
@@ -112,10 +152,16 @@ def main() -> int:
     with open(path.join(REPO_ROOT, 'LICENSE.md')) as fd:
         contents = fd.readlines()
 
-    license_table = generate_license_table()
+    server_license_table = server_generate_license_table()
+    client_vscode_license_table = client_vscode_generate_license_table()
+
     contents[0] = f'#{contents[0]}'
     license_contents = (
-        contents + ['\n', '## Third party licenses\n', '\n'] + license_table[:-1]
+        contents
+        + ['\n', '## Third party licenses\n', '\n', '### Server\n', '\n']
+        + server_license_table[:-1]
+        + ['\n### Client\n\n', '#### Visual Studio Code\n\n']
+        + client_vscode_license_table
     )
 
     print(''.join(license_contents))

@@ -41,7 +41,7 @@ jobs:
         id: pip
         working-directory: ./
         run: |
-          bash ./scripts/install.sh server
+          bash ./script/install.sh server
 
       - name: pytest
         id: pytest
@@ -80,8 +80,8 @@ jobs:
       - name: install dependencies
         id: install
         run: |
-          bash ./scripts/install.sh client/vscode
-          bash ./scripts/install.sh server +e
+          bash ./script/install.sh client/vscode
+          bash ./script/install.sh server +e
 
       - name: test
         id: test
@@ -123,7 +123,7 @@ jobs:
       - name: install dependencies
         id: install
         run: |
-          bash ./scripts/install.sh
+          bash ./script/install.sh
 
       - name: 'server: pylint'
         id: server-pylint

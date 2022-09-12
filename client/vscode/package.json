@@ -15,7 +15,10 @@
   },
   "homepage": "https://biometria-se.github.io/grizzly/",
   "publisher": "biometria-se",
-  "categories": ["Testing", "Programming Languages"],
+  "categories": [
+    "Testing",
+    "Programming Languages"
+  ],
   "keywords": [
     "grizzly",
     "load testing",
@@ -98,7 +101,8 @@
     "lint": "eslint src/ --ext .ts,.tsx",
     "lint-fix": "eslint src/ --ext .ts,.tsx --fix",
     "pretest": "npm run compile",
-    "test": "node out/tests/runTest"
+    "test": "node out/tests/runTest",
+    "licenses": "license-report"
   },
   "dependencies": {
     "vscode-languageclient": "^7.0.0"
@@ -118,6 +122,7 @@
     "eslint-plugin-import": "^2.26.0",
     "eslint-plugin-n": "^15.2.4",
     "eslint-plugin-promise": "^6.0.0",
+    "license-report": "^6.1.0",
     "mocha": "^9.2.1",
     "typescript": "^4.7.4"
   }
