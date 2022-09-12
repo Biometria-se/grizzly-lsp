@@ -29,9 +29,11 @@ class LspFixture:
 
     def _reset_behave_runtime(self) -> None:
         from behave import step_registry
+
         step_registry.setup_step_decorators(None, step_registry.registry)
 
         import parse
+
         reload_module(parse)
 
     def __enter__(self) -> 'LspFixture':
