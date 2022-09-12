@@ -120,7 +120,7 @@ class GrizzlyLanguageServer(LanguageServer):
                     f'creating virtual environment: {virtual_environment}'
                 )
                 self.show_message(
-                    f'creating virtual environment for language server, this could take a while'
+                    'creating virtual environment for language server, this could take a while'
                 )
                 venv_create(str(virtual_environment))
 
@@ -166,7 +166,7 @@ class GrizzlyLanguageServer(LanguageServer):
                     self.logger.debug(f'pip install took {delta} ms')
 
                 if rc == 0:
-                    self.show_message(f'virtual environment done')
+                    self.show_message('virtual environment done')
                 else:
                     self.show_message(
                         f'failed to install {requirements_file}',
@@ -466,7 +466,7 @@ class GrizzlyLanguageServer(LanguageServer):
             warnings.simplefilter('ignore')
             load_step_modules([str(step_path)])
 
-        self.logger.debug(f'...done!')
+        self.logger.debug('...done!')
         self._resolve_custom_types()
         self.steps = {}
         registry_steps: Dict[str, List[ParseMatcher]] = registry.steps

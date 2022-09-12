@@ -5,12 +5,12 @@ from types import TracebackType
 from typing import Literal, Optional, Type
 from threading import Thread
 from pathlib import Path
+from importlib import reload as reload_module
 
 from pytest_mock import MockerFixture
 
 from pygls.server import LanguageServer
 from pygls.lsp.methods import EXIT
-from behave.runner_util import reset_runtime
 from grizzly_ls.server import GrizzlyLanguageServer
 
 
@@ -27,8 +27,15 @@ class LspFixture:
     def __init__(self, mocker: MockerFixture) -> None:
         self._mocker = mocker
 
+    def _reset_behave_runtime(self) -> None:
+        from behave import step_registry
+        step_registry.setup_step_decorators(None, step_registry.registry)
+
+        import parse
+        reload_module(parse)
+
     def __enter__(self) -> 'LspFixture':
-        reset_runtime(reset_matchers=False)
+        self._reset_behave_runtime()
         cstdio, cstdout = os.pipe()
         sstdio, sstdout = os.pipe()
 
