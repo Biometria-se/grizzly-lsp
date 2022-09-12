@@ -178,6 +178,7 @@ jobs:
 
       - name: install python dependencies
         id: pip
+        working-directory: ./grizzly-ls
         run: python -m pip install --upgrade .[dev]
 
       - name: exists

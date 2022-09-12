@@ -4,7 +4,7 @@ import sys
 import subprocess
 
 from typing import List, Dict
-from os import path
+from os import path, unlink
 from json import loads as jsonloads
 from io import StringIO
 
@@ -19,27 +19,53 @@ REPO_ROOT = path.realpath(path.join(path.dirname(__file__), '..'))
 
 
 def client_vscode_generate_license_table() -> List[str]:
-    output = subprocess.check_output(
-        ['npm', 'run', 'licenses'],
+    rc = subprocess.check_call(
+        ['npm', 'install', '--silent'],
         shell=False,
-        encoding='utf-8',
-        cwd='./client/vscode',
-    ).split('\n')
+        cwd=f'{REPO_ROOT}/client/vscode',
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+    )
 
-    licenses = jsonloads(output[4])
+    assert rc == 0, 'failed to install npm dependencies'
 
-    headers = ['Name', 'Version', 'License']
+    try:
+        unlink('/tmp/client_vscode_licenses.json')
+    except:
+        pass
+
+    rc = subprocess.check_call(
+        ['npm', 'run', 'licenses', '--', '/tmp/client_vscode_licenses.json'],
+        shell=False,
+        cwd=f'{REPO_ROOT}/client/vscode',
+        stdout=subprocess.DEVNULL,
+    )
+
+    assert rc == 0, 'failed to generate npm license table'
+
+    with open('/tmp/client_vscode_licenses.json', 'r') as fd:
+        licenses = jsonloads(fd.read())
+
+    headers = ['Name', 'Parents', 'Version', 'License']
     table_contents: List[List[str]] = []
 
-    for license in licenses:
-        name = license['name']
-        name = f'[{name}]({license["link"]})'
+    for name, license in licenses.items():
+        name, version = name.rsplit('@', 1)
+        repository = license.get('repository', None)
+        parents = license.get('parents', None)
+
+        if parents == 'UNDEFINED':
+            parents = ''
+
+        if repository is not None:
+            name = f'[{name}]({license["repository"]})'
 
         table_contents.append(
             [
                 name,
-                license['installedVersion'],
-                license['licenseType'],
+                parents,
+                version,
+                license['licenses'],
             ]
         )
 
