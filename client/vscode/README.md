@@ -7,12 +7,12 @@ auto-complete of step expressions!
 
 ![Screenshot of step expressions auto-complete](https://github.com/Biometria-se/grizzly-lsp/raw/main/assets/images/screenshot-auto-complete-step-expressions.png)
 
-For the extension to work, you have to install the language server `grizzly-ls` which is published on [pypi.org](https://pypi.org/project/grizzly-ls/).
+For the extension to work, you have to install the language server `grizzly-loadtester-ls` which is published on [pypi.org](https://pypi.org/project/grizzly-loadtester-ls/).
 
 Install it with:
 
 ```bash
-python -m pip install grizzly-ls
+python -m pip install grizzly-loadtester-ls
 ```
 
 And make sure it's in your in a directory that is part of your `PATH` environment variable.

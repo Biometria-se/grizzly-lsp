@@ -5,7 +5,7 @@
   "author": "Biometria <opensource@biometria.se>",
   "license": "MIT",
   "version": "0.0.0",
-  "icon": "assets/grizzly_grasshopper_orange_256px.png",
+  "icon": "images/grizzly_grasshopper_orange_256px.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/biometria-se/grizzly-lsp"
