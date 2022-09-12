@@ -8,11 +8,42 @@ dependencies = [
     'pygls',
     'behave'
 ]
+readme = 'README.md'
+authors = [
+    {name = 'biometria', email='opensource@biometria.se'}
+]
+license = {file = 'LICENSE.md'}
 dynamic = ['version']
 requires-python = ">=3.8"
+classifiers = [
+    'Development Status :: 4 - Beta',
+    'License :: OSI Approved :: MIT License',
+    'Natural Language :: English',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3 :: Only',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: Implementation :: CPython'
+]
+keywords = [
+    'locust',
+    'behave',
+    'grizzly',
+    'grizzly-loadtester',
+    'loadtest',
+    'load',
+    'performance',
+    'traffic generator'
+]
 
 [project.scripts]
 grizzly-ls = 'grizzly_ls.__main__:main'
+
+[project.urls]
+Documentation = 'https://biometria-se.github.io/grizzly/'
+Code = 'https://github.com/biometria-se/grizzly-lsp/'
+Tracker = 'https://github.com/Biometria-se/grizzly/issues'
 
 [project.optional-dependencies]
 dev = [
