@@ -1,4 +1,5 @@
 {
+  "publisher": "biometria-se",
   "name": "grizzly-loadtester-vscode",
   "displayName": "Grizzly Loadtester for VSCode",
   "description": "Visual Studio Code extension for grizzly projects",
@@ -6,6 +7,10 @@
   "license": "MIT",
   "version": "0.0.0",
   "icon": "images/icon.png",
+  "galleryBanner": {
+    "theme": "dark",
+    "color": "#795649"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/biometria-se/grizzly-lsp"
@@ -14,7 +19,6 @@
     "url": "https://github.com/Biometria-se/grizzly/issues"
   },
   "homepage": "https://biometria-se.github.io/grizzly/",
-  "publisher": "biometria-se",
   "categories": [
     "Testing",
     "Programming Languages"
@@ -24,6 +28,7 @@
     "load testing",
     "locust"
   ],
+  "qna": "false",
   "engines": {
     "vscode": "^1.63.0"
   },
