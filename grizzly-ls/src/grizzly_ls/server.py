@@ -1,17 +1,14 @@
-import inspect
 import itertools
 import logging
 import platform
-import warnings
 import signal
-import re
 import subprocess
 import sys
 
 from os import environ
 from os.path import pathsep, sep
-from typing import Any, Tuple, Dict, List, Union, Optional, Callable, Literal, cast
-from types import FrameType, ModuleType
+from typing import Any, Tuple, Dict, List, Union, Optional, Literal, cast
+from types import FrameType
 from pathlib import Path
 from behave.matchers import ParseMatcher
 from venv import create as venv_create
@@ -19,7 +16,6 @@ from tempfile import gettempdir
 from difflib import get_close_matches, SequenceMatcher
 from urllib.parse import urlparse, unquote
 from urllib.request import url2pathname
-from importlib import import_module
 from time import perf_counter
 
 import gevent.monkey  # type: ignore
@@ -44,17 +40,18 @@ from pygls.lsp.types.workspace import (
 from pygls.lsp.types.basic_structures import Position
 from pygls.workspace import Document
 
-from behave.step_registry import registry
-from behave.runner_util import load_step_modules
 from behave.i18n import languages
 
-from .text import Coordinate, NormalizeHolder, RegexPermutationResolver, Normalizer
+from .text import Normalizer, get_step_parts
+from .utils import create_step_normalizer, load_step_registry
 
 
 class GrizzlyLanguageServer(LanguageServer):
     logger: logging.Logger = logging.getLogger(__name__)
 
+    behave_steps: Dict[str, List[ParseMatcher]]
     steps: Dict[str, List[str]]
+    help: Dict[str, str]
     keywords: List[str]
     keywords_once: List[str] = ['Feature', 'Background']
     keyword_alias: Dict[str, str] = {
@@ -72,7 +69,9 @@ class GrizzlyLanguageServer(LanguageServer):
     def __init__(self, *args: Tuple[Any, ...], **kwargs: Dict[str, Any]) -> None:
         super().__init__(*args, **kwargs)  # type: ignore
 
+        self.behave_steps = {}
         self.steps = {}
+        self.help = {}
         self.keywords = []
 
         # monkey patch functions to short-circuit them (causes problems in this context)
@@ -173,23 +172,17 @@ class GrizzlyLanguageServer(LanguageServer):
                         msg_type=MessageType.Error,
                     )
 
-            self.logger.debug('creating step registry')
-            self._make_step_registry(root_path / 'features' / 'steps')
-            total_steps = 0
-            for steps in self.steps.values():
-                total_steps += len(steps)
+            self._compile_inventory(root_path, project_name)
 
-            self._make_keyword_registry()
-            message = f'found {len(self.keywords)} keywords and {total_steps} steps for grizzly project {project_name}'
-            self.logger.debug(message)
-            self.show_message(message)
 
         @self.feature(COMPLETION)
         def completion(params: CompletionParams) -> CompletionList:
             assert self.steps is not None, 'no steps in inventory'
 
             line = self._current_line(params.text_document.uri, params.position).strip()
-            keyword, step = self._get_step_parts(line)
+            keyword, step = get_step_parts(line)
+            if keyword is not None:
+                keyword = self.keyword_alias.get(keyword, keyword)
 
             items: List[CompletionItem] = []
 
@@ -214,31 +207,6 @@ class GrizzlyLanguageServer(LanguageServer):
             params: WorkspaceDidChangeConfigurationParams,
         ) -> None:
             self.logger.debug(params)
-
-    def _get_step_parts(self, line: str) -> Tuple[Optional[str], Optional[str]]:
-        self.logger.info(f'{line=}')
-
-        if len(line) > 0:
-            # remove any user values enclosed with double-quotes
-            line = re.sub(r'"[^"]*"', '""', line)
-
-            # remove multiple white spaces
-            line = re.sub(r'\s+', ' ', line)
-
-            try:
-                keyword, step = line.strip().split(' ', 1)
-                step = step.strip()
-            except ValueError:
-                keyword = line
-                step = None
-            keyword = keyword.strip()
-
-            # get correct keyword if provided was an alias
-            keyword = self.keyword_alias.get(keyword, keyword)
-        else:
-            keyword, step = None, None
-
-        return keyword, step
 
     def _complete_keyword(
         self, keyword: Optional[str], document: Document
@@ -365,117 +333,37 @@ class GrizzlyLanguageServer(LanguageServer):
 
         return patterns
 
-    def _resolve_custom_types(self) -> None:
-        custom_types: Dict[str, Callable[[str], Any]] = ParseMatcher.custom_types
-        custom_type_permutations: Dict[str, NormalizeHolder] = {}
+    def _compile_inventory(self, root_path: Path, project_name: str) -> None:
+        self.logger.debug('creating step registry')
+        self.behave_steps = load_step_registry(root_path / 'features' / 'steps')
 
-        for custom_type, func in custom_types.items():
-            try:
-                func_code = [
-                    line
-                    for line in inspect.getsource(func).strip().split('\n')
-                    if not line.strip().startswith('@classmethod')
-                ]
-                message: Optional[str] = None
+        try:
+            self.normalizer = create_step_normalizer()
+        except ValueError as e:
+            message = str(e)
+            self.logger.error(message)
+            self.show_message(message, msg_type=MessageType.Error)
 
-                if func_code[0].startswith('@parse.with_pattern'):
-                    match = re.match(
-                        r'@parse.with_pattern\(r\'\(?(.*?)\)?\'', func_code[0]
-                    )
-                    if match:
-                        pattern = match.group(1)
-                        vector = getattr(func, '__vector__', None)
-                        if vector is None:
-                            coordinates = Coordinate()
-                        else:
-                            x, y = vector
-                            coordinates = Coordinate(x=x, y=y)
+        self._compile_step_inventory()
 
-                        custom_type_permutations.update(
-                            {
-                                custom_type: NormalizeHolder(
-                                    permutations=coordinates,
-                                    replacements=RegexPermutationResolver.resolve(
-                                        pattern
-                                    ),
-                                ),
-                            }
-                        )
-                    else:
-                        raise ValueError(
-                            f'could not extract pattern from "{func_code[0]}" for custom type {custom_type}'
-                        )
-                elif 'from_string(' in func_code[-1] or 'from_string(' in func_code[0]:
-                    enum_name: str
+        total_steps = 0
+        for steps in self.steps.values():
+            total_steps += len(steps)
 
-                    match = re.match(
-                        r'return ([^\.]*)\.from_string\(', func_code[-1].strip()
-                    )
-                    module: Optional[ModuleType]
-                    if match:
-                        enum_name = match.group(1)
-                        module = import_module('grizzly.types')
-                    else:
-                        match = re.match(
-                            r'def from_string.*?->\s+\'?([^:\']*)\'?:',
-                            func_code[0].strip(),
-                        )
-                        if match:
-                            enum_name = match.group(1)
-                            module = inspect.getmodule(func)
-                        else:
-                            raise ValueError(
-                                f'could not find the type that from_string method for custom type {custom_type} returns'
-                            )
+        self._compile_keyword_inventory()
+        message = f'found {len(self.keywords)} keywords and {total_steps} steps for grizzly project {project_name}'
+        self.logger.debug(message)
+        self.show_message(message)
 
-                    enum_class = getattr(module, enum_name)
-                    replacements = [value.name.lower() for value in enum_class]
-                    vector = enum_class.get_vector()
-
-                    if vector is None:
-                        coordinates = Coordinate()
-                    else:
-                        x, y = vector
-                        coordinates = Coordinate(x=x, y=y)
-
-                    custom_type_permutations.update(
-                        {
-                            custom_type: NormalizeHolder(
-                                permutations=coordinates,
-                                replacements=replacements,
-                            ),
-                        }
-                    )
-                else:
-                    raise ValueError(
-                        f'cannot infere what {func} will return for {custom_type}'
-                    )
-            except ValueError as e:
-                message = str(e)
-                self.logger.error(message)
-                self.show_message(message, msg_type=MessageType.Error)
-
-        self.normalizer = Normalizer(custom_type_permutations)
-
-    def _make_step_registry(self, step_path: Path) -> None:
-        self.logger.debug(f'loading step modules from {step_path}...')
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            load_step_modules([str(step_path)])
-
-        self.logger.debug('...done!')
-        self._resolve_custom_types()
-        self.steps = {}
-        registry_steps: Dict[str, List[ParseMatcher]] = registry.steps
-
-        for keyword, steps in registry_steps.items():
+    def _compile_step_inventory(self) -> None:
+        for keyword, steps in self.behave_steps.items():
             normalized_steps: List[str] = []
             for step in steps:
                 normalized_steps += self._normalize_step_expression(step)
 
             self.steps.update({keyword: normalized_steps})
 
-    def _make_keyword_registry(self) -> None:
+    def _compile_keyword_inventory(self) -> None:
         self.keywords = ['Scenario'] + list(self.keyword_alias.keys())
 
         language_en = languages.get('en', {})
