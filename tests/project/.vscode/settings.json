@@ -1,0 +1,5 @@
+{
+  "grizzly.server.connection": "socket",
+  "grizzly.socket.host": "localhost",
+  "grizzly.socket.port": 4444
+}

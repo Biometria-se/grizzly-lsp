@@ -21,17 +21,17 @@ function sortedWorkspaceFolders(): string[] {
     if (_sortedWorkspaceFolders === void 0) {
         _sortedWorkspaceFolders = workspace.workspaceFolders
             ? workspace.workspaceFolders
-                .map((folder) => {
-                    let result = folder.uri.toString();
-                    if (result.charAt(result.length - 1) !== '/') {
-                        result = result + '/';
-                    }
+                  .map((folder) => {
+                      let result = folder.uri.toString();
+                      if (result.charAt(result.length - 1) !== '/') {
+                          result = result + '/';
+                      }
 
-                    return result;
-                })
-                .sort((a, b) => {
-                    return a.length - b.length;
-                })
+                      return result;
+                  })
+                  .sort((a, b) => {
+                      return a.length - b.length;
+                  })
             : [];
     }
 
@@ -112,7 +112,7 @@ function createSocketLanguageServer(
 function createLanguageClient(): LanguageClient {
     const configuration = workspace.getConfiguration('grizzly');
     const documentSelector = ['grizzly-gherkin'];
-    const outputChannel: OutputChannel = Window.createOutputChannel('grizzly language server');
+    const outputChannel: OutputChannel = Window.createOutputChannel('Grizzly Language Server');
     let languageClient: LanguageClient;
 
     const connectionType = configuration.get<string>('server.connection');
