@@ -25,6 +25,7 @@ from pygls.lsp.methods import (
     COMPLETION,
     INITIALIZE,
     WORKSPACE_DID_CHANGE_CONFIGURATION,
+    HOVER,
 )
 from pygls.lsp.types import (
     CompletionParams,
@@ -33,16 +34,17 @@ from pygls.lsp.types import (
     CompletionItemKind,
     InitializeParams,
     MessageType,
+    Hover,
 )
 from pygls.lsp.types.workspace import (
     DidChangeConfigurationParams as WorkspaceDidChangeConfigurationParams,
 )
-from pygls.lsp.types.basic_structures import Position
+from pygls.lsp.types.basic_structures import Position, TextDocumentPositionParams
 from pygls.workspace import Document
 
 from behave.i18n import languages
 
-from .text import Normalizer, get_step_parts
+from .text import Normalizer, get_step_parts, clean_help
 from .utils import create_step_normalizer, load_step_registry
 
 
@@ -208,6 +210,13 @@ class GrizzlyLanguageServer(LanguageServer):
         ) -> None:
             self.logger.debug(params)
 
+        @self.feature(HOVER)
+        def hover(params: TextDocumentPositionParams) -> Optional[Hover]:
+            document = self.workspace.get_document(params.text_document.uri)
+
+            return None
+
+
     def _complete_keyword(
         self, keyword: Optional[str], document: Document
     ) -> List[CompletionItem]:
@@ -360,6 +369,11 @@ class GrizzlyLanguageServer(LanguageServer):
             normalized_steps: List[str] = []
             for step in steps:
                 normalized_steps += self._normalize_step_expression(step)
+
+                for normalized_step in normalized_steps:
+                    help = getattr(step.func, '__doc__', None)
+                    if help is not None:
+                        self.help.update({normalized_step: clean_help(help)})
 
             self.steps.update({keyword: normalized_steps})
 

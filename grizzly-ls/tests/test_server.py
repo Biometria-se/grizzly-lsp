@@ -433,6 +433,8 @@ class TestGrizzlyLanguageServer:
         for keyword in ['given', 'then', 'when']:
             assert keyword in keywords
 
+        assert len(server.help.keys()) >= 0
+
     def test__compile_keyword_inventory(self, lsp_fixture: LspFixture) -> None:
         server = lsp_fixture.server
 

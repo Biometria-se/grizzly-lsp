@@ -25,6 +25,7 @@ from sre_constants import (  # pylint: disable=no-name-in-module  # type: ignore
     SUBPATTERN,
 )
 from sre_parse import SubPattern, parse as sre_parse
+from textwrap import dedent
 
 SreParseTokens = Union[
     List[
@@ -367,3 +368,13 @@ def get_step_parts(line: str) -> Tuple[Optional[str], Optional[str]]:
         keyword, step = None, None
 
     return keyword, step
+
+
+def clean_help(text: str) -> str:
+    matches = re.finditer(r'\{@pylink ([^\}]*)}', text, re.MULTILINE)
+
+    for match in matches:
+        _, replacement_text = match.group(1).rsplit('.', 1)
+        text = text.replace(match.group(), replacement_text)
+
+    return dedent(text)
