@@ -4,6 +4,7 @@ import platform
 import signal
 import subprocess
 import sys
+import re
 
 from os import environ
 from os.path import pathsep, sep
@@ -39,7 +40,7 @@ from pygls.lsp.types import (
 from pygls.lsp.types.workspace import (
     DidChangeConfigurationParams as WorkspaceDidChangeConfigurationParams,
 )
-from pygls.lsp.types.basic_structures import Position, TextDocumentPositionParams
+from pygls.lsp.types.basic_structures import Position, TextDocumentPositionParams, MarkupKind
 from pygls.workspace import Document
 
 from behave.i18n import languages
@@ -192,10 +193,36 @@ class GrizzlyLanguageServer(LanguageServer):
 
             self.logger.debug(f'{keyword=}, {step=}, {self.keywords=}')
 
+            kind: CompletionItemKind = CompletionItemKind.Text
+            labels: List[str] = []
+
             if keyword is None or keyword not in self.keywords:
-                items = self._complete_keyword(keyword, document)
+                labels = self._complete_keyword(keyword, document)
+                kind = CompletionItemKind.Keyword
             elif keyword is not None:
-                items = self._complete_step(keyword, step)
+                labels = self._complete_step(keyword, step)
+                kind = CompletionItemKind.Function
+
+            if len(labels) > 0:
+                items = [CompletionItem(
+                    label=label,
+                    kind=kind,
+                    tags=None,
+                    detail=None,
+                    documentation=None,
+                    deprecated=False,
+                    preselect=None,
+                    sort_text=None,
+                    filter_text=None,
+                    insert_text=None,
+                    insert_text_format=None,
+                    insert_text_mode=None,
+                    text_edit=None,
+                    additional_text_edits=None,
+                    commit_characters=None,
+                    command=None,
+                    data=None,
+                ) for label in labels]
 
             self.logger.debug(f'completion: {items=}')
 
@@ -212,14 +239,18 @@ class GrizzlyLanguageServer(LanguageServer):
 
         @self.feature(HOVER)
         def hover(params: TextDocumentPositionParams) -> Optional[Hover]:
-            document = self.workspace.get_document(params.text_document.uri)
+            markup_supported = self.client_capabilities.get_capability(
+                'text_document.completion.completion_item.documentation_format',
+                [MarkupKind.Markdown],
+            )
+            current_line = self._current_line(params.text_document.uri, params.position)
 
             return None
 
 
     def _complete_keyword(
         self, keyword: Optional[str], document: Document
-    ) -> List[CompletionItem]:
+    ) -> List[str]:
         if len(document.source.strip()) < 1:
             keywords = ['Feature']
         else:
@@ -241,36 +272,13 @@ class GrizzlyLanguageServer(LanguageServer):
                     ),
                 )
 
-        return list(
-            map(
-                lambda k: CompletionItem(
-                    label=k,
-                    kind=CompletionItemKind.Keyword,
-                    tags=None,
-                    detail=None,
-                    documentation=None,
-                    deprecated=False,
-                    preselect=None,
-                    sort_text=None,
-                    filter_text=None,
-                    insert_text=None,
-                    insert_text_format=None,
-                    insert_text_mode=None,
-                    text_edit=None,
-                    additional_text_edits=None,
-                    commit_characters=None,
-                    command=None,
-                    data=None,
-                ),
-                sorted(keywords),
-            )
-        )
+        return list(sorted(keywords))
 
     def _complete_step(
         self,
         keyword: str,
         expression: Optional[str],
-    ) -> List[CompletionItem]:
+    ) -> List[str]:
         steps = self.steps.get(keyword.lower(), [])
 
         matched_steps: List[str]
@@ -293,6 +301,16 @@ class GrizzlyLanguageServer(LanguageServer):
             for matched_step in itertools.chain(
                 matched_steps_1, matched_steps_2, matched_steps_3
             ):
+                input_matches = re.finditer(r'"([^"]*)"', expression, re.MULTILINE)
+                output_matches = re.finditer(r'"([^"]*)"', matched_step, re.MULTILINE)
+
+                # suggest step with already entetered variables in their correct place
+                if input_matches and output_matches:
+                    offset = 0
+                    for input_match, output_match in zip(input_matches, output_matches):
+                        matched_step = f'{matched_step[0:output_match.start()+offset]}"{input_match.group(1)}"{matched_step[output_match.end()+offset:]}'
+                        offset += len(input_match.group(1))
+
                 matched_steps_container.update({matched_step: None})  # type: ignore
 
             matched_steps = list(matched_steps_container.keys())
@@ -302,30 +320,8 @@ class GrizzlyLanguageServer(LanguageServer):
                 score = SequenceMatcher(None, expression, matched_step).ratio()
                 self.logger.debug(f'\t{matched_step=} {score=}')
 
-        return list(
-            map(
-                lambda s: CompletionItem(
-                    label=s,
-                    kind=CompletionItemKind.Function,
-                    tags=None,
-                    detail=None,
-                    documentation=None,
-                    deprecated=False,
-                    preselect=None,
-                    sort_text=None,
-                    filter_text=None,
-                    insert_text=None,
-                    insert_text_format=None,
-                    insert_text_mode=None,
-                    text_edit=None,
-                    additional_text_edits=None,
-                    commit_characters=None,
-                    command=None,
-                    data=None,
-                ),
-                matched_steps,
-            )
-        )
+        return matched_steps
+
 
     def _normalize_step_expression(self, step: Union[ParseMatcher, str]) -> List[str]:
         if isinstance(step, ParseMatcher):
@@ -395,3 +391,21 @@ class GrizzlyLanguageServer(LanguageServer):
         line = content.split('\n')[position.line]
 
         return line
+
+    def _find_help(self, line: str) -> Optional[str]:
+        keyword, step = get_step_parts(line)
+
+        if step is None:
+            return None
+
+        step_help = self.help.get(step, None)
+
+        if step_help is None:
+            possible_help = [help for possible_step, help in self.help.items() if possible_step.startswith(step)]
+
+            if len(possible_help) != 1:
+                self.logger.error(f'found many steps matching {step}')
+
+                return None
+
+            step_help = self.help.get(possible)

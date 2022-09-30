@@ -25,7 +25,6 @@ from pygls.lsp.methods import (
 from pygls.lsp.types import (
     ClientCapabilities,
     CompletionContext,
-    CompletionItem,
     CompletionParams,
     #    CompletionList,
     #    CompletionItem,
@@ -41,10 +40,6 @@ from pygls.lsp.types.basic_structures import (
 from behave.matchers import ParseMatcher
 
 from .fixtures import LspFixture
-
-
-
-
 
 
 class TestGrizzlyLanguageServer:
@@ -63,15 +58,6 @@ class TestGrizzlyLanguageServer:
         assert server.logger.name == 'grizzly_ls.server'
 
     def test__complete_keyword(self, lsp_fixture: LspFixture) -> None:
-        def map_keyword_completion_list(
-            completion_list: List[CompletionItem],
-        ) -> List[Dict[str, Any]]:
-            return [
-                {'label': completion.label, 'kind': completion.kind.numerator}
-                for completion in completion_list
-                if completion.kind is not None
-            ]
-
         grizzly_project = Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
         server = lsp_fixture.server
         server._compile_inventory(grizzly_project.resolve(), 'project')
@@ -81,10 +67,8 @@ class TestGrizzlyLanguageServer:
             source='',
         )
 
-        assert map_keyword_completion_list(
-            server._complete_keyword(None, document)
-        ) == [
-            {'label': 'Feature', 'kind': 14},
+        assert server._complete_keyword(None, document) == [
+            'Feature',
         ]
 
         document = Document(
@@ -92,11 +76,9 @@ class TestGrizzlyLanguageServer:
             source='Feature:',
         )
 
-        assert map_keyword_completion_list(
-            server._complete_keyword(None, document)
-        ) == [
-            {'label': 'Background', 'kind': 14},
-            {'label': 'Scenario', 'kind': 14},
+        assert server._complete_keyword(None, document) == [
+            'Background',
+            'Scenario',
         ]
 
         document = Document(
@@ -106,16 +88,14 @@ class TestGrizzlyLanguageServer:
 ''',
         )
 
-        assert map_keyword_completion_list(
-            server._complete_keyword(None, document)
-        ) == [
-            {'label': 'And', 'kind': 14},
-            {'label': 'Background', 'kind': 14},
-            {'label': 'But', 'kind': 14},
-            {'label': 'Given', 'kind': 14},
-            {'label': 'Scenario', 'kind': 14},
-            {'label': 'Then', 'kind': 14},
-            {'label': 'When', 'kind': 14},
+        assert server._complete_keyword(None, document) == [
+            'And',
+            'Background',
+            'But',
+            'Given',
+            'Scenario',
+            'Then',
+            'When',
         ]
 
         document = Document(
@@ -127,52 +107,36 @@ class TestGrizzlyLanguageServer:
 ''',
         )
 
-        assert map_keyword_completion_list(
-            server._complete_keyword(None, document)
-        ) == [
-            {'label': 'And', 'kind': 14},
-            {'label': 'But', 'kind': 14},
-            {'label': 'Given', 'kind': 14},
-            {'label': 'Scenario', 'kind': 14},
-            {'label': 'Then', 'kind': 14},
-            {'label': 'When', 'kind': 14},
+        assert server._complete_keyword(None, document) == [
+            'And',
+            'But',
+            'Given',
+            'Scenario',
+            'Then',
+            'When',
         ]
 
-        assert map_keyword_completion_list(
-            server._complete_keyword('EN', document)
-        ) == [
-            {'label': 'Given', 'kind': 14},
-            {'label': 'Scenario', 'kind': 14},
-            {'label': 'Then', 'kind': 14},
-            {'label': 'When', 'kind': 14},
+        assert server._complete_keyword('EN', document) == [
+            'Given',
+            'Scenario',
+            'Then',
+            'When',
         ]
 
-        assert map_keyword_completion_list(
-            server._complete_keyword('Giv', document)
-        ) == [
-            {'label': 'Given', 'kind': 14},
+        assert server._complete_keyword('Giv', document) == [
+            'Given',
         ]
 
     def test__complete_step(
         self, lsp_fixture: LspFixture, caplog: LogCaptureFixture
     ) -> None:
-        def map_step_completion_list(
-            completion_list: List[CompletionItem],
-        ) -> List[Dict[str, Any]]:
-            return [
-                {'label': completion.label, 'kind': completion.kind.numerator}
-                for completion in completion_list
-                if completion.kind is not None
-            ]
-
         grizzly_project = Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
         server = lsp_fixture.server
         server._compile_inventory(grizzly_project.resolve(), 'project')
 
         with caplog.at_level(logging.DEBUG):
-            matched_steps = map_step_completion_list(
-                server._complete_step('Given', 'variable')
-            )
+            matched_steps = server._complete_step('Given', 'variable')
+
             for expected_step in [
                 'set context variable "" to ""',
                 'ask for value of variable ""',
@@ -180,11 +144,9 @@ class TestGrizzlyLanguageServer:
                 'set alias "" for variable ""',
                 'value for variable "" is ""',
             ]:
-                assert {'kind': 3, 'label': expected_step} in matched_steps
+                assert expected_step in matched_steps
 
-            matched_steps = map_step_completion_list(
-                server._complete_step('Then', 'save')
-            )
+            matched_steps = server._complete_step('Then', 'save')
             for expected_step in [
                 'save response metadata "" in variable ""',
                 'save response payload "" in variable ""',
@@ -197,20 +159,18 @@ class TestGrizzlyLanguageServer:
                 'parse "" as "xml" and save value of "" in variable ""',
                 'parse "" as "json" and save value of "" in variable ""',
             ]:
-                assert {'kind': 3, 'label': expected_step} in matched_steps
+                assert expected_step in matched_steps
 
-            matched_steps = map_step_completion_list(
-                server._complete_step('Then', 'save response metadata "hello"')
-            )
+            matched_steps = server._complete_step('Then', 'save response metadata "hello"')
+
             for expected_step in [
-                'save response metadata "" in variable ""',
-                'save response metadata "" that matches "" in variable ""',
+                'save response metadata "hello" in variable ""',
+                'save response metadata "hello" that matches "" in variable ""',
             ]:
-                assert {'kind': 3, 'label': expected_step} in matched_steps
+                assert expected_step in matched_steps
 
-            matched_steps = map_step_completion_list(
-                server._complete_step('When', None)
-            )
+            matched_steps = server._complete_step('When', None)
+
             for expected_step in [
                 'condition "" with name "" is true, execute these tasks',
                 'fail ratio is greater than ""% fail scenario',
@@ -221,11 +181,10 @@ class TestGrizzlyLanguageServer:
                 'response metadata "" is not "" fail request',
                 'response metadata "" is "" fail request',
             ]:
-                assert {'kind': 3, 'label': expected_step} in matched_steps
+                assert expected_step in matched_steps
 
-            matched_steps = map_step_completion_list(
-                server._complete_step('When', 'response ')
-            )
+            matched_steps = server._complete_step('When', 'response ')
+
             for expected_step in [
                 'average response time is greater than "" milliseconds fail scenario',
                 'response time percentile ""% is greater than "" milliseconds fail scenario',
@@ -234,27 +193,30 @@ class TestGrizzlyLanguageServer:
                 'response metadata "" is not "" fail request',
                 'response metadata "" is "" fail request',
             ]:
-                assert {'kind': 3, 'label': expected_step} in matched_steps
+                assert expected_step in matched_steps
 
-            matched_steps = map_step_completion_list(
-                server._complete_step('When', 'response fail request')
-            )
+            matched_steps = server._complete_step('When', 'response fail request')
+
             for expected_step in [
                 'response payload "" is not "" fail request',
                 'response payload "" is "" fail request',
                 'response metadata "" is not "" fail request',
                 'response metadata "" is "" fail request',
             ]:
-                assert {'kind': 3, 'label': expected_step} in matched_steps
+                assert expected_step in matched_steps
 
-            matched_steps = map_step_completion_list(
-                server._complete_step('When', 'response payload "" is fail request')
-            )
+            matched_steps = server._complete_step('When', 'response payload "" is fail request')
+
             for expected_step in [
                 'response payload "" is not "" fail request',
                 'response payload "" is "" fail request',
             ]:
-                assert {'kind': 3, 'label': expected_step} in matched_steps
+                assert expected_step in matched_steps
+
+            matched_steps = server._complete_step('Given', 'a user of type "RestApi" with weight "1" load')
+
+            assert len(matched_steps) == 1
+            assert matched_steps[0] == 'a user of type "RestApi" with weight "1" load testing ""'
 
     def test__normalize_step_expression(
         self, lsp_fixture: LspFixture, mocker: MockerFixture, caplog: LogCaptureFixture
