@@ -8,6 +8,8 @@ An extension makes it easier to develop load test scenarios with [`grizzly`](htt
 
 ![Screenshot of step expressions auto-complete](https://github.com/Biometria-se/grizzly-lsp/raw/main/assets/images/screenshot-auto-complete-step-expressions.png)
 
+![Screenshot of hover help text](https://github.com/Biometria-se/grizzly-lsp/raw/main/assets/images/screenshot-hover-help.png)
+
 ## Development
 
 ### Environments

@@ -21,14 +21,12 @@ from pygls.lsp.methods import (
     COMPLETION,
     INITIALIZE,
     TEXT_DOCUMENT_DID_OPEN,
+    HOVER,
 )
 from pygls.lsp.types import (
     ClientCapabilities,
     CompletionContext,
     CompletionParams,
-    #    CompletionList,
-    #    CompletionItem,
-    #    CompletionItemKind,
     DidOpenTextDocumentParams,
     InitializeParams,
 )
@@ -36,6 +34,8 @@ from pygls.lsp.types.basic_structures import (
     Position,
     TextDocumentItem,
     TextDocumentIdentifier,
+    MarkupKind,
+    TextDocumentPositionParams,
 )
 from behave.matchers import ParseMatcher
 
@@ -56,6 +56,12 @@ class TestGrizzlyLanguageServer:
 
         assert isinstance(server.logger, logging.Logger)
         assert server.logger.name == 'grizzly_ls.server'
+
+    def test__format_arg_line(self, lsp_fixture: LspFixture) -> None:
+        server = lsp_fixture.server
+
+        assert server._format_arg_line('hello_world (bool): foo bar description of argument') == '* hello_world `bool`: foo bar description of argument'
+        assert server._format_arg_line('hello: strange stuff (bool)') == '* hello: strange stuff (bool)'
 
     def test__complete_keyword(self, lsp_fixture: LspFixture) -> None:
         grizzly_project = Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
@@ -415,6 +421,38 @@ class TestGrizzlyLanguageServer:
         assert 'Given' in server.keywords  # - " -
         assert 'When' in server.keywords
 
+    def test__current_word_range(self, lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
+        server = lsp_fixture.server
+
+        mocker.patch.object(server.lsp, 'workspace', Workspace('', None))
+        mocker.patch(
+            'tests.test_server.Workspace.get_document',
+            return_value=Document(
+                'file://test.feature',
+                '''Feature:
+    Scenario: test
+        Then hello world!
+        But foo bar
+''',
+            ),
+        )
+
+        document = server.workspace.get_document('fake stuff')
+
+        # "test" in "    Scenario: test"
+        range = server._current_word_range(document, Position(line=1, character=15))
+        assert range is not None
+        assert range.start.line == 1 and range.start.character == 14
+        assert range.end.line == 1 and range.end.character == 18
+        assert document.lines[range.start.line][range.start.character:range.end.character] == 'test'
+
+        # "foo" in "        But foo bar"
+        range = server._current_word_range(document, Position(line=3, character=13))
+        assert range is not None
+        assert range.start.line == 3 and range.start.character == 12
+        assert range.end.line == 3 and range.end.character == 15
+        assert document.lines[range.start.line][range.start.character:range.end.character] == 'foo'
+
     def test__current_line(
         self, lsp_fixture: LspFixture, mocker: MockerFixture
     ) -> None:
@@ -466,6 +504,23 @@ class TestGrizzlyLanguageServer:
                 == 'Then hello world!'
             )
         assert str(ie.value) == 'list index out of range'
+
+    def test__find_help(self, lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
+        server = lsp_fixture.server
+
+        server.help = {
+            'hello world': 'this is the help for hello world',
+            'hello ""': 'this is the help for hello world parameterized',
+            'foo bar': 'this is the help for foo bar',
+            '"" bar': 'this is the help for foo bar parameterized',
+        }
+
+        assert server._find_help('Then hello world', MarkupKind.PlainText) == 'this is the help for hello world'
+        assert server._find_help('asdfasdf', MarkupKind.Markdown) is None
+        assert server._find_help('And hello', MarkupKind.Markdown) == 'this is the help for hello world'
+        assert server._find_help('And hello "world"', MarkupKind.Markdown) == 'this is the help for hello world parameterized'
+        assert server._find_help('But foo', MarkupKind.Markdown) == 'this is the help for foo bar'
+        assert server._find_help('But "foo" bar', MarkupKind.Markdown) == 'this is the help for foo bar parameterized'
 
     class TestGrizzlyLangageServerFeatures:
         def _initialize(self, client: LanguageServer, root: Path) -> None:
@@ -557,6 +612,23 @@ class TestGrizzlyLanguageServer:
             response = client.lsp.send_request(COMPLETION, params).result(timeout=3)  # type: ignore
 
             assert isinstance(response, dict)
+
+            return cast(Dict[str, Any], response)
+
+        def _hover(self, client: LanguageServer, path: Path, position: Position) -> Dict[str, Any]:
+            self._initialize(client, path)
+
+            path = path / 'features' / 'project.feature'
+            self._open(client, path, None)
+
+            params = TextDocumentPositionParams(
+                text_document=TextDocumentIdentifier(
+                    uri=path.as_uri(),
+                ),
+                position=position,
+            )
+
+            response = client.lsp.send_request(HOVER, params).result(timeout=3)  # type: ignore
 
             return cast(Dict[str, Any], response)
 
@@ -669,9 +741,7 @@ class TestGrizzlyLanguageServer:
             assert all([True if label is not None else False for label in labels])
             assert labels == ['Feature']
 
-        def test_completion_steps(
-            self, lsp_fixture: LspFixture, caplog: LogCaptureFixture
-        ) -> None:
+        def test_completion_steps(self, lsp_fixture: LspFixture) -> None:
             client = lsp_fixture.client
 
             # all Given/And steps
@@ -734,3 +804,43 @@ class TestGrizzlyLanguageServer:
 
             assert 'a user of type "" with weight "" load testing ""' in labels
             assert 'a user of type "" load testing ""' in labels
+
+        def test_hover(self, lsp_fixture: LspFixture) -> None:
+            client = lsp_fixture.client
+
+            response = self._hover(client, lsp_fixture.datadir, Position(line=2, character=31))
+
+            assert response == {
+                'contents': {
+                    'kind': 'markdown',
+                    'value': '''
+## Sets which type of users the scenario should use and which `host` is the target.
+- - -
+### Example:
+
+``` gherkin
+Given a user of type "RestApi" load testing "http://api.example.com"
+Given a user of type "MessageQueue" load testing "mq://mqm:secret@mq.example.com/?QueueManager=QMGR01&Channel=Channel01"
+Given a user of type "ServiceBus" load testing "sb://sb.example.com/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=abc123def456ghi789="
+Given a user of type "BlobStorage" load testing "DefaultEndpointsProtocol=https;EndpointSuffix=core.windows.net;AccountName=examplestorage;AccountKey=xxxyyyyzzz=="
+```
+- - -
+### Arguments:
+* user_class_name `str`: name of an implementation of users, with or without `User`-suffix
+* host `str`: an URL for the target host, format depends on which users is specified'''.strip()
+                },
+                'range': {
+                    'end': {
+                        'character': 33,
+                        'line': 2,
+                    },
+                    'start': {
+                        'character': 26,
+                        'line': 2,
+                    },
+                },
+            }
+
+            response = self._hover(client, lsp_fixture.datadir, Position(line=0, character=1))
+
+            assert response is None

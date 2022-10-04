@@ -77,6 +77,9 @@ function createStdioLanguageServer(
         synchronize: {
             configurationSection: 'grizzly', // @TODO: should be implemented using a pull workspace/section thingy
         },
+        markdown: {
+            isTrusted: true,
+        },
         outputChannel,
     };
 
@@ -104,6 +107,9 @@ function createSocketLanguageServer(
     const clientOptions: LanguageClientOptions = {
         documentSelector: documentSelector,
         outputChannel: outputChannel,
+        markdown: {
+            isTrusted: true,
+        },
     };
 
     return new LanguageClient(`socket language server (${host}:${port})`, serverOptions, clientOptions);

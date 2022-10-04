@@ -40,7 +40,7 @@ from pygls.lsp.types import (
 from pygls.lsp.types.workspace import (
     DidChangeConfigurationParams as WorkspaceDidChangeConfigurationParams,
 )
-from pygls.lsp.types.basic_structures import Position, TextDocumentPositionParams, MarkupKind
+from pygls.lsp.types.basic_structures import Position, TextDocumentPositionParams, MarkupKind, MarkupContent, Range
 from pygls.workspace import Document
 
 from behave.i18n import languages
@@ -239,14 +239,49 @@ class GrizzlyLanguageServer(LanguageServer):
 
         @self.feature(HOVER)
         def hover(params: TextDocumentPositionParams) -> Optional[Hover]:
+            hover: Optional[Hover] = None
+            help_text: Optional[str] = None
+            current_line = self._current_line(params.text_document.uri, params.position)
+            _, step = get_step_parts(current_line)
+
+            if step is None:
+                return None
+
             markup_supported = self.client_capabilities.get_capability(
                 'text_document.completion.completion_item.documentation_format',
                 [MarkupKind.Markdown],
             )
-            current_line = self._current_line(params.text_document.uri, params.position)
+            if len(markup_supported) < 1:
+                markup_kind = MarkupKind.PlainText
+            else:
+                markup_kind = markup_supported[0]
 
-            return None
+            help_text = self._find_help(current_line, markup_kind)
 
+            if help_text is None:
+                return None
+
+            header, help_text = help_text.split('\n\n', 1)
+            example, arguments = help_text.split('Args:', 1)
+            example = example.replace('Example:', '### Example:').strip()
+            arguments = '\n'.join([self._format_arg_line(arg_line) for arg_line in arguments.strip().split('\n')])
+            help_text = f'## {header}\n- - -\n{example}\n- - -\n### Arguments:\n{arguments}'
+            contents = MarkupContent(kind=markup_kind, value=help_text)
+            document = self.workspace.get_document(params.text_document.uri)
+            range = self._current_word_range(document, params.position)
+            hover = Hover(contents=contents, range=range)
+
+            return hover
+
+    def _format_arg_line(self, line: str) -> str:
+        try:
+            argument, description = line.split(':', 1)
+            arg_name, arg_type = argument.split(' ')
+            arg_type = arg_type.replace('(', '').replace(')', '').strip()
+
+            return f'* {arg_name} `{arg_type}`: {description.strip()}'
+        except ValueError:
+            return f'* {line}'
 
     def _complete_keyword(
         self, keyword: Optional[str], document: Document
@@ -392,8 +427,29 @@ class GrizzlyLanguageServer(LanguageServer):
 
         return line
 
-    def _find_help(self, line: str) -> Optional[str]:
-        keyword, step = get_step_parts(line)
+    def _current_word_range(self, document: Document, position: Position) -> Optional[Range]:
+        word = document.word_at_position(position)  # type: ignore
+        word_len = len(word)
+        line: str = document.lines[position.line]
+        start: int = 0
+
+        for _ in range(1000):
+            begin = line.find(word, start)
+            if begin == -1:
+                return None
+
+            end = begin + word_len
+            if begin <= position.character <= end:
+                return Range(
+                    start=Position(line=position.line, character=begin),
+                    end=Position(line=position.line, character=end),
+                )
+            start = end
+
+        return None
+
+    def _find_help(self, line: str, markup_kind: MarkupKind) -> Optional[str]:
+        _, step = get_step_parts(line)
 
         if step is None:
             return None
@@ -401,11 +457,15 @@ class GrizzlyLanguageServer(LanguageServer):
         step_help = self.help.get(step, None)
 
         if step_help is None:
-            possible_help = [help for possible_step, help in self.help.items() if possible_step.startswith(step)]
+            possible_help = {possible_step: help for possible_step, help in self.help.items() if possible_step.startswith(step)}
 
-            if len(possible_help) != 1:
-                self.logger.error(f'found many steps matching {step}')
-
+            if len(possible_help) < 1:
                 return None
 
-            step_help = self.help.get(possible)
+            step_help = possible_help[sorted(possible_help.keys(), reverse=True)[0]]
+
+            if markup_kind == MarkupKind.PlainText:
+                # @TODO: normalize markdown to plain text
+                pass
+
+        return step_help
