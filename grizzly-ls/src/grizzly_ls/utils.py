@@ -13,6 +13,7 @@ from behave.runner_util import load_step_modules as behave_load_step_modules
 
 from .text import Normalizer, NormalizeHolder, Coordinate, RegexPermutationResolver
 
+
 def load_step_registry(step_path: Path) -> Dict[str, List[ParseMatcher]]:
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -32,9 +33,7 @@ def create_step_normalizer() -> Normalizer:
         ]
 
         if func_code[0].startswith('@parse.with_pattern'):
-            match = re.match(
-                r'@parse.with_pattern\(r\'\(?(.*?)\)?\'', func_code[0]
-            )
+            match = re.match(r'@parse.with_pattern\(r\'\(?(.*?)\)?\'', func_code[0])
             if match:
                 pattern = match.group(1)
                 vector = getattr(func, '__vector__', None)
@@ -48,9 +47,7 @@ def create_step_normalizer() -> Normalizer:
                     {
                         custom_type: NormalizeHolder(
                             permutations=coordinates,
-                            replacements=RegexPermutationResolver.resolve(
-                                pattern
-                            ),
+                            replacements=RegexPermutationResolver.resolve(pattern),
                         ),
                     }
                 )
@@ -61,9 +58,7 @@ def create_step_normalizer() -> Normalizer:
         elif 'from_string(' in func_code[-1] or 'from_string(' in func_code[0]:
             enum_name: str
 
-            match = re.match(
-                r'return ([^\.]*)\.from_string\(', func_code[-1].strip()
-            )
+            match = re.match(r'return ([^\.]*)\.from_string\(', func_code[-1].strip())
             module: Optional[ModuleType]
             if match:
                 enum_name = match.group(1)
@@ -100,8 +95,6 @@ def create_step_normalizer() -> Normalizer:
                 }
             )
         else:
-            raise ValueError(
-                f'cannot infere what {func} will return for {custom_type}'
-            )
+            raise ValueError(f'cannot infere what {func} will return for {custom_type}')
 
     return Normalizer(custom_type_permutations)

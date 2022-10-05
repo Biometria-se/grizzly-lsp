@@ -21,17 +21,17 @@ function sortedWorkspaceFolders(): string[] {
     if (_sortedWorkspaceFolders === void 0) {
         _sortedWorkspaceFolders = workspace.workspaceFolders
             ? workspace.workspaceFolders
-                  .map((folder) => {
-                      let result = folder.uri.toString();
-                      if (result.charAt(result.length - 1) !== '/') {
-                          result = result + '/';
-                      }
+                .map((folder) => {
+                    let result = folder.uri.toString();
+                    if (result.charAt(result.length - 1) !== '/') {
+                        result = result + '/';
+                    }
 
-                      return result;
-                  })
-                  .sort((a, b) => {
-                      return a.length - b.length;
-                  })
+                    return result;
+                })
+                .sort((a, b) => {
+                    return a.length - b.length;
+                })
             : [];
     }
 

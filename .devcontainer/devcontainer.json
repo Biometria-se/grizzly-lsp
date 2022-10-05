@@ -56,8 +56,12 @@
     ],
     "coverage-gutters.ignoredPathGlobs": "**/{node_modules,venv,.venv,vendor,tests}/**",
     "[typescript]": {
-      "editor.defaultFormatter": "esbenp.prettier-vscode"
-    }
+      "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+    },
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": true
+    },
+    "eslint.validate": ["typescript"]
   },
   // Add the IDs of extensions you want installed when the container is created.
   "extensions": [
@@ -67,8 +71,7 @@
     "oderwat.indent-rainbow",
     "eamodio.gitlens",
     "ryanluker.vscode-coverage-gutters",
-    "dbaeumer.vscode-eslint",
-    "esbenp.prettier-vscode"
+    "dbaeumer.vscode-eslint"
   ],
   "mounts": [
     "source=/etc/timezone,target=/etc/timezone,type=bind",

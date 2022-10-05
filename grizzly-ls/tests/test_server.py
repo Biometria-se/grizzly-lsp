@@ -60,8 +60,16 @@ class TestGrizzlyLanguageServer:
     def test__format_arg_line(self, lsp_fixture: LspFixture) -> None:
         server = lsp_fixture.server
 
-        assert server._format_arg_line('hello_world (bool): foo bar description of argument') == '* hello_world `bool`: foo bar description of argument'
-        assert server._format_arg_line('hello: strange stuff (bool)') == '* hello: strange stuff (bool)'
+        assert (
+            server._format_arg_line(
+                'hello_world (bool): foo bar description of argument'
+            )
+            == '* hello_world `bool`: foo bar description of argument'
+        )
+        assert (
+            server._format_arg_line('hello: strange stuff (bool)')
+            == '* hello: strange stuff (bool)'
+        )
 
     def test__complete_keyword(self, lsp_fixture: LspFixture) -> None:
         grizzly_project = Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
@@ -167,7 +175,9 @@ class TestGrizzlyLanguageServer:
             ]:
                 assert expected_step in matched_steps
 
-            matched_steps = server._complete_step('Then', 'save response metadata "hello"')
+            matched_steps = server._complete_step(
+                'Then', 'save response metadata "hello"'
+            )
 
             for expected_step in [
                 'save response metadata "hello" in variable ""',
@@ -211,7 +221,9 @@ class TestGrizzlyLanguageServer:
             ]:
                 assert expected_step in matched_steps
 
-            matched_steps = server._complete_step('When', 'response payload "" is fail request')
+            matched_steps = server._complete_step(
+                'When', 'response payload "" is fail request'
+            )
 
             for expected_step in [
                 'response payload "" is not "" fail request',
@@ -219,10 +231,15 @@ class TestGrizzlyLanguageServer:
             ]:
                 assert expected_step in matched_steps
 
-            matched_steps = server._complete_step('Given', 'a user of type "RestApi" with weight "1" load')
+            matched_steps = server._complete_step(
+                'Given', 'a user of type "RestApi" with weight "1" load'
+            )
 
             assert len(matched_steps) == 1
-            assert matched_steps[0] == 'a user of type "RestApi" with weight "1" load testing ""'
+            assert (
+                matched_steps[0]
+                == 'a user of type "RestApi" with weight "1" load testing ""'
+            )
 
     def test__normalize_step_expression(
         self, lsp_fixture: LspFixture, mocker: MockerFixture, caplog: LogCaptureFixture
@@ -421,38 +438,6 @@ class TestGrizzlyLanguageServer:
         assert 'Given' in server.keywords  # - " -
         assert 'When' in server.keywords
 
-    def test__current_word_range(self, lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
-        server = lsp_fixture.server
-
-        mocker.patch.object(server.lsp, 'workspace', Workspace('', None))
-        mocker.patch(
-            'tests.test_server.Workspace.get_document',
-            return_value=Document(
-                'file://test.feature',
-                '''Feature:
-    Scenario: test
-        Then hello world!
-        But foo bar
-''',
-            ),
-        )
-
-        document = server.workspace.get_document('fake stuff')
-
-        # "test" in "    Scenario: test"
-        range = server._current_word_range(document, Position(line=1, character=15))
-        assert range is not None
-        assert range.start.line == 1 and range.start.character == 14
-        assert range.end.line == 1 and range.end.character == 18
-        assert document.lines[range.start.line][range.start.character:range.end.character] == 'test'
-
-        # "foo" in "        But foo bar"
-        range = server._current_word_range(document, Position(line=3, character=13))
-        assert range is not None
-        assert range.start.line == 3 and range.start.character == 12
-        assert range.end.line == 3 and range.end.character == 15
-        assert document.lines[range.start.line][range.start.character:range.end.character] == 'foo'
-
     def test__current_line(
         self, lsp_fixture: LspFixture, mocker: MockerFixture
     ) -> None:
@@ -515,12 +500,27 @@ class TestGrizzlyLanguageServer:
             '"" bar': 'this is the help for foo bar parameterized',
         }
 
-        assert server._find_help('Then hello world', MarkupKind.PlainText) == 'this is the help for hello world'
+        assert (
+            server._find_help('Then hello world', MarkupKind.PlainText)
+            == 'this is the help for hello world'
+        )
         assert server._find_help('asdfasdf', MarkupKind.Markdown) is None
-        assert server._find_help('And hello', MarkupKind.Markdown) == 'this is the help for hello world'
-        assert server._find_help('And hello "world"', MarkupKind.Markdown) == 'this is the help for hello world parameterized'
-        assert server._find_help('But foo', MarkupKind.Markdown) == 'this is the help for foo bar'
-        assert server._find_help('But "foo" bar', MarkupKind.Markdown) == 'this is the help for foo bar parameterized'
+        assert (
+            server._find_help('And hello', MarkupKind.Markdown)
+            == 'this is the help for hello world'
+        )
+        assert (
+            server._find_help('And hello "world"', MarkupKind.Markdown)
+            == 'this is the help for hello world parameterized'
+        )
+        assert (
+            server._find_help('But foo', MarkupKind.Markdown)
+            == 'this is the help for foo bar'
+        )
+        assert (
+            server._find_help('But "foo" bar', MarkupKind.Markdown)
+            == 'this is the help for foo bar parameterized'
+        )
 
     class TestGrizzlyLangageServerFeatures:
         def _initialize(self, client: LanguageServer, root: Path) -> None:
@@ -615,7 +615,9 @@ class TestGrizzlyLanguageServer:
 
             return cast(Dict[str, Any], response)
 
-        def _hover(self, client: LanguageServer, path: Path, position: Position) -> Dict[str, Any]:
+        def _hover(
+            self, client: LanguageServer, path: Path, position: Position
+        ) -> Dict[str, Any]:
             self._initialize(client, path)
 
             path = path / 'features' / 'project.feature'
@@ -808,7 +810,9 @@ class TestGrizzlyLanguageServer:
         def test_hover(self, lsp_fixture: LspFixture) -> None:
             client = lsp_fixture.client
 
-            response = self._hover(client, lsp_fixture.datadir, Position(line=2, character=31))
+            response = self._hover(
+                client, lsp_fixture.datadir, Position(line=2, character=31)
+            )
 
             assert response == {
                 'contents': {
@@ -827,20 +831,22 @@ Given a user of type "BlobStorage" load testing "DefaultEndpointsProtocol=https;
 - - -
 ### Arguments:
 * user_class_name `str`: name of an implementation of users, with or without `User`-suffix
-* host `str`: an URL for the target host, format depends on which users is specified'''.strip()
+* host `str`: an URL for the target host, format depends on which users is specified'''.strip(),
                 },
                 'range': {
                     'end': {
-                        'character': 33,
+                        'character': 85,
                         'line': 2,
                     },
                     'start': {
-                        'character': 26,
+                        'character': 4,
                         'line': 2,
                     },
                 },
             }
 
-            response = self._hover(client, lsp_fixture.datadir, Position(line=0, character=1))
+            response = self._hover(
+                client, lsp_fixture.datadir, Position(line=0, character=1)
+            )
 
             assert response is None

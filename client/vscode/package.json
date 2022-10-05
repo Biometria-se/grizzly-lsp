@@ -115,6 +115,7 @@
   },
   "devDependencies": {
     "@types/chai": "^4.3.3",
+    "@types/glob": "^8.0.0",
     "@types/mocha": "^9.1.0",
     "@types/node": "^16.11.58",
     "@types/vscode": "^1.63.0",

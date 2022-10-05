@@ -93,9 +93,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
         ]
     )
 
-    with_pattern_and_vector = normalizer.custom_types.get(
-        'WithPatternAndVector', None
-    )
+    with_pattern_and_vector = normalizer.custom_types.get('WithPatternAndVector', None)
 
     assert with_pattern_and_vector is not None
     assert (
@@ -122,9 +120,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
     enum_direct = normalizer.custom_types.get('EnumDirect', None)
     assert enum_direct is not None
     assert not enum_direct.permutations.x and not enum_direct.permutations.y
-    assert sorted(enum_direct.replacements) == sorted(
-        ['hello', 'world', 'foo', 'bar']
-    )
+    assert sorted(enum_direct.replacements) == sorted(['hello', 'world', 'foo', 'bar'])
 
     mocker.patch(
         'grizzly_ls.utils.ParseMatcher.custom_types',
@@ -135,8 +131,10 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
 
     with pytest.raises(ValueError) as ve:
         create_step_normalizer()
-    assert str(ve.value) == 'could not extract pattern from "@parse.with_pattern(\'\')" for custom type WithPattern'
-
+    assert (
+        str(ve.value)
+        == 'could not extract pattern from "@parse.with_pattern(\'\')" for custom type WithPattern'
+    )
 
     mocker.patch(
         'grizzly_ls.utils.ParseMatcher.custom_types',
@@ -147,7 +145,10 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
 
     with pytest.raises(ValueError) as ve:
         create_step_normalizer()
-    assert str(ve.value) == 'cannot infere what <bound method DummyEnumNoFromString.magic of <enum \'DummyEnumNoFromString\'>> will return for EnumError'
+    assert (
+        str(ve.value)
+        == 'cannot infere what <bound method DummyEnumNoFromString.magic of <enum \'DummyEnumNoFromString\'>> will return for EnumError'
+    )
 
     mocker.patch(
         'grizzly_ls.utils.ParseMatcher.custom_types',
@@ -158,4 +159,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
 
     with pytest.raises(ValueError) as ve:
         create_step_normalizer()
-    assert str(ve.value) == 'could not find the type that from_string method for custom type EnumError returns'
+    assert (
+        str(ve.value)
+        == 'could not find the type that from_string method for custom type EnumError returns'
+    )
