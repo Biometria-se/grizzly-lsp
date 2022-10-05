@@ -1,17 +1,15 @@
-import inspect
 import itertools
 import logging
 import platform
-import warnings
 import signal
-import re
 import subprocess
 import sys
+import re
 
 from os import environ
 from os.path import pathsep, sep
-from typing import Any, Tuple, Dict, List, Union, Optional, Callable, Literal, cast
-from types import FrameType, ModuleType
+from typing import Any, Tuple, Dict, List, Union, Optional, Literal, Set, cast
+from types import FrameType
 from pathlib import Path
 from behave.matchers import ParseMatcher
 from venv import create as venv_create
@@ -19,7 +17,6 @@ from tempfile import gettempdir
 from difflib import get_close_matches, SequenceMatcher
 from urllib.parse import urlparse, unquote
 from urllib.request import url2pathname
-from importlib import import_module
 from time import perf_counter
 
 import gevent.monkey  # type: ignore
@@ -29,6 +26,7 @@ from pygls.lsp.methods import (
     COMPLETION,
     INITIALIZE,
     WORKSPACE_DID_CHANGE_CONFIGURATION,
+    HOVER,
 )
 from pygls.lsp.types import (
     CompletionParams,
@@ -37,24 +35,32 @@ from pygls.lsp.types import (
     CompletionItemKind,
     InitializeParams,
     MessageType,
+    Hover,
 )
 from pygls.lsp.types.workspace import (
     DidChangeConfigurationParams as WorkspaceDidChangeConfigurationParams,
 )
-from pygls.lsp.types.basic_structures import Position
+from pygls.lsp.types.basic_structures import (
+    Position,
+    TextDocumentPositionParams,
+    MarkupKind,
+    MarkupContent,
+    Range,
+)
 from pygls.workspace import Document
 
-from behave.step_registry import registry
-from behave.runner_util import load_step_modules
 from behave.i18n import languages
 
-from .text import Coordinate, NormalizeHolder, RegexPermutationResolver, Normalizer
+from .text import Normalizer, get_step_parts, clean_help
+from .utils import create_step_normalizer, load_step_registry
 
 
 class GrizzlyLanguageServer(LanguageServer):
     logger: logging.Logger = logging.getLogger(__name__)
 
+    behave_steps: Dict[str, List[ParseMatcher]]
     steps: Dict[str, List[str]]
+    help: Dict[str, str]
     keywords: List[str]
     keywords_once: List[str] = ['Feature', 'Background']
     keyword_alias: Dict[str, str] = {
@@ -72,7 +78,9 @@ class GrizzlyLanguageServer(LanguageServer):
     def __init__(self, *args: Tuple[Any, ...], **kwargs: Dict[str, Any]) -> None:
         super().__init__(*args, **kwargs)  # type: ignore
 
+        self.behave_steps = {}
         self.steps = {}
+        self.help = {}
         self.keywords = []
 
         # monkey patch functions to short-circuit them (causes problems in this context)
@@ -173,23 +181,16 @@ class GrizzlyLanguageServer(LanguageServer):
                         msg_type=MessageType.Error,
                     )
 
-            self.logger.debug('creating step registry')
-            self._make_step_registry(root_path / 'features' / 'steps')
-            total_steps = 0
-            for steps in self.steps.values():
-                total_steps += len(steps)
-
-            self._make_keyword_registry()
-            message = f'found {len(self.keywords)} keywords and {total_steps} steps for grizzly project {project_name}'
-            self.logger.debug(message)
-            self.show_message(message)
+            self._compile_inventory(root_path, project_name)
 
         @self.feature(COMPLETION)
         def completion(params: CompletionParams) -> CompletionList:
             assert self.steps is not None, 'no steps in inventory'
 
             line = self._current_line(params.text_document.uri, params.position).strip()
-            keyword, step = self._get_step_parts(line)
+            keyword, step = get_step_parts(line)
+            if keyword is not None:
+                keyword = self.keyword_alias.get(keyword, keyword)
 
             items: List[CompletionItem] = []
 
@@ -197,10 +198,39 @@ class GrizzlyLanguageServer(LanguageServer):
 
             self.logger.debug(f'{keyword=}, {step=}, {self.keywords=}')
 
+            kind: CompletionItemKind = CompletionItemKind.Text
+            labels: List[str] = []
+
             if keyword is None or keyword not in self.keywords:
-                items = self._complete_keyword(keyword, document)
+                labels = self._complete_keyword(keyword, document)
+                kind = CompletionItemKind.Keyword
             elif keyword is not None:
-                items = self._complete_step(keyword, step)
+                labels = self._complete_step(keyword, step)
+                kind = CompletionItemKind.Function
+
+            if len(labels) > 0:
+                items = [
+                    CompletionItem(
+                        label=label,
+                        kind=kind,
+                        tags=None,
+                        detail=None,
+                        documentation=None,
+                        deprecated=False,
+                        preselect=None,
+                        sort_text=None,
+                        filter_text=None,
+                        insert_text=None,
+                        insert_text_format=None,
+                        insert_text_mode=None,
+                        text_edit=None,
+                        additional_text_edits=None,
+                        commit_characters=None,
+                        command=None,
+                        data=None,
+                    )
+                    for label in labels
+                ]
 
             self.logger.debug(f'completion: {items=}')
 
@@ -215,34 +245,67 @@ class GrizzlyLanguageServer(LanguageServer):
         ) -> None:
             self.logger.debug(params)
 
-    def _get_step_parts(self, line: str) -> Tuple[Optional[str], Optional[str]]:
-        self.logger.info(f'{line=}')
+        @self.feature(HOVER)
+        def hover(params: TextDocumentPositionParams) -> Optional[Hover]:
+            hover: Optional[Hover] = None
+            help_text: Optional[str] = None
+            current_line = self._current_line(params.text_document.uri, params.position)
+            keyword, step = get_step_parts(current_line)
 
-        if len(line) > 0:
-            # remove any user values enclosed with double-quotes
-            line = re.sub(r'"[^"]*"', '""', line)
+            if step is None or keyword is None:
+                return None
 
-            # remove multiple white spaces
-            line = re.sub(r'\s+', ' ', line)
+            start = current_line.index(keyword)
+            end = len(current_line) - 1
 
-            try:
-                keyword, step = line.strip().split(' ', 1)
-                step = step.strip()
-            except ValueError:
-                keyword = line
-                step = None
-            keyword = keyword.strip()
+            markup_supported = self.client_capabilities.get_capability(
+                'text_document.completion.completion_item.documentation_format',
+                [MarkupKind.Markdown],
+            )
+            if len(markup_supported) < 1:
+                markup_kind = MarkupKind.PlainText
+            else:
+                markup_kind = markup_supported[0]
 
-            # get correct keyword if provided was an alias
-            keyword = self.keyword_alias.get(keyword, keyword)
-        else:
-            keyword, step = None, None
+            help_text = self._find_help(current_line, markup_kind)
 
-        return keyword, step
+            if help_text is None:
+                return None
+
+            header, help_text = help_text.split('\n\n', 1)
+            example, arguments = help_text.split('Args:', 1)
+            example = example.replace('Example:', '### Example:').strip()
+            arguments = '\n'.join(
+                [
+                    self._format_arg_line(arg_line)
+                    for arg_line in arguments.strip().split('\n')
+                ]
+            )
+            help_text = (
+                f'## {header}\n- - -\n{example}\n- - -\n### Arguments:\n{arguments}'
+            )
+            contents = MarkupContent(kind=markup_kind, value=help_text)
+            range = Range(
+                start=Position(line=params.position.line, character=start),
+                end=Position(line=params.position.line, character=end),
+            )
+            hover = Hover(contents=contents, range=range)
+
+            return hover
+
+    def _format_arg_line(self, line: str) -> str:
+        try:
+            argument, description = line.split(':', 1)
+            arg_name, arg_type = argument.split(' ')
+            arg_type = arg_type.replace('(', '').replace(')', '').strip()
+
+            return f'* {arg_name} `{arg_type}`: {description.strip()}'
+        except ValueError:
+            return f'* {line}'
 
     def _complete_keyword(
         self, keyword: Optional[str], document: Document
-    ) -> List[CompletionItem]:
+    ) -> List[str]:
         if len(document.source.strip()) < 1:
             keywords = ['Feature']
         else:
@@ -264,36 +327,13 @@ class GrizzlyLanguageServer(LanguageServer):
                     ),
                 )
 
-        return list(
-            map(
-                lambda k: CompletionItem(
-                    label=k,
-                    kind=CompletionItemKind.Keyword,
-                    tags=None,
-                    detail=None,
-                    documentation=None,
-                    deprecated=False,
-                    preselect=None,
-                    sort_text=None,
-                    filter_text=None,
-                    insert_text=None,
-                    insert_text_format=None,
-                    insert_text_mode=None,
-                    text_edit=None,
-                    additional_text_edits=None,
-                    commit_characters=None,
-                    command=None,
-                    data=None,
-                ),
-                sorted(keywords),
-            )
-        )
+        return list(sorted(keywords))
 
     def _complete_step(
         self,
         keyword: str,
         expression: Optional[str],
-    ) -> List[CompletionItem]:
+    ) -> List[str]:
         steps = self.steps.get(keyword.lower(), [])
 
         matched_steps: List[str]
@@ -302,13 +342,15 @@ class GrizzlyLanguageServer(LanguageServer):
             matched_steps = steps
         else:
             # 1. exact matching
-            matched_steps_1 = set(filter(lambda s: s.startswith(expression), steps))  # type: ignore
+            matched_steps_1: Set[str] = set(filter(lambda s: s.startswith(expression), steps))  # type: ignore
 
             # 2. close enough matching
-            matched_steps_2 = set(filter(lambda s: expression in s, steps))  # type: ignore
+            matched_steps_2: Set[str] = set(filter(lambda s: expression in s, steps))  # type: ignore
 
             # 3. "fuzzy" matching
-            matched_steps_3 = set(get_close_matches(expression, steps, len(steps), 0.6))
+            matched_steps_3: Set[str] = set(
+                get_close_matches(expression, steps, len(steps), 0.6)
+            )
 
             # keep order so that 1. matches comes before 2. matches etc.
             matched_steps_container: Dict[str, Literal[None]] = {}
@@ -316,6 +358,20 @@ class GrizzlyLanguageServer(LanguageServer):
             for matched_step in itertools.chain(
                 matched_steps_1, matched_steps_2, matched_steps_3
             ):
+                input_matches = re.finditer(
+                    r'"([^"]*)"', expression, flags=re.MULTILINE
+                )
+                output_matches = re.finditer(
+                    r'"([^"]*)"', matched_step, flags=re.MULTILINE
+                )
+
+                # suggest step with already entetered variables in their correct place
+                if input_matches and output_matches:
+                    offset = 0
+                    for input_match, output_match in zip(input_matches, output_matches):
+                        matched_step = f'{matched_step[0:output_match.start()+offset]}"{input_match.group(1)}"{matched_step[output_match.end()+offset:]}'
+                        offset += len(input_match.group(1))
+
                 matched_steps_container.update({matched_step: None})  # type: ignore
 
             matched_steps = list(matched_steps_container.keys())
@@ -325,30 +381,7 @@ class GrizzlyLanguageServer(LanguageServer):
                 score = SequenceMatcher(None, expression, matched_step).ratio()
                 self.logger.debug(f'\t{matched_step=} {score=}')
 
-        return list(
-            map(
-                lambda s: CompletionItem(
-                    label=s,
-                    kind=CompletionItemKind.Function,
-                    tags=None,
-                    detail=None,
-                    documentation=None,
-                    deprecated=False,
-                    preselect=None,
-                    sort_text=None,
-                    filter_text=None,
-                    insert_text=None,
-                    insert_text_format=None,
-                    insert_text_mode=None,
-                    text_edit=None,
-                    additional_text_edits=None,
-                    commit_characters=None,
-                    command=None,
-                    data=None,
-                ),
-                matched_steps,
-            )
-        )
+        return matched_steps
 
     def _normalize_step_expression(self, step: Union[ParseMatcher, str]) -> List[str]:
         if isinstance(step, ParseMatcher):
@@ -365,117 +398,42 @@ class GrizzlyLanguageServer(LanguageServer):
 
         return patterns
 
-    def _resolve_custom_types(self) -> None:
-        custom_types: Dict[str, Callable[[str], Any]] = ParseMatcher.custom_types
-        custom_type_permutations: Dict[str, NormalizeHolder] = {}
+    def _compile_inventory(self, root_path: Path, project_name: str) -> None:
+        self.logger.debug('creating step registry')
+        self.behave_steps = load_step_registry(root_path / 'features' / 'steps')
 
-        for custom_type, func in custom_types.items():
-            try:
-                func_code = [
-                    line
-                    for line in inspect.getsource(func).strip().split('\n')
-                    if not line.strip().startswith('@classmethod')
-                ]
-                message: Optional[str] = None
+        try:
+            self.normalizer = create_step_normalizer()
+        except ValueError as e:
+            message = str(e)
+            self.logger.error(message)
+            self.show_message(message, msg_type=MessageType.Error)
 
-                if func_code[0].startswith('@parse.with_pattern'):
-                    match = re.match(
-                        r'@parse.with_pattern\(r\'\(?(.*?)\)?\'', func_code[0]
-                    )
-                    if match:
-                        pattern = match.group(1)
-                        vector = getattr(func, '__vector__', None)
-                        if vector is None:
-                            coordinates = Coordinate()
-                        else:
-                            x, y = vector
-                            coordinates = Coordinate(x=x, y=y)
+        self._compile_step_inventory()
 
-                        custom_type_permutations.update(
-                            {
-                                custom_type: NormalizeHolder(
-                                    permutations=coordinates,
-                                    replacements=RegexPermutationResolver.resolve(
-                                        pattern
-                                    ),
-                                ),
-                            }
-                        )
-                    else:
-                        raise ValueError(
-                            f'could not extract pattern from "{func_code[0]}" for custom type {custom_type}'
-                        )
-                elif 'from_string(' in func_code[-1] or 'from_string(' in func_code[0]:
-                    enum_name: str
+        total_steps = 0
+        for steps in self.steps.values():
+            total_steps += len(steps)
 
-                    match = re.match(
-                        r'return ([^\.]*)\.from_string\(', func_code[-1].strip()
-                    )
-                    module: Optional[ModuleType]
-                    if match:
-                        enum_name = match.group(1)
-                        module = import_module('grizzly.types')
-                    else:
-                        match = re.match(
-                            r'def from_string.*?->\s+\'?([^:\']*)\'?:',
-                            func_code[0].strip(),
-                        )
-                        if match:
-                            enum_name = match.group(1)
-                            module = inspect.getmodule(func)
-                        else:
-                            raise ValueError(
-                                f'could not find the type that from_string method for custom type {custom_type} returns'
-                            )
+        self._compile_keyword_inventory()
+        message = f'found {len(self.keywords)} keywords and {total_steps} steps for grizzly project {project_name}'
+        self.logger.debug(message)
+        self.show_message(message)
 
-                    enum_class = getattr(module, enum_name)
-                    replacements = [value.name.lower() for value in enum_class]
-                    vector = enum_class.get_vector()
-
-                    if vector is None:
-                        coordinates = Coordinate()
-                    else:
-                        x, y = vector
-                        coordinates = Coordinate(x=x, y=y)
-
-                    custom_type_permutations.update(
-                        {
-                            custom_type: NormalizeHolder(
-                                permutations=coordinates,
-                                replacements=replacements,
-                            ),
-                        }
-                    )
-                else:
-                    raise ValueError(
-                        f'cannot infere what {func} will return for {custom_type}'
-                    )
-            except ValueError as e:
-                message = str(e)
-                self.logger.error(message)
-                self.show_message(message, msg_type=MessageType.Error)
-
-        self.normalizer = Normalizer(custom_type_permutations)
-
-    def _make_step_registry(self, step_path: Path) -> None:
-        self.logger.debug(f'loading step modules from {step_path}...')
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            load_step_modules([str(step_path)])
-
-        self.logger.debug('...done!')
-        self._resolve_custom_types()
-        self.steps = {}
-        registry_steps: Dict[str, List[ParseMatcher]] = registry.steps
-
-        for keyword, steps in registry_steps.items():
+    def _compile_step_inventory(self) -> None:
+        for keyword, steps in self.behave_steps.items():
             normalized_steps: List[str] = []
             for step in steps:
                 normalized_steps += self._normalize_step_expression(step)
 
+                for normalized_step in normalized_steps:
+                    help = getattr(step.func, '__doc__', None)
+                    if help is not None:
+                        self.help.update({normalized_step: clean_help(help)})
+
             self.steps.update({keyword: normalized_steps})
 
-    def _make_keyword_registry(self) -> None:
+    def _compile_keyword_inventory(self) -> None:
         self.keywords = ['Scenario'] + list(self.keyword_alias.keys())
 
         language_en = languages.get('en', {})
@@ -493,3 +451,29 @@ class GrizzlyLanguageServer(LanguageServer):
         line = content.split('\n')[position.line]
 
         return line
+
+    def _find_help(self, line: str, markup_kind: MarkupKind) -> Optional[str]:
+        _, step = get_step_parts(line)
+
+        if step is None:
+            return None
+
+        step_help = self.help.get(step, None)
+
+        if step_help is None:
+            possible_help = {
+                possible_step: help
+                for possible_step, help in self.help.items()
+                if possible_step.startswith(step)
+            }
+
+            if len(possible_help) < 1:
+                return None
+
+            step_help = possible_help[sorted(possible_help.keys(), reverse=True)[0]]
+
+            if markup_kind == MarkupKind.PlainText:
+                # @TODO: normalize markdown to plain text
+                pass
+
+        return step_help

@@ -1,7 +1,8 @@
-from typing import Callable, Optional, Any, Dict
+from typing import Callable, Optional, Any, Dict, Tuple
 
 class Matcher:
     pattern: str
+    func: Callable[[Tuple[Any, ...]], Any]
 
     ...
 

@@ -5,17 +5,15 @@
       "type": "extensionHost",
       "request": "launch",
       "name": "Launch Client",
-      "runtimeExecutable": "${execPath}",
       "args": [
-        "--extensionDevelopmentPath=${workspaceRoot}/client/vscode"
+        "--extensionDevelopmentPath=${workspaceRoot}/client/vscode",
+        "${workspaceFolder}/tests/project"
       ],
+      "sourceMaps": true,
       "outFiles": [
         "${workspaceRoot}/client/vscode/out/**/*.js"
       ],
-      "preLaunchTask": {
-        "type": "npm",
-        "script": "watch"
-      }
+      "preLaunchTask": "debug client"
     }
   ]
 }

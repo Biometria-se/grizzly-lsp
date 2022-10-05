@@ -346,3 +346,34 @@ class Normalizer:
             patterns.append(pattern)
 
         return patterns, list(errors)
+
+
+def get_step_parts(line: str) -> Tuple[Optional[str], Optional[str]]:
+    if len(line) > 0:
+        # remove any user values enclosed with double-quotes
+        line = re.sub(r'"[^"]*"', '""', line)
+
+        # remove multiple white spaces
+        line = re.sub(r'\s+', ' ', line)
+
+        try:
+            keyword, step = line.strip().split(' ', 1)
+            step = step.strip()
+        except ValueError:
+            keyword = line
+            step = None
+        keyword = keyword.strip()
+    else:
+        keyword, step = None, None
+
+    return keyword, step
+
+
+def clean_help(text: str) -> str:
+    matches = re.finditer(r'\{@pylink ([^\}]*)}', text, re.MULTILINE)
+
+    for match in matches:
+        _, replacement_text = match.group(1).rsplit('.', 1)
+        text = text.replace(match.group(), replacement_text)
+
+    return '\n'.join([line.lstrip() for line in text.split('\n')])

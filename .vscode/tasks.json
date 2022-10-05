@@ -17,8 +17,9 @@
       ]
     },
     {
+      "label": "tsc watch",
       "type": "npm",
-      "script": "watch",
+      "script": "tsc-watch",
       "isBackground": true,
       "group": {
         "kind": "build",
@@ -33,6 +34,36 @@
       },
       "problemMatcher": [
         "$tsc-watch"
+      ]
+    },
+    {
+      "label": "language server",
+      "type": "shell",
+      "command": "grizzly-ls",
+      "args": [
+        "--socket",
+        "--verbose"
+      ],
+      "isBackground": true,
+      "problemMatcher": {
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*Starting TCP server on.*",
+          "endsPattern": "."
+        },
+        "pattern": {
+          "regexp": ".",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        }
+      }
+    },
+      {
+      "label": "debug client",
+      "dependsOn": [
+          "tsc watch",
+          "language server"
       ]
     }
   ]

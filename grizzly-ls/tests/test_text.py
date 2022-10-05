@@ -18,6 +18,7 @@ from grizzly_ls.text import (
     RegexPermutationResolver,
     SreParseValue,
     SreParseValueMaxRepeat,
+    get_step_parts,
 )
 
 
@@ -216,3 +217,26 @@ class TestRegexPermutationResolver:
         assert sorted(RegexPermutationResolver.resolve('(foo|bar)?')) == sorted(
             ['', 'foo', 'bar']
         )
+
+
+def test_get_step_parts() -> None:
+    assert get_step_parts('') == (
+        None,
+        None,
+    )
+    assert get_step_parts('Giv') == (
+        'Giv',
+        None,
+    )
+    assert get_step_parts('Given hello world') == (
+        'Given',
+        'hello world',
+    )
+    assert get_step_parts('And are you "ok"?') == (
+        'And',
+        'are you ""?',
+    )
+    assert get_step_parts('Then   make sure   that "value"  is "None"') == (
+        'Then',
+        'make sure that "" is ""',
+    )

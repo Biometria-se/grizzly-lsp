@@ -77,6 +77,9 @@ function createStdioLanguageServer(
         synchronize: {
             configurationSection: 'grizzly', // @TODO: should be implemented using a pull workspace/section thingy
         },
+        markdown: {
+            isTrusted: true,
+        },
         outputChannel,
     };
 
@@ -104,6 +107,9 @@ function createSocketLanguageServer(
     const clientOptions: LanguageClientOptions = {
         documentSelector: documentSelector,
         outputChannel: outputChannel,
+        markdown: {
+            isTrusted: true,
+        },
     };
 
     return new LanguageClient(`socket language server (${host}:${port})`, serverOptions, clientOptions);
@@ -112,7 +118,7 @@ function createSocketLanguageServer(
 function createLanguageClient(): LanguageClient {
     const configuration = workspace.getConfiguration('grizzly');
     const documentSelector = ['grizzly-gherkin'];
-    const outputChannel: OutputChannel = Window.createOutputChannel('grizzly language server');
+    const outputChannel: OutputChannel = Window.createOutputChannel('Grizzly Language Server');
     let languageClient: LanguageClient;
 
     const connectionType = configuration.get<string>('server.connection');
