@@ -9,6 +9,8 @@ auto-complete of step expressions!
 
 ![Screenshot of hover help text](https://github.com/Biometria-se/grizzly-lsp/raw/main/assets/images/screenshot-hover-help.png)
 
+Download the extension from [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=biometria-se.grizzly-loadtester-vscode).
+
 For the extension to work, you have to install the language server `grizzly-loadtester-ls` which is published on [pypi.org](https://pypi.org/project/grizzly-loadtester-ls/).
 
 Install it with:
