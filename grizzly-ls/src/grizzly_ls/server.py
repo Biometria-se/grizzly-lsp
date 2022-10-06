@@ -268,22 +268,22 @@ class GrizzlyLanguageServer(LanguageServer):
                 markup_kind = markup_supported[0]
 
             help_text = self._find_help(current_line, markup_kind)
+            self.logger.debug(f'{help_text=}')
 
             if help_text is None:
                 return None
 
-            header, help_text = help_text.split('\n\n', 1)
-            example, arguments = help_text.split('Args:', 1)
-            example = example.replace('Example:', '### Example:').strip()
-            arguments = '\n'.join(
-                [
-                    self._format_arg_line(arg_line)
-                    for arg_line in arguments.strip().split('\n')
-                ]
-            )
-            help_text = (
-                f'## {header}\n- - -\n{example}\n- - -\n### Arguments:\n{arguments}'
-            )
+            if 'Args:' in help_text:
+                pre, post = help_text.split('Args:', 1)
+                text = '\n'.join(
+                    [
+                        self._format_arg_line(arg_line)
+                        for arg_line in post.strip().split('\n')
+                    ]
+                )
+
+                help_text = f'{pre}Args:\n\n{text}\n'
+
             contents = MarkupContent(kind=markup_kind, value=help_text)
             range = Range(
                 start=Position(line=params.position.line, character=start),
@@ -422,16 +422,19 @@ class GrizzlyLanguageServer(LanguageServer):
 
     def _compile_step_inventory(self) -> None:
         for keyword, steps in self.behave_steps.items():
-            normalized_steps: List[str] = []
+            normalized_steps_all: List[str] = []
             for step in steps:
-                normalized_steps += self._normalize_step_expression(step)
+                normalized_steps = self._normalize_step_expression(step)
 
                 for normalized_step in normalized_steps:
                     help = getattr(step.func, '__doc__', None)
+
                     if help is not None:
                         self.help.update({normalized_step: clean_help(help)})
 
-            self.steps.update({keyword: normalized_steps})
+                normalized_steps_all += normalized_steps
+
+            self.steps.update({keyword: normalized_steps_all})
 
     def _compile_keyword_inventory(self) -> None:
         self.keywords = ['Scenario'] + list(self.keyword_alias.keys())
@@ -458,7 +461,11 @@ class GrizzlyLanguageServer(LanguageServer):
         if step is None:
             return None
 
+        self.logger.debug(f'{step=}')
+
         step_help = self.help.get(step, None)
+
+        self.logger.debug(f'{step_help=}')
 
         if step_help is None:
             possible_help = {
@@ -469,6 +476,8 @@ class GrizzlyLanguageServer(LanguageServer):
 
             if len(possible_help) < 1:
                 return None
+
+            self.logger.debug(f'{possible_help=}')
 
             step_help = possible_help[sorted(possible_help.keys(), reverse=True)[0]]
 

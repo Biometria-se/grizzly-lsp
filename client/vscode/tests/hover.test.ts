@@ -29,20 +29,24 @@ describe('Should show help on hover step expression', () => {
         expect(actual.range?.end.character).to.be.equal(end);
         const contents = actual.contents[0] as vscode.MarkdownString;
         expect(contents.value).to.be
-            .equal(`## Sets which type of users the scenario should use and which \`host\` is the target.
-- - -
-### Example:
+            .equal(`Sets which type of users the scenario should use and which \`host\` is the target,
+together with \`weight\` of the user (how many instances of this user should spawn relative to others).
+
+Example:
 
 \`\`\` gherkin
-Given a user of type "RestApi" load testing "http://api.example.com"
-Given a user of type "MessageQueue" load testing "mq://mqm:secret@mq.example.com/?QueueManager=QMGR01&Channel=Channel01"
-Given a user of type "ServiceBus" load testing "sb://sb.example.com/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=abc123def456ghi789="
-Given a user of type "BlobStorage" load testing "DefaultEndpointsProtocol=https;EndpointSuffix=core.windows.net;AccountName=examplestorage;AccountKey=xxxyyyyzzz=="
+Given a user of type "RestApi" with weight "2" load testing "..."
+Given a user of type "MessageQueue" with weight "1" load testing "..."
+Given a user of type "ServiceBus" with weight "1" load testing "..."
+Given a user of type "BlobStorage" with weight "4" load testing "..."
 \`\`\`
-- - -
-### Arguments:
+
+Args:
+
 * user_class_name \`str\`: name of an implementation of users, with or without \`User\`-suffix
-* host \`str\`: an URL for the target host, format depends on which users is specified`);
+* weight_value \`str\`: weight value for the user, default is \`1\` (see [writing a locustfile](http://docs.locust.io/en/stable/writing-a-locustfile.html#weight-attribute))
+* host \`str\`: an URL for the target host, format depends on which users is specified
+`);
     });
 });
 
