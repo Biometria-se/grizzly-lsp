@@ -616,12 +616,17 @@ class TestGrizzlyLanguageServer:
             return cast(Dict[str, Any], response)
 
         def _hover(
-            self, client: LanguageServer, path: Path, position: Position
+            self,
+            client: LanguageServer,
+            path: Path,
+            position: Position,
+            content: Optional[str] = None,
         ) -> Dict[str, Any]:
             self._initialize(client, path)
 
             path = path / 'features' / 'project.feature'
-            self._open(client, path, None)
+
+            self._open(client, path, content)
 
             params = TextDocumentPositionParams(
                 text_document=TextDocumentIdentifier(
@@ -847,6 +852,23 @@ Args:
 
             response = self._hover(
                 client, lsp_fixture.datadir, Position(line=0, character=1)
+            )
+
+            assert response is None
+
+            response = self._hover(
+                client,
+                lsp_fixture.datadir,
+                Position(line=6, character=12),
+                content='''Feature:
+  Scenario: test
+    Given a user of type "RestApi" load testing "http://localhost"
+    Then do something
+    """
+    {
+        "hello": "world"
+    }
+    """''',
             )
 
             assert response is None

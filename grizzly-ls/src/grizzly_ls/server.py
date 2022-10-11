@@ -252,7 +252,7 @@ class GrizzlyLanguageServer(LanguageServer):
             current_line = self._current_line(params.text_document.uri, params.position)
             keyword, step = get_step_parts(current_line)
 
-            if step is None or keyword is None:
+            if step is None or keyword is None or keyword.lower() not in self.steps:
                 return None
 
             start = current_line.index(keyword)
