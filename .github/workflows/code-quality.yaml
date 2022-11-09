@@ -141,7 +141,7 @@ jobs:
         id: server-flake8
         if: always()
         working-directory: ./grizzly-ls
-        run: python3 -m flake518
+        run: python3 -m flake8
 
       - name: 'server: black'
         id: server-black
