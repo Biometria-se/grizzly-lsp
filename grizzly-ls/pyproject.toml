@@ -6,7 +6,7 @@ build-backend = 'setuptools.build_meta'
 name = 'grizzly-loadtester-ls'
 description = 'LSP server implementation for grizzly-loadtester load scenario development'
 dependencies = [
-    'pygls',
+    'pygls >=0.13.0',
     'behave'
 ]
 readme = 'README.md'
@@ -54,7 +54,7 @@ dev = [
     'pytest-timeout',
     'coverage[toml]',
     'pylint',
-    'flake518',
+    'flake8-pyproject',
     'black',
     'mypy',
     'grizzly-loadtester',

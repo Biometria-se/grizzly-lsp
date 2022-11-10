@@ -7,7 +7,7 @@
     "context": "..",
     "args": {
       // Update 'VARIANT' to pick a Python version: 3, 3.6, 3.7, 3.8, 3.9
-      "VARIANT": "3",
+      "VARIANT": "3.10",
       // Options
       "INSTALL_NODE": "true",
       "NODE_VERSION": "lts/*"
@@ -30,7 +30,7 @@
       "-S",
       "-l 180"
     ],
-    "python.linting.flake8Path": "flake518",
+    "python.linting.flake8Path": "flake8",
     "python.linting.mypyPath": "mypy",
     "python.linting.pylintPath": "pylint",
     "python.linting.pylintArgs": [
@@ -61,7 +61,9 @@
     "editor.codeActionsOnSave": {
       "source.fixAll.eslint": true
     },
-    "eslint.validate": ["typescript"]
+    "eslint.validate": [
+      "typescript"
+    ]
   },
   // Add the IDs of extensions you want installed when the container is created.
   "extensions": [

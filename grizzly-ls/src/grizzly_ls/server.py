@@ -53,6 +53,7 @@ from behave.i18n import languages
 
 from .text import Normalizer, get_step_parts, clean_help
 from .utils import create_step_normalizer, load_step_registry
+from . import __version__
 
 
 class GrizzlyLanguageServer(LanguageServer):
@@ -76,7 +77,7 @@ class GrizzlyLanguageServer(LanguageServer):
         super().show_message(message, msg_type=msg_type)  # type: ignore
 
     def __init__(self, *args: Tuple[Any, ...], **kwargs: Dict[str, Any]) -> None:
-        super().__init__(*args, **kwargs)  # type: ignore
+        super().__init__(name='grizzly-ls', version=__version__, *args, **kwargs)  # type: ignore
 
         self.behave_steps = {}
         self.steps = {}
@@ -251,6 +252,8 @@ class GrizzlyLanguageServer(LanguageServer):
             help_text: Optional[str] = None
             current_line = self._current_line(params.text_document.uri, params.position)
             keyword, step = get_step_parts(current_line)
+
+            self.logger.debug(f'{keyword=}, {step=}')
 
             if step is None or keyword is None or keyword.lower() not in self.steps:
                 return None

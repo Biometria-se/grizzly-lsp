@@ -40,12 +40,15 @@ from pygls.lsp.types.basic_structures import (
 from behave.matchers import ParseMatcher
 
 from .fixtures import LspFixture
+from grizzly_ls import __version__
 
 
 class TestGrizzlyLanguageServer:
     def test___init__(self, lsp_fixture: LspFixture) -> None:
         server = lsp_fixture.server
 
+        assert server.name == 'grizzly-ls'
+        assert server.version == __version__
         assert server.steps == {}
         assert server.keywords == []
         assert server.keyword_alias == {
@@ -314,6 +317,7 @@ class TestGrizzlyLanguageServer:
             'Then save {target:ResponseTarget} as "{content_type:ContentType}" in "{variable}" for "{count}" {grammar:UserGramaticalNumber}',
         )
         actual = sorted(server._normalize_step_expression(step))
+        print('\n'.join(actual))
         assert actual == sorted(
             [
                 'Then save payload as "undefined" in "" for "" user',
@@ -332,6 +336,10 @@ class TestGrizzlyLanguageServer:
                 'Then save payload as "plain" in "" for "" users',
                 'Then save metadata as "plain" in "" for "" user',
                 'Then save metadata as "plain" in "" for "" users',
+                'Then save metadata as "multipart_form_data" in "" for "" user',
+                'Then save metadata as "multipart_form_data" in "" for "" users',
+                'Then save payload as "multipart_form_data" in "" for "" user',
+                'Then save payload as "multipart_form_data" in "" for "" users',
             ]
         )
 
