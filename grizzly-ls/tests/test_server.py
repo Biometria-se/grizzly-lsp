@@ -51,10 +51,11 @@ class TestGrizzlyLanguageServer:
         assert server.version == __version__
         assert server.steps == {}
         assert server.keywords == []
-        assert server.keyword_alias == {
-            'But': 'Then',
-            'And': 'Given',
-        }
+        assert server.keyword_any == [
+            'But',
+            'And',
+            '*',
+        ]
         assert server.keywords_once == ['Feature', 'Background']
 
         assert isinstance(server.logger, logging.Logger)
