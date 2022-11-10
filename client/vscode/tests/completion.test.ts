@@ -30,7 +30,9 @@ describe('Should do completion on keywords', () => {
 
     it('Complete keywords, only expect `Feature`', async () => {
         // "Background" present in document, which only occurs once, suggest only "Scenario"
-        setTestContent('Feature:\n\tBackground:\n\t');
+        setTestContent(`Feature:
+    Background:
+    `);
 
         const actual = await testCompletion(docUri, new vscode.Position(2, 0));
 
@@ -43,7 +45,10 @@ describe('Should do completion on keywords', () => {
 
     it('Complete keywords, all other keywords', async () => {
         // "Background" and "Scenario" (at least once) present, suggest all the other keywords
-        setTestContent('Feature:\n\tBackground:\n\tScenario:\n\t');
+        setTestContent(`Feature:
+    Background:
+    Scenario:
+    `);
 
         const actual = await testCompletion(docUri, new vscode.Position(3, 0));
 
@@ -63,7 +68,10 @@ describe('Should do completion on keywords', () => {
 
     it('Complete keywords, keywords containing `en` (fuzzy matching)', async () => {
         // Complete keywords containing "en"
-        setTestContent('Feature:\n\tBackground:\n\tScenario:\n\t\ten');
+        setTestContent(`Feature:
+    Background:
+    Scenario:
+        en`);
 
         const actual = await testCompletion(docUri, new vscode.Position(3, 3));
 
@@ -77,7 +85,10 @@ describe('Should do completion on keywords', () => {
 
 describe('Should do completion on steps', () => {
     it('Complete steps, keyword `Given` step `variable`', async () => {
-        setTestContent('Feature:\n\tBackground:\n\tScenario:\n\t\tGiven variable');
+        setTestContent(`Feature:
+    Background:
+    Scenario:
+        Given variable`);
 
         const actual = await testCompletion(docUri, new vscode.Position(3, 15));
         const expected = [

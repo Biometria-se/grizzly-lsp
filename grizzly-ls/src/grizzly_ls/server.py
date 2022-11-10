@@ -64,10 +64,11 @@ class GrizzlyLanguageServer(LanguageServer):
     help: Dict[str, str]
     keywords: List[str]
     keywords_once: List[str] = ['Feature', 'Background']
-    keyword_alias: Dict[str, str] = {
-        'But': 'Then',
-        'And': 'Given',
-    }
+    keyword_any: List[str] = [
+        'But',
+        'And',
+        '*',
+    ]
 
     normalizer: Normalizer
 
@@ -190,8 +191,6 @@ class GrizzlyLanguageServer(LanguageServer):
 
             line = self._current_line(params.text_document.uri, params.position).strip()
             keyword, step = get_step_parts(line)
-            if keyword is not None:
-                keyword = self.keyword_alias.get(keyword, keyword)
 
             items: List[CompletionItem] = []
 
@@ -255,7 +254,14 @@ class GrizzlyLanguageServer(LanguageServer):
 
             self.logger.debug(f'{keyword=}, {step=}')
 
-            if step is None or keyword is None or keyword.lower() not in self.steps:
+            if (
+                step is None
+                or keyword is None
+                or (
+                    keyword.lower() not in self.steps
+                    and keyword not in self.keyword_any
+                )
+            ):
                 return None
 
             start = current_line.index(keyword)
@@ -337,7 +343,12 @@ class GrizzlyLanguageServer(LanguageServer):
         keyword: str,
         expression: Optional[str],
     ) -> List[str]:
-        steps = self.steps.get(keyword.lower(), [])
+        if keyword in self.keyword_any:
+            steps = [
+                step for keyword_steps in self.steps.values() for step in keyword_steps
+            ]
+        else:
+            steps = self.steps.get(keyword.lower(), [])
 
         matched_steps: List[str]
 
@@ -440,7 +451,7 @@ class GrizzlyLanguageServer(LanguageServer):
             self.steps.update({keyword: normalized_steps_all})
 
     def _compile_keyword_inventory(self) -> None:
-        self.keywords = ['Scenario'] + list(self.keyword_alias.keys())
+        self.keywords = ['Scenario'] + self.keyword_any[:-1]
 
         language_en = languages.get('en', {})
         for keyword in self.steps.keys():

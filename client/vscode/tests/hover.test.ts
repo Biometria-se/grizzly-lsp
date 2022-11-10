@@ -12,19 +12,21 @@ describe('Should show help on hover step expression', () => {
     });
 
     it('Hover `Given a user...`', async () => {
-        setTestContent(
-            'Feature:\n\tScenario: test scenario\n\t\tGiven a user of type "RestApi" with weight "1" load testing "$conf::template.host"\n\t\tAnd restart scenario on failure\n'
-        );
+        setTestContent(`Feature:
+    Scenario: test scenario
+        Given a user of type "RestApi" with weight "1" load testing "$conf::template.host"
+        And restart scenario on failure
+`);
+
+        let end = 89;
+        if (process.platform == 'win32') {
+            end = 90;  // due to \r\n on win32?
+        }
 
         const actual = await testHover(docUri, new vscode.Position(2, 35));
 
-        let end = 83;
-        if (process.platform == 'win32') {
-            end = 84;  // due to \r\n on win32?
-        }
-
         expect(actual.range?.start.line).to.be.equal(2);
-        expect(actual.range?.start.character).to.be.equal(2);
+        expect(actual.range?.start.character).to.be.equal(8);
         expect(actual.range?.end.line).to.be.equal(2);
         expect(actual.range?.end.character).to.be.equal(end);
         const contents = actual.contents[0] as vscode.MarkdownString;
@@ -48,6 +50,40 @@ Args:
 * host \`str\`: an URL for the target host, format depends on which users is specified
 `);
     });
+
+    it('Hover `And restart scenario on failure`', async () => {
+        setTestContent(`Feature:
+    Scenario: test scenario
+        Given a user of type "RestApi" with weight "1" load testing "$conf::template.host"
+        And restart scenario on failure
+`);
+
+        let end = 38;
+        if (process.platform == 'win32') {
+            end = 39;  // due to \r\n on win32?
+        }
+
+        const actual = await testHover(docUri, new vscode.Position(3, 13));
+
+        expect(actual.range?.start.line).to.be.equal(3);
+        expect(actual.range?.start.character).to.be.equal(8);
+        expect(actual.range?.end.line).to.be.equal(3);
+        expect(actual.range?.end.character).to.be.equal(end);
+
+        const contents = actual.contents[0] as vscode.MarkdownString;
+        expect(contents.value).to.be
+            .equal(`Restart scenario, from first task, if a request fails.
+
+Default behavior is to continue the scenario if a request fails.
+
+Example:
+
+\`\`\` gherkin
+And restart scenario on failure
+\`\`\`
+`);
+    });
+
 });
 
 async function testHover(docUri: vscode.Uri, position: vscode.Position): Promise<vscode.Hover> {
