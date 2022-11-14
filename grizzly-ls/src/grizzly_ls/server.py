@@ -38,6 +38,7 @@ from pygls.lsp.types import (
     DefinitionParams,
     MessageType,
     Hover,
+    InsertTextFormat,
 )
 from pygls.lsp.types.workspace import (
     DidChangeConfigurationParams as WorkspaceDidChangeConfigurationParams,
@@ -458,18 +459,34 @@ class GrizzlyLanguageServer(LanguageServer):
                 if ' ' in expression:
                     insert_text = matched_step.replace(expression, '')
                 else:
-                    insert_text = None
+                    insert_text = matched_step
 
                 # do not suggest the step that is already written
                 if matched_step == expression:
                     continue
                 elif matched_step == insert_text:  # exact match, preselect it
-                    insert_text = None
                     preselect = True
 
                 # if typed expression ends with whitespace, do not insert text starting with a whitespace
-                if insert_text is not None and expression[-1] == ' ':
+                if expression[-1] == ' ':
                     insert_text = insert_text.strip()
+
+                if '""' in insert_text:
+                    snippet_matches = re.finditer(
+                        r'""',
+                        insert_text,
+                        flags=re.MULTILINE,
+                    )
+
+                    offset = 0
+                    for index, snippet_match in enumerate(snippet_matches, start=1):
+                        snippet_placeholder = f'${index}'
+                        insert_text = f'{insert_text[0:snippet_match.start()+offset]}"{snippet_placeholder}"{insert_text[snippet_match.end()+offset:]}'
+                        offset += len(snippet_placeholder)
+
+                    insert_text_format = InsertTextFormat.Snippet
+                else:
+                    insert_text_format = InsertTextFormat.PlainText
 
                 matched_steps_container.update(
                     {
@@ -484,7 +501,7 @@ class GrizzlyLanguageServer(LanguageServer):
                             sort_text=None,
                             filter_text=None,
                             insert_text=insert_text,
-                            insert_text_format=None,
+                            insert_text_format=insert_text_format,
                             insert_text_mode=None,
                             text_edit=None,
                             additional_text_edits=None,
@@ -577,7 +594,7 @@ class GrizzlyLanguageServer(LanguageServer):
         if step is None:
             return None
 
-        step_help = self.help.get(step, None)
+        step_help = self.help.get(step.strip(), None)
 
         if step_help is None:
             possible_help = {

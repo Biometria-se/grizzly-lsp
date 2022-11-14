@@ -131,6 +131,27 @@ describe('Should do completion on steps', () => {
         actual.items.forEach((item) => {
             expect(item.kind).to.be.equal(vscode.CompletionItemKind.Function);
         });
+
+        const actualInsertText = actual.items.map((item) => {
+            if (item.insertText instanceof vscode.SnippetString) {
+                return item.insertText.value;
+            } else {
+                return item.insertText;
+            }
+        });
+        expected.forEach((e) => {
+            const parts: string[] = [];
+            let index = 1;
+            for (const p of e.split('""')) {
+                if (p === undefined || p.length < 1) {
+                    continue;
+                }
+                parts.push(p);
+                parts.push(`"$${index++}"`);
+            }
+            e = parts.join('');
+            expect(actualInsertText).to.contain(e);
+        });
     });
 
     it('Complete steps, keyword `Then` step `save response metadata "hello"`', async () => {

@@ -216,13 +216,14 @@ class TestGrizzlyLanguageServer:
                     == 'save response metadata "hello" that matches "" in variable ""'
                 ):
                     assert (
-                        suggested_step.insert_text == ' that matches "" in variable ""'
+                        suggested_step.insert_text
+                        == ' that matches "$1" in variable "$2"'
                     )
                 elif (
                     suggested_step.label
                     == 'save response metadata "hello" in variable ""'
                 ):
-                    assert suggested_step.insert_text == ' in variable ""'
+                    assert suggested_step.insert_text == ' in variable "$1"'
                 else:
                     raise AssertionError(
                         f'"{suggested_step.label}" was an unexpected suggested step'
