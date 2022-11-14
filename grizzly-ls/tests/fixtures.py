@@ -53,7 +53,9 @@ class LspFixture:
         )
         self._server_thread.start()
 
-        self.client = LanguageServer(loop=asyncio.new_event_loop())
+        self.client = LanguageServer(
+            loop=asyncio.new_event_loop(), name='dummy client', version='0.0.0'
+        )
         self._client_thread = Thread(
             target=start, args=(self.client, sstdio, cstdout), daemon=True
         )

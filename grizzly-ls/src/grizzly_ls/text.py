@@ -2,6 +2,7 @@ import re
 import itertools
 import string
 import inspect
+import sys
 
 from typing import (
     List,
@@ -354,11 +355,14 @@ def get_step_parts(line: str) -> Tuple[Optional[str], Optional[str]]:
         line = re.sub(r'"[^"]*"', '""', line)
 
         # remove multiple white spaces
-        line = re.sub(r'\s+', ' ', line)
+        line = re.sub(r'^\s+', '', line)
+        line = re.sub(r'\s{2,}', ' ', line)
+        if sys.platform == 'win32':
+            line = line.replace('\r', '')
 
         try:
-            keyword, step = line.strip().split(' ', 1)
-            step = step.strip()
+            keyword, step = line.split(' ', 1)
+            step = step
         except ValueError:
             keyword = line
             step = None
@@ -372,6 +376,7 @@ def get_step_parts(line: str) -> Tuple[Optional[str], Optional[str]]:
 def clean_help(text: str) -> str:
     matches = re.finditer(r'\{@pylink ([^\}]*)}', text, re.MULTILINE)
 
+    # @TODO: can we reverse engineer the URL based on the text?
     for match in matches:
         _, replacement_text = match.group(1).rsplit('.', 1)
         text = text.replace(match.group(), replacement_text)

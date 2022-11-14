@@ -6,7 +6,7 @@ export let editor: vscode.TextEditor;
 export let documentEol: string;
 export let platformEol: string;
 
-const testWorkspace: string = path.resolve(__dirname, '../../../../tests/project');
+export const testWorkspace: string = path.resolve(__dirname, '../../../../tests/project');
 
 const docUriActivated: Map<string, boolean> = new Map();
 

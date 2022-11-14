@@ -224,19 +224,19 @@ def test_get_step_parts() -> None:
         None,
         None,
     )
-    assert get_step_parts('Giv') == (
+    assert get_step_parts('   Giv') == (
         'Giv',
         None,
     )
-    assert get_step_parts('Given hello world') == (
+    assert get_step_parts(' Given hello world') == (
         'Given',
         'hello world',
     )
-    assert get_step_parts('And are you "ok"?') == (
+    assert get_step_parts('  And are you "ok"?') == (
         'And',
         'are you ""?',
     )
-    assert get_step_parts('Then   make sure   that "value"  is "None"') == (
+    assert get_step_parts('     Then   make sure   that "value"  is "None"') == (
         'Then',
         'make sure that "" is ""',
     )
