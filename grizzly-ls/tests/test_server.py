@@ -22,11 +22,13 @@ from pygls.lsp.methods import (
     INITIALIZE,
     TEXT_DOCUMENT_DID_OPEN,
     HOVER,
+    DEFINITION,
 )
 from pygls.lsp.types import (
     ClientCapabilities,
     CompletionContext,
     CompletionParams,
+    CompletionItemKind,
     DidOpenTextDocumentParams,
     InitializeParams,
 )
@@ -34,12 +36,12 @@ from pygls.lsp.types.basic_structures import (
     Position,
     TextDocumentItem,
     TextDocumentIdentifier,
-    MarkupKind,
     TextDocumentPositionParams,
 )
 from behave.matchers import ParseMatcher
 
 from .fixtures import LspFixture
+from .helpers import normalize_completion_item
 from grizzly_ls import __version__
 
 
@@ -85,7 +87,9 @@ class TestGrizzlyLanguageServer:
             source='',
         )
 
-        assert server._complete_keyword(None, document) == [
+        assert normalize_completion_item(
+            server._complete_keyword(None, document), CompletionItemKind.Keyword
+        ) == [
             'Feature',
         ]
 
@@ -94,7 +98,9 @@ class TestGrizzlyLanguageServer:
             source='Feature:',
         )
 
-        assert server._complete_keyword(None, document) == [
+        assert normalize_completion_item(
+            server._complete_keyword(None, document), CompletionItemKind.Keyword
+        ) == [
             'Background',
             'Scenario',
         ]
@@ -106,7 +112,9 @@ class TestGrizzlyLanguageServer:
 ''',
         )
 
-        assert server._complete_keyword(None, document) == [
+        assert normalize_completion_item(
+            server._complete_keyword(None, document), CompletionItemKind.Keyword
+        ) == [
             'And',
             'Background',
             'But',
@@ -125,7 +133,9 @@ class TestGrizzlyLanguageServer:
 ''',
         )
 
-        assert server._complete_keyword(None, document) == [
+        assert normalize_completion_item(
+            server._complete_keyword(None, document), CompletionItemKind.Keyword
+        ) == [
             'And',
             'But',
             'Given',
@@ -134,14 +144,18 @@ class TestGrizzlyLanguageServer:
             'When',
         ]
 
-        assert server._complete_keyword('EN', document) == [
+        assert normalize_completion_item(
+            server._complete_keyword('EN', document), CompletionItemKind.Keyword
+        ) == [
             'Given',
             'Scenario',
             'Then',
             'When',
         ]
 
-        assert server._complete_keyword('Giv', document) == [
+        assert normalize_completion_item(
+            server._complete_keyword('Giv', document), CompletionItemKind.Keyword
+        ) == [
             'Given',
         ]
 
@@ -153,7 +167,9 @@ class TestGrizzlyLanguageServer:
         server._compile_inventory(grizzly_project.resolve(), 'project')
 
         with caplog.at_level(logging.DEBUG):
-            matched_steps = server._complete_step('Given', 'variable')
+            matched_steps = normalize_completion_item(
+                server._complete_step('Given', 'variable'), CompletionItemKind.Function
+            )
 
             for expected_step in [
                 'set context variable "" to ""',
@@ -164,7 +180,9 @@ class TestGrizzlyLanguageServer:
             ]:
                 assert expected_step in matched_steps
 
-            matched_steps = server._complete_step('Then', 'save')
+            matched_steps = normalize_completion_item(
+                server._complete_step('Then', 'save'), CompletionItemKind.Function
+            )
             for expected_step in [
                 'save response metadata "" in variable ""',
                 'save response payload "" in variable ""',
@@ -179,8 +197,11 @@ class TestGrizzlyLanguageServer:
             ]:
                 assert expected_step in matched_steps
 
-            matched_steps = server._complete_step(
+            suggested_steps = server._complete_step(
                 'Then', 'save response metadata "hello"'
+            )
+            matched_steps = normalize_completion_item(
+                suggested_steps, CompletionItemKind.Function
             )
 
             for expected_step in [
@@ -189,7 +210,27 @@ class TestGrizzlyLanguageServer:
             ]:
                 assert expected_step in matched_steps
 
-            matched_steps = server._complete_step('When', None)
+            for suggested_step in suggested_steps:
+                if (
+                    suggested_step.label
+                    == 'save response metadata "hello" that matches "" in variable ""'
+                ):
+                    assert (
+                        suggested_step.insert_text == ' that matches "" in variable ""'
+                    )
+                elif (
+                    suggested_step.label
+                    == 'save response metadata "hello" in variable ""'
+                ):
+                    assert suggested_step.insert_text == ' in variable ""'
+                else:
+                    raise AssertionError(
+                        f'"{suggested_step.label}" was an unexpected suggested step'
+                    )
+
+            matched_steps = normalize_completion_item(
+                server._complete_step('When', None), CompletionItemKind.Function
+            )
 
             for expected_step in [
                 'condition "" with name "" is true, execute these tasks',
@@ -203,10 +244,11 @@ class TestGrizzlyLanguageServer:
             ]:
                 assert expected_step in matched_steps
 
-            matched_steps = server._complete_step('When', 'response ')
+            matched_steps = normalize_completion_item(
+                server._complete_step('When', 'response '), CompletionItemKind.Function
+            )
 
             for expected_step in [
-                'average response time is greater than "" milliseconds fail scenario',
                 'response time percentile ""% is greater than "" milliseconds fail scenario',
                 'response payload "" is not "" fail request',
                 'response payload "" is "" fail request',
@@ -215,7 +257,10 @@ class TestGrizzlyLanguageServer:
             ]:
                 assert expected_step in matched_steps
 
-            matched_steps = server._complete_step('When', 'response fail request')
+            matched_steps = normalize_completion_item(
+                server._complete_step('When', 'response fail request'),
+                CompletionItemKind.Function,
+            )
 
             for expected_step in [
                 'response payload "" is not "" fail request',
@@ -225,8 +270,9 @@ class TestGrizzlyLanguageServer:
             ]:
                 assert expected_step in matched_steps
 
-            matched_steps = server._complete_step(
-                'When', 'response payload "" is fail request'
+            matched_steps = normalize_completion_item(
+                server._complete_step('When', 'response payload "" is fail request'),
+                CompletionItemKind.Function,
             )
 
             for expected_step in [
@@ -235,8 +281,11 @@ class TestGrizzlyLanguageServer:
             ]:
                 assert expected_step in matched_steps
 
-            matched_steps = server._complete_step(
-                'Given', 'a user of type "RestApi" with weight "1" load'
+            matched_steps = normalize_completion_item(
+                server._complete_step(
+                    'Given', 'a user of type "RestApi" with weight "1" load'
+                ),
+                CompletionItemKind.Function,
             )
 
             assert len(matched_steps) == 1
@@ -318,7 +367,6 @@ class TestGrizzlyLanguageServer:
             'Then save {target:ResponseTarget} as "{content_type:ContentType}" in "{variable}" for "{count}" {grammar:UserGramaticalNumber}',
         )
         actual = sorted(server._normalize_step_expression(step))
-        print('\n'.join(actual))
         assert actual == sorted(
             [
                 'Then save payload as "undefined" in "" for "" user',
@@ -510,24 +558,17 @@ class TestGrizzlyLanguageServer:
         }
 
         assert (
-            server._find_help('Then hello world', MarkupKind.PlainText)
-            == 'this is the help for hello world'
+            server._find_help('Then hello world') == 'this is the help for hello world'
         )
-        assert server._find_help('asdfasdf', MarkupKind.Markdown) is None
+        assert server._find_help('asdfasdf') is None
+        assert server._find_help('And hello') == 'this is the help for hello world'
         assert (
-            server._find_help('And hello', MarkupKind.Markdown)
-            == 'this is the help for hello world'
-        )
-        assert (
-            server._find_help('And hello "world"', MarkupKind.Markdown)
+            server._find_help('And hello "world"')
             == 'this is the help for hello world parameterized'
         )
+        assert server._find_help('But foo') == 'this is the help for foo bar'
         assert (
-            server._find_help('But foo', MarkupKind.Markdown)
-            == 'this is the help for foo bar'
-        )
-        assert (
-            server._find_help('But "foo" bar', MarkupKind.Markdown)
+            server._find_help('But "foo" bar')
             == 'this is the help for foo bar parameterized'
         )
 
@@ -647,6 +688,29 @@ class TestGrizzlyLanguageServer:
             response = client.lsp.send_request(HOVER, params).result(timeout=3)  # type: ignore
 
             return cast(Dict[str, Any], response)
+
+        def _definition(
+            self,
+            client: LanguageServer,
+            path: Path,
+            position: Position,
+            content: Optional[str] = None,
+        ) -> List[Dict[str, Any]]:
+            self._initialize(client, path)
+
+            path = path / 'features' / 'project.feature'
+            self._open(client, path, content)
+
+            params = TextDocumentPositionParams(
+                text_document=TextDocumentIdentifier(
+                    uri=path.as_uri(),
+                ),
+                position=position,
+            )
+
+            response = client.lsp.send_request(DEFINITION, params).result(timeout=3)  # type: ignore
+
+            return cast(List[Dict[str, Any]], response)
 
         @pytest.mark.timeout(60)
         def test_initialize(self, lsp_fixture: LspFixture) -> None:
@@ -881,3 +945,53 @@ Args:
             )
 
             assert response is None
+
+        def test_definition(self, lsp_fixture: LspFixture) -> None:
+            client = lsp_fixture.client
+
+            response = self._definition(
+                client, lsp_fixture.datadir, Position(line=2, character=30)
+            )
+
+            assert response is None
+
+            request_payload_dir = lsp_fixture.datadir / 'features' / 'requests' / 'test'
+            request_payload_dir.mkdir(exist_ok=True, parents=True)
+            try:
+                test_txt_file = request_payload_dir / 'test.txt'
+                test_txt_file.write_text('hello world!')
+                response = self._definition(
+                    client,
+                    lsp_fixture.datadir,
+                    Position(line=3, character=20),
+                    content='''Feature:
+  Scenario: test
+    Given a user of type "RestApi" load testing "http://localhost"
+    Then post request "test/test.txt" with name "test request" to endpoint "/api/test"
+''',
+                )
+                assert len(response) == 1
+                actual_definition = response[0]
+                assert actual_definition['targetUri'] == test_txt_file.as_uri()
+                assert actual_definition.get('targetRange', {}).get('start', None) == {
+                    'line': 0,
+                    'character': 0,
+                }
+                assert actual_definition.get('targetRange', {}).get('end', None) == {
+                    'line': 0,
+                    'character': 0,
+                }
+                assert actual_definition.get('targetSelectionRange', {}).get(
+                    'start', None
+                ) == {'line': 0, 'character': 0}
+                assert actual_definition.get('targetSelectionRange', {}).get(
+                    'end', None
+                ) == {'line': 0, 'character': 0}
+                assert actual_definition.get('originSelectionRange', {}).get(
+                    'start', None
+                ) == {'line': 3, 'character': 23}
+                assert actual_definition.get('originSelectionRange', {}).get(
+                    'end', None
+                ) == {'line': 3, 'character': 36}
+            finally:
+                rmtree(request_payload_dir)
