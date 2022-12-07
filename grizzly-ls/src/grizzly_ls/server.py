@@ -22,14 +22,14 @@ from time import perf_counter
 import gevent.monkey  # type: ignore
 
 from pygls.server import LanguageServer
-from pygls.lsp.methods import (
-    COMPLETION,
+from pygls.workspace import Document
+from pygls.capabilities import get_capability
+from lsprotocol.types import (
     INITIALIZE,
     WORKSPACE_DID_CHANGE_CONFIGURATION,
-    HOVER,
-    DEFINITION,
-)
-from pygls.lsp.types import (
+    TEXT_DOCUMENT_HOVER,
+    TEXT_DOCUMENT_DEFINITION,
+    TEXT_DOCUMENT_COMPLETION,
     CompletionParams,
     CompletionList,
     CompletionItem,
@@ -38,20 +38,15 @@ from pygls.lsp.types import (
     DefinitionParams,
     MessageType,
     Hover,
+    HoverParams,
     InsertTextFormat,
-)
-from pygls.lsp.types.workspace import (
     DidChangeConfigurationParams as WorkspaceDidChangeConfigurationParams,
-)
-from pygls.lsp.types.basic_structures import (
     Position,
-    TextDocumentPositionParams,
-    MarkupKind,
     MarkupContent,
+    MarkupKind,
     Range,
     LocationLink,
 )
-from pygls.workspace import Document
 
 from behave.i18n import languages
 
@@ -195,7 +190,8 @@ class GrizzlyLanguageServer(LanguageServer):
 
             self._compile_inventory(root_path, project_name)
 
-            markup_supported = self.client_capabilities.get_capability(
+            markup_supported: List[MarkupKind] = get_capability(
+                self.client_capabilities,
                 'text_document.completion.completion_item.documentation_format',
                 [MarkupKind.Markdown],
             )
@@ -204,7 +200,7 @@ class GrizzlyLanguageServer(LanguageServer):
             else:
                 self.markup_kind = markup_supported[0]
 
-        @self.feature(COMPLETION)
+        @self.feature(TEXT_DOCUMENT_COMPLETION)
         def completion(params: CompletionParams) -> CompletionList:
             assert self.steps is not None, 'no steps in inventory'
 
@@ -234,8 +230,8 @@ class GrizzlyLanguageServer(LanguageServer):
         ) -> None:
             self.logger.debug(params)
 
-        @self.feature(HOVER)
-        def hover(params: TextDocumentPositionParams) -> Optional[Hover]:
+        @self.feature(TEXT_DOCUMENT_HOVER)
+        def hover(params: HoverParams) -> Optional[Hover]:
             hover: Optional[Hover] = None
             help_text: Optional[str] = None
             current_line = self._current_line(params.text_document.uri, params.position)
@@ -281,7 +277,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
             return hover
 
-        @self.feature(DEFINITION)
+        @self.feature(TEXT_DOCUMENT_DEFINITION)
         def definition(params: DefinitionParams) -> Optional[List[LocationLink]]:
             current_line = self._current_line(params.text_document.uri, params.position)
             matches = re.finditer(r'"([^"]*)"', current_line, re.MULTILINE)

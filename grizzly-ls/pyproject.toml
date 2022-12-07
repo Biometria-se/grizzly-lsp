@@ -6,7 +6,7 @@ build-backend = 'setuptools.build_meta'
 name = 'grizzly-loadtester-ls'
 description = 'LSP server implementation for grizzly-loadtester load scenario development'
 dependencies = [
-    'pygls >=0.13.0,<1.0.0',
+    'pygls >=1.0.0,<1.1.0',
     'behave ==1.2.6'
 ]
 readme = 'README.md'
