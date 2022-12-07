@@ -4,7 +4,6 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
   server:
@@ -23,7 +22,7 @@ jobs:
           - python-version: '3.10'
             runs-on: windows-latest
           - python-version: '3.10'
-            runs-on: macos-latest
+            runs-on: macos-12
 
     steps:
       - name: checkout
@@ -83,7 +82,7 @@ jobs:
 
       - name: test
         id: test
-        uses: GabrielBB/xvfb-action@v1
+        uses: hankolsen/xvfb-action@dcb076c1c3802845f73bb6fe14a009d8d3377255
         env:
           VERBOSE: true
         with:
@@ -198,6 +197,8 @@ jobs:
       - documentation-scripts
 
     steps:
-      - uses: technote-space/workflow-conclusion-action@v2
-      - run: |
+      - uses: technote-space/workflow-conclusion-action@v3
+
+      - name: is releaseable?
+        run: |
           [[ "${{ env.WORKFLOW_CONCLUSION }}" == "success" ]] || exit 1
