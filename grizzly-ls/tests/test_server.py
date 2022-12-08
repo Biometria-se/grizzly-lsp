@@ -17,26 +17,29 @@ from pytest_mock import MockerFixture
 
 from pygls.workspace import Workspace, Document
 from pygls.server import LanguageServer
-from pygls.lsp.methods import (
-    COMPLETION,
+from lsprotocol.types import (
+    TEXT_DOCUMENT_COMPLETION,
     INITIALIZE,
     TEXT_DOCUMENT_DID_OPEN,
-    HOVER,
-    DEFINITION,
-)
-from pygls.lsp.types import (
+    TEXT_DOCUMENT_HOVER,
+    TEXT_DOCUMENT_DEFINITION,
+    Hover,
     ClientCapabilities,
     CompletionContext,
     CompletionParams,
     CompletionItemKind,
+    CompletionList,
+    CompletionItem,
     DidOpenTextDocumentParams,
+    DefinitionParams,
     InitializeParams,
-)
-from pygls.lsp.types.basic_structures import (
+    LocationLink,
     Position,
+    HoverParams,
     TextDocumentItem,
     TextDocumentIdentifier,
-    TextDocumentPositionParams,
+    MarkupKind,
+    MarkupContent,
 )
 from behave.matchers import ParseMatcher
 
@@ -637,7 +640,7 @@ class TestGrizzlyLanguageServer:
             path: Path,
             content: str,
             context: Optional[CompletionContext] = None,
-        ) -> Dict[str, Any]:
+        ) -> Optional[CompletionList]:
             self._initialize(client, path)
 
             path = path / 'features' / 'project.feature'
@@ -646,6 +649,9 @@ class TestGrizzlyLanguageServer:
             lines = content.split('\n')
             line = len(lines) - 1
             character = len(lines[-1]) - 1
+
+            if character < 0:
+                character = 0
 
             params = CompletionParams(
                 text_document=TextDocumentIdentifier(
@@ -657,14 +663,11 @@ class TestGrizzlyLanguageServer:
                 work_done_token=None,
             )
 
-            if context is None:
-                del params.context
+            response = client.lsp.send_request(TEXT_DOCUMENT_COMPLETION, params).result(timeout=3)  # type: ignore
 
-            response = client.lsp.send_request(COMPLETION, params).result(timeout=3)  # type: ignore
+            assert response is None or isinstance(response, CompletionList)
 
-            assert isinstance(response, dict)
-
-            return cast(Dict[str, Any], response)
+            return cast(Optional[CompletionList], response)
 
         def _hover(
             self,
@@ -672,23 +675,25 @@ class TestGrizzlyLanguageServer:
             path: Path,
             position: Position,
             content: Optional[str] = None,
-        ) -> Dict[str, Any]:
+        ) -> Optional[Hover]:
             self._initialize(client, path)
 
             path = path / 'features' / 'project.feature'
 
             self._open(client, path, content)
 
-            params = TextDocumentPositionParams(
+            params = HoverParams(
                 text_document=TextDocumentIdentifier(
                     uri=path.as_uri(),
                 ),
                 position=position,
             )
 
-            response = client.lsp.send_request(HOVER, params).result(timeout=3)  # type: ignore
+            response = client.lsp.send_request(TEXT_DOCUMENT_HOVER, params).result(timeout=3)  # type: ignore
 
-            return cast(Dict[str, Any], response)
+            assert response is None or isinstance(response, Hover)
+
+            return cast(Optional[Hover], response)
 
         def _definition(
             self,
@@ -696,22 +701,24 @@ class TestGrizzlyLanguageServer:
             path: Path,
             position: Position,
             content: Optional[str] = None,
-        ) -> List[Dict[str, Any]]:
+        ) -> Optional[List[LocationLink]]:
             self._initialize(client, path)
 
             path = path / 'features' / 'project.feature'
             self._open(client, path, content)
 
-            params = TextDocumentPositionParams(
+            params = DefinitionParams(
                 text_document=TextDocumentIdentifier(
                     uri=path.as_uri(),
                 ),
                 position=position,
             )
 
-            response = client.lsp.send_request(DEFINITION, params).result(timeout=3)  # type: ignore
+            response = client.lsp.send_request(TEXT_DOCUMENT_DEFINITION, params).result(timeout=3)  # type: ignore
 
-            return cast(List[Dict[str, Any]], response)
+            assert response is None or isinstance(response, list)
+
+            return cast(Optional[List[LocationLink]], response)
 
         @pytest.mark.timeout(60)
         def test_initialize(self, lsp_fixture: LspFixture) -> None:
@@ -748,15 +755,15 @@ class TestGrizzlyLanguageServer:
             client = lsp_fixture.client
 
             def filter_keyword_properties(
-                keywords: List[Dict[str, Any]]
+                items: List[CompletionItem],
             ) -> List[Dict[str, Any]]:
                 return [
                     {
-                        key: value
-                        for key, value in keyword.items()
+                        key: getattr(item, key)
+                        for key in item.__dir__()
                         if key in ['label', 'kind']
                     }
-                    for keyword in keywords
+                    for item in items
                 ]
 
             # partial match, keyword containing 'B'
@@ -768,9 +775,9 @@ class TestGrizzlyLanguageServer:
         B''',
             )
 
-            assert not response.get('isIncomplete', True)
-            items = response.get('items', [])
-            assert filter_keyword_properties(items) == [
+            assert response is not None
+            assert not response.is_incomplete
+            assert filter_keyword_properties(response.items) == [
                 {
                     'label': 'Background',
                     'kind': 14,
@@ -789,9 +796,9 @@ class TestGrizzlyLanguageServer:
     Scenario:
         en''',
             )
-            assert not response.get('isIncomplete', True)
-            items = response.get('items', [])
-            assert filter_keyword_properties(items) == [
+            assert response is not None
+            assert not response.is_incomplete
+            assert filter_keyword_properties(response.items) == [
                 {
                     'label': 'Given',
                     'kind': 14,
@@ -812,13 +819,13 @@ class TestGrizzlyLanguageServer:
 
             # all keywords
             response = self._completion(client, lsp_fixture.datadir, '')
-            assert not response.get('isIncomplete', True)
-            items = response.get('items', [])
+            assert response is not None
+            assert not response.is_incomplete
             unexpected_kinds = list(
-                filter(lambda k: k != 14, map(lambda k: k.get('kind', None), items))
+                filter(lambda k: k != 14, map(lambda k: k.kind, response.items))
             )
             assert len(unexpected_kinds) == 0
-            labels = list(map(lambda k: k.get('label', None), items))
+            labels = list(map(lambda k: k.label, response.items))
             assert all([True if label is not None else False for label in labels])
             assert labels == ['Feature']
 
@@ -828,17 +835,18 @@ class TestGrizzlyLanguageServer:
             # all Given/And steps
             for keyword in ['Given', 'And']:
                 response = self._completion(client, lsp_fixture.datadir, keyword)
-                assert not response.get('isIncomplete', True)
+                assert response is not None
+                assert not response.is_incomplete
                 unexpected_kinds = list(
                     filter(
                         lambda s: s != 3,
-                        map(lambda s: s.get('kind', None), response.get('items', [])),
+                        map(lambda s: s.kind, response.items),
                     )
                 )
                 assert len(unexpected_kinds) == 0
 
                 labels = list(
-                    map(lambda s: s.get('label', None), response.get('items', []))
+                    map(lambda s: s.label, response.items),
                 )
                 assert len(labels) > 0
                 assert all([True if label is not None else False for label in labels])
@@ -849,17 +857,18 @@ class TestGrizzlyLanguageServer:
                 assert 'a user of type "" with weight "" load testing ""' in labels
 
             response = self._completion(client, lsp_fixture.datadir, 'Given value')
-            assert not response.get('isIncomplete', True)
+            assert response is not None
+            assert not response.is_incomplete
             unexpected_kinds = list(
                 filter(
                     lambda s: s != 3,
-                    map(lambda s: s.get('kind', None), response.get('items', [])),
+                    map(lambda s: s.kind, response.items),
                 )
             )
             assert len(unexpected_kinds) == 0
 
             labels = list(
-                map(lambda s: s.get('label', None), response.get('items', []))
+                map(lambda s: s.label, response.items),
             )
             assert len(labels) > 0
             assert all([True if label is not None else False for label in labels])
@@ -868,17 +877,18 @@ class TestGrizzlyLanguageServer:
             assert 'value for variable "" is ""'
 
             response = self._completion(client, lsp_fixture.datadir, 'Given a user of')
-            assert not response.get('isIncomplete', True)
+            assert response is not None
+            assert not response.is_incomplete
             unexpected_kinds = list(
                 filter(
                     lambda s: s != 3,
-                    map(lambda s: s.get('kind', None), response.get('items', [])),
+                    map(lambda s: s.kind, response.items),
                 )
             )
             assert len(unexpected_kinds) == 0
 
             labels = list(
-                map(lambda s: s.get('label', None), response.get('items', []))
+                map(lambda s: s.label, response.items),
             )
             assert len(labels) > 0
             assert all([True if label is not None else False for label in labels])
@@ -893,17 +903,17 @@ class TestGrizzlyLanguageServer:
                 client, lsp_fixture.datadir, Position(line=2, character=31)
             )
 
-            assert response.get('range', {}).get('end', {}) == {
-                'character': 85,
-                'line': 2,
-            }
-            assert response.get('range', {}).get('start', {}) == {
-                'character': 4,
-                'line': 2,
-            }
-            assert response.get('contents', {}).get('kind', None) == 'markdown'
+            assert response is not None
+            assert response.range is not None
+
+            assert response.range.end.character == 85
+            assert response.range.end.line == 2
+            assert response.range.start.character == 4
+            assert response.range.start.line == 2
+            assert isinstance(response.contents, MarkupContent)
+            assert response.contents.kind == MarkupKind.Markdown
             assert (
-                response.get('contents', {}).get('value', None)
+                response.contents.value
                 == '''Sets which type of users the scenario should use and which `host` is the target,
 together with `weight` of the user (how many instances of this user should spawn relative to others).
 
@@ -971,28 +981,22 @@ Args:
     Then post request "test/test.txt" with name "test request" to endpoint "/api/test"
 ''',
                 )
+                assert response is not None
                 assert len(response) == 1
                 actual_definition = response[0]
-                assert actual_definition['targetUri'] == test_txt_file.as_uri()
-                assert actual_definition.get('targetRange', {}).get('start', None) == {
-                    'line': 0,
-                    'character': 0,
-                }
-                assert actual_definition.get('targetRange', {}).get('end', None) == {
-                    'line': 0,
-                    'character': 0,
-                }
-                assert actual_definition.get('targetSelectionRange', {}).get(
-                    'start', None
-                ) == {'line': 0, 'character': 0}
-                assert actual_definition.get('targetSelectionRange', {}).get(
-                    'end', None
-                ) == {'line': 0, 'character': 0}
-                assert actual_definition.get('originSelectionRange', {}).get(
-                    'start', None
-                ) == {'line': 3, 'character': 23}
-                assert actual_definition.get('originSelectionRange', {}).get(
-                    'end', None
-                ) == {'line': 3, 'character': 36}
+                assert actual_definition.target_uri == test_txt_file.as_uri()
+                assert actual_definition.target_range.start.line == 0
+                assert actual_definition.target_range.start.character == 0
+                assert actual_definition.target_range.end.line == 0
+                assert actual_definition.target_range.end.character == 0
+                assert actual_definition.target_selection_range.start.line == 0
+                assert actual_definition.target_selection_range.start.character == 0
+                assert actual_definition.target_selection_range.end.line == 0
+                assert actual_definition.target_selection_range.end.character == 0
+                assert actual_definition.origin_selection_range is not None
+                assert actual_definition.origin_selection_range.start.line == 3
+                assert actual_definition.origin_selection_range.start.character == 23
+                assert actual_definition.origin_selection_range.end.line == 3
+                assert actual_definition.origin_selection_range.end.character == 36
             finally:
                 rmtree(request_payload_dir)

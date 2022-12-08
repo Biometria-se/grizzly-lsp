@@ -1,6 +1,6 @@
 from typing import List
 
-from pygls.lsp.types import CompletionItemKind, CompletionItem
+from lsprotocol.types import CompletionItemKind, CompletionItem
 
 
 def normalize_completion_item(

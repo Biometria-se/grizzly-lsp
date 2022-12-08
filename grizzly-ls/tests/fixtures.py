@@ -10,7 +10,7 @@ from importlib import reload as reload_module
 from pytest_mock import MockerFixture
 
 from pygls.server import LanguageServer
-from pygls.lsp.methods import EXIT
+from lsprotocol.types import EXIT
 from grizzly_ls.server import GrizzlyLanguageServer
 
 
