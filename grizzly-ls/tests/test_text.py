@@ -234,9 +234,9 @@ def test_get_step_parts() -> None:
     )
     assert get_step_parts('  And are you "ok"?') == (
         'And',
-        'are you ""?',
+        'are you "ok"?',
     )
     assert get_step_parts('     Then   make sure   that "value"  is "None"') == (
         'Then',
-        'make sure that "" is ""',
+        'make sure that "value" is "None"',
     )

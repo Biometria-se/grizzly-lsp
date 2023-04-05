@@ -212,10 +212,10 @@ class GrizzlyLanguageServer(LanguageServer):
 
             self.logger.debug(f'{keyword=}, {step=}, {self.keywords=}')
 
-            if keyword is None or keyword not in self.keywords:
-                items = self._complete_keyword(keyword, document)
-            elif keyword is not None:
+            if keyword is not None and keyword in self.keywords:
                 items = self._complete_step(keyword, step)
+            else:
+                items = self._complete_keyword(keyword, document)
 
             # self.logger.debug(f'completion: {items=}')
 
@@ -384,9 +384,15 @@ class GrizzlyLanguageServer(LanguageServer):
         expression: Optional[str],
     ) -> List[CompletionItem]:
         if keyword in self.keyword_any:
-            steps = [
-                step for keyword_steps in self.steps.values() for step in keyword_steps
-            ]
+            steps = list(
+                set(
+                    [
+                        re.sub(r'"[^"]*"', '""', step)
+                        for keyword_steps in self.steps.values()
+                        for step in keyword_steps
+                    ]
+                )
+            )
         else:
             steps = self.steps.get(keyword.lower(), [])
 
@@ -416,32 +422,36 @@ class GrizzlyLanguageServer(LanguageServer):
                 for step in steps
             ]
         else:
+            # remove any user values enclosed with double-quotes
+            expression_shell = re.sub(r'"[^"]*"', '""', expression)
+
             # 1. exact matching
-            matched_steps_1: Set[str] = set(filter(lambda s: s.startswith(expression), steps))  # type: ignore
+            matched_steps_1: Set[str] = set(filter(lambda s: s.startswith(expression_shell), steps))  # type: ignore
 
             matched_steps_2: Set[str] = set()
             matched_steps_3: Set[str] = set()
 
             if len(matched_steps_1) < 1 or ' ' not in expression:
                 # 2. close enough matching
-                matched_steps_2 = set(filter(lambda s: expression in s, steps))  # type: ignore
+                matched_steps_2 = set(filter(lambda s: expression_shell in s, steps))  # type: ignore
 
                 # 3. "fuzzy" matching
                 matched_steps_3 = set(
-                    get_close_matches(expression, steps, len(steps), 0.6)
+                    get_close_matches(expression_shell, steps, len(steps), 0.6)
                 )
 
             # keep order so that 1. matches comes before 2. matches etc.
             matched_steps_container: Dict[str, CompletionItem] = {}
 
+            input_matches = list(
+                re.finditer(r'"([^"]*)"', expression, flags=re.MULTILINE)
+            )
+
             for matched_step in itertools.chain(
                 matched_steps_1, matched_steps_2, matched_steps_3
             ):
-                input_matches = re.finditer(
-                    r'"([^"]*)"', expression, flags=re.MULTILINE
-                )
-                output_matches = re.finditer(
-                    r'"([^"]*)"', matched_step, flags=re.MULTILINE
+                output_matches = list(
+                    re.finditer(r'"([^"]*)"', matched_step, flags=re.MULTILINE)
                 )
 
                 # suggest step with already entetered variables in their correct place
@@ -453,7 +463,14 @@ class GrizzlyLanguageServer(LanguageServer):
 
                 preselect: bool = False
                 if ' ' in expression:
+                    # only insert the part of the step that has not already been written, up until last space, since vscode
+                    # seems to insert text word wise
                     insert_text = matched_step.replace(expression, '')
+                    if not insert_text.startswith(' '):
+                        try:
+                            _, insert_text = matched_step.rsplit(' ', 1)
+                        except:
+                            pass
                 else:
                     insert_text = matched_step
 
@@ -464,8 +481,12 @@ class GrizzlyLanguageServer(LanguageServer):
                     preselect = True
 
                 # if typed expression ends with whitespace, do not insert text starting with a whitespace
-                if expression[-1] == ' ':
-                    insert_text = insert_text.strip()
+                if (
+                    expression[-1] == ' '
+                    and expression[-2] != ' '
+                    and insert_text[0] == ' '
+                ):
+                    insert_text = insert_text[1:]
 
                 if '""' in insert_text:
                     snippet_matches = re.finditer(
@@ -589,6 +610,8 @@ class GrizzlyLanguageServer(LanguageServer):
 
         if step is None:
             return None
+
+        step = re.sub(r'"[^"]*"', '""', step)
 
         step_help = self.help.get(step.strip(), None)
 

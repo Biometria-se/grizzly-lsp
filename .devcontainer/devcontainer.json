@@ -100,12 +100,12 @@
   // "postCreateCommand": "pip3 install --user -r requirements.txt",
   // Comment out connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
   "remoteUser": "vscode",
-    "features": {
-      "ghcr.io/devcontainers/features/docker-from-docker:1": {
-          "version": "latest"
-      },
-      "ghcr.io/devcontainers/features/git:1": {
-          "version": "os-provided"
-      }
+  "features": {
+    "ghcr.io/devcontainers/features/docker-from-docker:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/git:1": {
+      "version": "os-provided"
+    }
   }
 }

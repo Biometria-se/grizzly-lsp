@@ -351,9 +351,6 @@ class Normalizer:
 
 def get_step_parts(line: str) -> Tuple[Optional[str], Optional[str]]:
     if len(line) > 0:
-        # remove any user values enclosed with double-quotes
-        line = re.sub(r'"[^"]*"', '""', line)
-
         # remove multiple white spaces
         line = re.sub(r'^\s+', '', line)
         line = re.sub(r'\s{2,}', ' ', line)

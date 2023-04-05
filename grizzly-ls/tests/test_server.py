@@ -298,6 +298,63 @@ class TestGrizzlyLanguageServer:
                 == 'a user of type "RestApi" with weight "1" load testing ""'
             )
 
+            actual_completed_steps = server._complete_step('And', 'repeat for "1" it')
+
+            matched_steps = normalize_completion_item(
+                actual_completed_steps,
+                CompletionItemKind.Function,
+            )
+
+            assert sorted(matched_steps) == sorted(
+                ['repeat for "1" iterations', 'repeat for "1" iteration']
+            )
+
+            matched_insert_text = normalize_completion_item(
+                actual_completed_steps,
+                CompletionItemKind.Function,
+                'insert_text',
+            )
+
+            assert sorted(matched_insert_text) == sorted(['iteration', 'iterations'])
+
+            actual_completed_steps = server._complete_step('And', 'repeat for "1"')
+
+            matched_steps = normalize_completion_item(
+                actual_completed_steps,
+                CompletionItemKind.Function,
+            )
+
+            assert sorted(matched_steps) == sorted(
+                ['repeat for "1" iterations', 'repeat for "1" iteration']
+            )
+
+            matched_insert_text = normalize_completion_item(
+                actual_completed_steps,
+                CompletionItemKind.Function,
+                'insert_text',
+            )
+
+            assert sorted(matched_insert_text) == sorted([' iteration', ' iterations'])
+
+            actual_completed_steps = server._complete_step('And', 'repeat for "1" ')
+
+            matched_steps = normalize_completion_item(
+                actual_completed_steps,
+                CompletionItemKind.Function,
+            )
+
+            assert sorted(matched_steps) == sorted(
+                ['repeat for "1" iterations', 'repeat for "1" iteration']
+            )
+
+            matched_insert_text = normalize_completion_item(
+                actual_completed_steps,
+                CompletionItemKind.Function,
+                'insert_text',
+            )
+
+            assert sorted(matched_insert_text) == sorted(['iteration', 'iterations'])
+
     def test__normalize_step_expression(
         self, lsp_fixture: LspFixture, mocker: MockerFixture, caplog: LogCaptureFixture
     ) -> None:
