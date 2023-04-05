@@ -158,8 +158,8 @@ describe('Should do completion on steps', () => {
         setTestContent('Feature:\n\tBackground:\n\tScenario:\n\t\tThen  save response metadata "hello"');
         const actual = await testCompletion(docUri, new vscode.Position(3, 37));
         const expected = [
-            'save response metadata "" in variable ""',
-            'save response metadata "" that matches "" in variable ""',
+            'save response metadata "hello" in variable ""',
+            'save response metadata "hello" that matches "" in variable ""',
         ];
 
         const actualLabels = actual.items.map((item) => item.label);
@@ -241,6 +241,36 @@ describe('Should do completion on steps', () => {
         actual.items.forEach((item) => {
             expect(item.kind).to.be.equal(vscode.CompletionItemKind.Function);
         });
+    });
+
+    it('Complete steps, keyword `And` step `repeat for "" it`', async () => {
+        setTestContent('Feature:\n\tBackground:\n\tScenario:\n\t\tGiven a user of type "RestApi" load testing "https://www.example.org"\n\t\tAnd repeat for "1" it');
+        const actual = await testCompletion(docUri, new vscode.Position(4, 22));
+
+        const actualLabels = actual.items.map((item) => item.label);
+        const actualInsertText = actual.items.map((item) => item.insertText);
+        expect(actualInsertText).to.be.eql(['iteration', 'iterations']);
+        expect(actualLabels).to.be.eql(['repeat for "1" iteration', 'repeat for "1" iterations']);
+    });
+
+    it('Complete steps, keyword `And` step `repeat for "" it `', async () => {
+        setTestContent('Feature:\n\tBackground:\n\tScenario:\n\t\tGiven a user of type "RestApi" load testing "https://www.example.org"\n\t\tAnd repeat for "1" ');
+        const actual = await testCompletion(docUri, new vscode.Position(4, 22));
+
+        const actualLabels = actual.items.map((item) => item.label);
+        const actualInsertText = actual.items.map((item) => item.insertText);
+        expect(actualInsertText).to.be.eql(['iteration', 'iterations']);
+        expect(actualLabels).to.be.eql(['repeat for "1" iteration', 'repeat for "1" iterations']);
+    });
+
+    it('Complete steps, keyword `And` step `repeat for ""`', async () => {
+        setTestContent('Feature:\n\tBackground:\n\tScenario:\n\t\tGiven a user of type "RestApi" load testing "https://www.example.org"\n\t\tAnd repeat for "1"');
+        const actual = await testCompletion(docUri, new vscode.Position(4, 22));
+
+        const actualLabels = actual.items.map((item) => item.label);
+        const actualInsertText = actual.items.map((item) => item.insertText);
+        expect(actualInsertText).to.be.eql([' iteration', ' iterations']);
+        expect(actualLabels).to.be.eql(['repeat for "1" iteration', 'repeat for "1" iterations']);
     });
 });
 

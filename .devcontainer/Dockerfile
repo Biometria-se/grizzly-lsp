@@ -4,6 +4,9 @@
 ARG VARIANT="3.9"
 FROM mcr.microsoft.com/vscode/devcontainers/python:0-${VARIANT}
 
+RUN rm  -rf /etc/apt/sources.list.d/yarn.list || true && \
+    apt-get update
+
 # [Option] Install Node.js
 ARG INSTALL_NODE="true"
 ARG NODE_VERSION="lts/*"
