@@ -14,70 +14,75 @@
     }
   },
   // Set *default* container specific settings.json values on container create.
-  "settings": {
-    "python.defaultInterpreterPath": "/usr/local/bin/python",
-    "python.pythonPath": "/usr/local/bin/python",
-    "python.languageServer": "Pylance",
-    "python.analysis.diagnosticSeverityOverrides": {
-      "reportUnusedFunction": "none"
-    },
-    "python.linting.enabled": true,
-    "python.linting.pylintEnabled": true,
-    "python.formatting.provider": "black",
-    "python.formatting.blackPath": "black",
-    "python.formatting.blackArgs": [
-      "--config=/workspaces/grizzly-vscode/grizzly-ls/pyproject.toml",
-      "-S",
-      "-l 180"
-    ],
-    "python.linting.flake8Path": "flake8",
-    "python.linting.mypyPath": "mypy",
-    "python.linting.pylintPath": "pylint",
-    "python.linting.pylintArgs": [
-      "--rcfile=${containerWorkspaceFolder}/grizzly-ls/pyproject.toml"
-    ],
-    "editor.formatOnSave": true,
-    "python.testing.cwd": "./grizzly-ls",
-    "python.testing.pytestArgs": [
-      "-c",
-      "./pyproject.toml",
-      "-o",
-      "testpaths=tests",
-      "--cov-reset",
-      "--cov=./src/grizzly_ls",
-      "--cov-report=xml:./.coverage.xml",
-      "."
-    ],
-    "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true,
-    "coverage-gutters.coverageFileNames": [],
-    "coverage-gutters.manualCoverageFilePaths": [
-      "${containerWorkspaceFolder}/grizzly-ls/.coverage.xml"
-    ],
-    "coverage-gutters.ignoredPathGlobs": "**/{node_modules,venv,.venv,vendor,tests}/**",
-    "[typescript]": {
-      "editor.defaultFormatter": "dbaeumer.vscode-eslint"
-    },
-    "editor.codeActionsOnSave": {
-      "source.fixAll.eslint": true
-    },
-    "eslint.validate": [
-      "typescript"
-    ]
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.pythonPath": "/usr/local/bin/python",
+        "python.languageServer": "Pylance",
+        "python.analysis.diagnosticSeverityOverrides": {
+          "reportUnusedFunction": "none"
+        },
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": true,
+        "python.formatting.provider": "black",
+        "python.formatting.blackPath": "black",
+        "python.formatting.blackArgs": [
+          "--config=/workspaces/grizzly-vscode/grizzly-ls/pyproject.toml",
+          "-S",
+          "-l 180"
+        ],
+        "python.linting.flake8Path": "flake8",
+        "python.linting.mypyPath": "mypy",
+        "python.linting.pylintPath": "pylint",
+        "python.linting.pylintArgs": [
+          "--rcfile=${containerWorkspaceFolder}/grizzly-ls/pyproject.toml"
+        ],
+        "editor.formatOnSave": true,
+        "python.testing.cwd": "./grizzly-ls",
+        "python.testing.pytestArgs": [
+          "-c",
+          "./pyproject.toml",
+          "-o",
+          "testpaths=tests",
+          "--cov-reset",
+          "--cov=./src/grizzly_ls",
+          "--cov-report=xml:./.coverage.xml",
+          "."
+        ],
+        "python.testing.unittestEnabled": false,
+        "python.testing.pytestEnabled": true,
+        "coverage-gutters.coverageFileNames": [],
+        "coverage-gutters.manualCoverageFilePaths": [
+          "${containerWorkspaceFolder}/grizzly-ls/.coverage.xml"
+        ],
+        "coverage-gutters.ignoredPathGlobs": "**/{node_modules,venv,.venv,vendor,tests}/**",
+        "[typescript]": {
+          "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+        },
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": true
+        },
+        "eslint.validate": [
+          "typescript"
+        ]
+      },
+      // Add the IDs of extensions you want installed when the container is created.
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "EditorConfig.EditorConfig",
+        "oderwat.indent-rainbow",
+        "eamodio.gitlens",
+        "ryanluker.vscode-coverage-gutters",
+        "dbaeumer.vscode-eslint"
+      ]
+    }
   },
-  // Add the IDs of extensions you want installed when the container is created.
-  "extensions": [
-    "ms-python.python",
-    "ms-python.vscode-pylance",
-    "EditorConfig.EditorConfig",
-    "oderwat.indent-rainbow",
-    "eamodio.gitlens",
-    "ryanluker.vscode-coverage-gutters",
-    "dbaeumer.vscode-eslint"
-  ],
   "mounts": [
     "source=/etc/timezone,target=/etc/timezone,type=bind",
-    "source=/etc/localtime,target=/etc/localtime,type=bind"
+    "source=/etc/localtime,target=/etc/localtime,type=bind",
+    "source=grizzly-lsp-bashhistory,target=/commandhistory,type=volume"
   ],
   "runArgs": [
     "--add-host=host.docker.internal:host-gateway"
@@ -95,8 +100,12 @@
   // "postCreateCommand": "pip3 install --user -r requirements.txt",
   // Comment out connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
   "remoteUser": "vscode",
-  "features": {
-    "docker-from-docker": "latest",
-    "git": "os-provided"
+    "features": {
+      "ghcr.io/devcontainers/features/docker-from-docker:1": {
+          "version": "latest"
+      },
+      "ghcr.io/devcontainers/features/git:1": {
+          "version": "os-provided"
+      }
   }
 }

@@ -27,3 +27,13 @@ RUN curl https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo b
 
 # [Optional] Uncomment this line to install global node packages.
 RUN su vscode -c "source /usr/local/share/nvm/nvm.sh && npm install -g xvfb-maybe vsce" 2>&1
+
+RUN rm -rf /etc/localtime || true
+
+ARG USERNAME=vscode
+
+RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
+    && mkdir /commandhistory \
+    && touch /commandhistory/.bash_history \
+    && chown -R $USERNAME /commandhistory \
+    && echo "$SNIPPET" >> "/home/$USERNAME/.bashrc"
