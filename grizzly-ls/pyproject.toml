@@ -60,7 +60,7 @@ dev = [
     'grizzly-loadtester',
     'requests',
     'types-requests',
-    'pip-licenses',
+    'pip-licenses <4.2.0',
     'pytablewriter'
 ]
 
