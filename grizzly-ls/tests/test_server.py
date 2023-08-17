@@ -191,7 +191,7 @@ class TestGrizzlyLanguageServer:
                 'save response payload "" in variable ""',
                 'save response payload "" that matches "" in variable ""',
                 'save response metadata "" that matches "" in variable ""',
-                'get "" with name "" and save response in ""',
+                'get "" with name "" and save response payload in ""',
                 'parse date "" and save in variable ""',
                 'parse "" as "undefined" and save value of "" in variable ""',
                 'parse "" as "plain" and save value of "" in variable ""',

@@ -24,7 +24,7 @@ async function main() {
         await runTests({
             extensionDevelopmentPath,
             extensionTestsPath,
-            launchArgs: [testWorkspace],
+            launchArgs: [testWorkspace, '--disable-chromium-sandbox'],
         });
     } catch (err) {
         console.error(err);

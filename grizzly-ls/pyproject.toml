@@ -25,6 +25,7 @@ classifiers = [
     'Programming Language :: Python :: 3.8',
     'Programming Language :: Python :: 3.9',
     'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: 3.11',
     'Programming Language :: Python :: Implementation :: CPython'
 ]
 keywords = [
@@ -57,7 +58,7 @@ dev = [
     'flake8-pyproject',
     'black',
     'mypy',
-    'grizzly-loadtester',
+    'grizzly-loadtester @ git+https://github.com/Biometria-se/grizzly.git@main',
     'requests',
     'types-requests',
     'pip-licenses <4.2.0',
@@ -66,7 +67,7 @@ dev = [
 
 ci = [
     'build',
-    'twine'
+    'twine >=3.8.0,<4.0.0'
 ]
 
 [tool.setuptools_scm]
