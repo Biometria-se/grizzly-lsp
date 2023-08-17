@@ -7,7 +7,7 @@
     "context": "..",
     "args": {
       // Update 'VARIANT' to pick a Python version: 3, 3.6, 3.7, 3.8, 3.9
-      "VARIANT": "3.10",
+      "VARIANT": "3.11",
       // Options
       "INSTALL_NODE": "true",
       "NODE_VERSION": "lts/*"
@@ -23,19 +23,28 @@
         "python.analysis.diagnosticSeverityOverrides": {
           "reportUnusedFunction": "none"
         },
-        "python.linting.enabled": true,
-        "python.linting.pylintEnabled": true,
-        "python.formatting.provider": "black",
-        "python.formatting.blackPath": "black",
-        "python.formatting.blackArgs": [
-          "--config=/workspaces/grizzly-vscode/grizzly-ls/pyproject.toml",
+        "pylint.path": [
+          "pylint"
+        ],
+        "flake8.path": [
+          "flake8"
+        ],
+        "flake8.args": [
+          "--config=${containerWorkspaceFolder}/grizzly-ls/pyproject.toml"
+        ],
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.black-formatter",
+          "editor.formatOnSave": true
+        },
+        "black-formatter.path": [
+          "black"
+        ],
+        "black-formatter.args": [
+          "--config=${containerWorkspaceFolder}/grizzly-ls/pyproject.toml",
           "-S",
           "-l 180"
         ],
-        "python.linting.flake8Path": "flake8",
-        "python.linting.mypyPath": "mypy",
-        "python.linting.pylintPath": "pylint",
-        "python.linting.pylintArgs": [
+        "pylint.args": [
           "--rcfile=${containerWorkspaceFolder}/grizzly-ls/pyproject.toml"
         ],
         "editor.formatOnSave": true,
@@ -71,6 +80,10 @@
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
+        "ms-python.vscode-pylance",
+        "ms-python.pylint",
+        "ms-python.flake8",
+        "ms-python.black-formatter",
         "EditorConfig.EditorConfig",
         "oderwat.indent-rainbow",
         "eamodio.gitlens",

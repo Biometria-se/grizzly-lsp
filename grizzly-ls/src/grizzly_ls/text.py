@@ -1,3 +1,4 @@
+# pyright: reportGeneralTypeIssues=false, reportUnknownVariableType=false, reportUnknownParameterType=false, reportUnknownArgumentType=false
 import re
 import itertools
 import string
@@ -17,15 +18,32 @@ from typing import (
     cast,
 )
 from dataclasses import dataclass, field
-from sre_constants import (  # pylint: disable=no-name-in-module  # type: ignore
-    _NamedIntConstant as SreNamedIntConstant,  # type: ignore
-    ANY,
-    BRANCH,
-    LITERAL,
-    MAX_REPEAT,
-    SUBPATTERN,
-)
-from sre_parse import SubPattern, parse as sre_parse
+
+
+try:
+    from re._constants import (  # type: ignore
+        _NamedIntConstant as SreNamedIntConstant,
+        ANY,
+        BRANCH,
+        LITERAL,
+        MAX_REPEAT,
+        SUBPATTERN,
+    )
+except ImportError:
+    from sre_constants import (
+        _NamedIntConstant as SreNamedIntConstant,
+        ANY,
+        BRANCH,
+        LITERAL,
+        MAX_REPEAT,
+        SUBPATTERN,
+    )
+
+try:
+    from re._parser import parse as sre_parse, SubPattern  # type: ignore
+except ImportError:
+    from sre_parse import SubPattern, parse as sre_parse  # type: ignore
+
 
 SreParseTokens = Union[
     List[
@@ -146,10 +164,7 @@ class RegexPermutationResolver:
 
     def permute_tokens(self, tokens: SreParseTokens) -> List[str]:
         lists: List[List[str]]
-        lists = [
-            self.handle_token(token, cast(SreParseValue, value))
-            for token, value in tokens  # type: ignore
-        ]
+        lists = [self.handle_token(token, cast(SreParseValue, value)) for token, value in tokens]  # type: ignore
         output: List[str] = []
         for list in self.cartesian_join(lists):
             output.append(''.join(list))

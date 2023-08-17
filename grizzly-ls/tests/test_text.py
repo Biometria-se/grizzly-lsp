@@ -1,16 +1,28 @@
+# pyright: reportGeneralTypeIssues=false, reportUnknownVariableType=false, reportUnknownParameterType=false, reportUnknownArgumentType=false
 from typing import cast
 
 import string
 
-from sre_constants import (  # pylint: disable=no-name-in-module  # type: ignore
-    _NamedIntConstant as SreNamedIntConstant,  # type: ignore
-    ANY,
-    BRANCH,
-    LITERAL,
-    MAX_REPEAT,
-    SUBPATTERN,
-    IN,
-)
+try:
+    from re._constants import (  # type: ignore
+        _NamedIntConstant as SreNamedIntConstant,
+        ANY,
+        BRANCH,
+        LITERAL,
+        MAX_REPEAT,
+        SUBPATTERN,
+        IN,
+    )
+except ImportError:
+    from sre_constants import (
+        _NamedIntConstant as SreNamedIntConstant,
+        ANY,
+        BRANCH,
+        LITERAL,
+        MAX_REPEAT,
+        SUBPATTERN,
+        IN,
+    )
 
 import pytest
 
