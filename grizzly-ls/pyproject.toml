@@ -58,7 +58,7 @@ dev = [
     'flake8-pyproject',
     'black',
     'mypy',
-    'grizzly-loadtester @ git+https://github.com/Biometria-se/grizzly.git@main',
+    'grizzly-loadtester',
     'requests',
     'types-requests',
     'pip-licenses <4.2.0',
