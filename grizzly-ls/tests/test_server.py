@@ -355,6 +355,20 @@ class TestGrizzlyLanguageServer:
 
             assert sorted(matched_insert_text) == sorted(['iteration', 'iterations'])
 
+            actual_completed_steps = server._complete_step(
+                'Then', 'parse date "{{ datetime.now() }}" '
+            )
+            assert len(actual_completed_steps) == 1
+            actual_completed_step = actual_completed_steps[0]
+            assert actual_completed_step.insert_text == 'and save in variable "$1"'
+
+            actual_completed_steps = server._complete_step(
+                'Then', 'parse date "{{ datetime.now() }}"'
+            )
+            assert len(actual_completed_steps) == 1
+            actual_completed_step = actual_completed_steps[0]
+            assert actual_completed_step.insert_text == ' and save in variable "$1"'
+
     def test__normalize_step_expression(
         self, lsp_fixture: LspFixture, mocker: MockerFixture, caplog: LogCaptureFixture
     ) -> None:
@@ -639,13 +653,7 @@ class TestGrizzlyLanguageServer:
             params = InitializeParams(
                 process_id=1337,
                 root_uri=root.as_uri(),
-                capabilities=ClientCapabilities(
-                    workspace=None,
-                    text_document=None,
-                    window=None,
-                    general=None,
-                    experimental=None,
-                ),
+                capabilities=ClientCapabilities(),
                 client_info=None,
                 locale=None,
                 root_path=str(root),

@@ -348,9 +348,7 @@ class GrizzlyLanguageServer(LanguageServer):
             if keyword is not None:
                 keywords = cast(
                     List[str],
-                    list(
-                        filter(lambda k: keyword.strip().lower() in k.lower(), keywords)  # type: ignore
-                    ),
+                    list(filter(lambda k: keyword.strip().lower() in k.lower(), keywords)),  # type: ignore
                 )
 
         for keyword in sorted(keywords):
@@ -460,13 +458,14 @@ class GrizzlyLanguageServer(LanguageServer):
                     for input_match, output_match in zip(input_matches, output_matches):
                         matched_step = f'{matched_step[0:output_match.start()+offset]}"{input_match.group(1)}"{matched_step[output_match.end()+offset:]}'
                         offset += len(input_match.group(1))
+                        print(f'{matched_step=}')
 
                 preselect: bool = False
                 if ' ' in expression:
                     # only insert the part of the step that has not already been written, up until last space, since vscode
                     # seems to insert text word wise
                     insert_text = matched_step.replace(expression, '')
-                    if not insert_text.startswith(' '):
+                    if not insert_text.startswith(' ') and not expression.endswith(' '):
                         try:
                             _, insert_text = matched_step.rsplit(' ', 1)
                         except:

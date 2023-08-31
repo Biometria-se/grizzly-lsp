@@ -272,6 +272,16 @@ describe('Should do completion on steps', () => {
         expect(actualInsertText).to.be.eql([' iteration', ' iterations']);
         expect(actualLabels).to.be.eql(['repeat for "1" iteration', 'repeat for "1" iterations']);
     });
+
+    it('Complete steps, partial step expression', async () => {
+        setTestContent('Feature:\n\tBackground:\n\tScenario:\n\t\tGiven a user of type "RestApi" load testing "https://www.example.org"\n\t\tAnd repeat for "1" iteration\n\t\tThen parse date "{{ datetime.now() }}"');
+        const actual = await testCompletion(docUri, new vscode.Position(5, 42));
+
+        const actualLabels = actual.items.map((item) => item.label);
+        const actualInsertText = actual.items.map((item) => item.insertText);
+        expect(actualInsertText).to.be.eql([{'e': 1, 'value': ' and save in variable "$1"'}]);
+        expect(actualLabels).to.be.eql(['parse date "{{ datetime.now() }}" and save in variable ""']);
+    });
 });
 
 async function testCompletion(docUri: vscode.Uri, position: vscode.Position): Promise<vscode.CompletionList> {
