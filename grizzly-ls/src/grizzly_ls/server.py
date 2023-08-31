@@ -74,9 +74,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
     markup_kind: MarkupKind
 
-    def show_message(
-        self, message: str, msg_type: Optional[MessageType] = MessageType.Info
-    ) -> None:
+    def show_message(self, message: str, msg_type: Optional[MessageType] = MessageType.Info) -> None:
         super().show_message(message, msg_type=msg_type)  # type: ignore
 
     def __init__(self, *args: Tuple[Any, ...], **kwargs: Dict[str, Any]) -> None:
@@ -104,18 +102,10 @@ class GrizzlyLanguageServer(LanguageServer):
                 self.logger.error(error_message)
                 self.show_message(error_message, msg_type=MessageType.Error)
 
-            root_path = (
-                Path(unquote(url2pathname(urlparse(params.root_uri).path)))
-                if params.root_uri is not None
-                else Path(cast(str, params.root_path))
-            )
+            root_path = Path(unquote(url2pathname(urlparse(params.root_uri).path))) if params.root_uri is not None else Path(cast(str, params.root_path))
 
             # fugly as hell
-            if (
-                not root_path.exists()
-                and str(root_path)[0:1] == sep
-                and str(root_path)[2] == ':'
-            ):
+            if not root_path.exists() and str(root_path)[0:1] == sep and str(root_path)[2] == ':':
                 root_path = Path(str(root_path)[1:])
 
             self.root_path = root_path
@@ -131,12 +121,8 @@ class GrizzlyLanguageServer(LanguageServer):
             has_venv = virtual_environment.exists()
 
             if not has_venv:
-                self.logger.debug(
-                    f'creating virtual environment: {virtual_environment}'
-                )
-                self.show_message(
-                    'creating virtual environment for language server, this could take a while'
-                )
+                self.logger.debug(f'creating virtual environment: {virtual_environment}')
+                self.show_message('creating virtual environment for language server, this could take a while')
                 venv_create(str(virtual_environment))
 
             if platform.system() == 'Windows':  # pragma: no cover
@@ -205,17 +191,20 @@ class GrizzlyLanguageServer(LanguageServer):
             assert self.steps is not None, 'no steps in inventory'
 
             line = self._current_line(params.text_document.uri, params.position)
-            keyword, step = get_step_parts(line)
 
             items: List[CompletionItem] = []
             document = self.workspace.get_document(params.text_document.uri)
 
-            self.logger.debug(f'{keyword=}, {step=}, {self.keywords=}')
-
-            if keyword is not None and keyword in self.keywords:
-                items = self._complete_step(keyword, step)
+            if line[params.position.character - 1 : params.position.character + 1] == '{{':
+                items = self._complete_variable_name(line, document, params.position)
             else:
-                items = self._complete_keyword(keyword, document)
+                keyword, text = get_step_parts(line)
+                self.logger.debug(f'{keyword=}, {text=}, {self.keywords=}')
+
+                if keyword is not None and keyword in self.keywords:
+                    items = self._complete_step(keyword, text)
+                else:
+                    items = self._complete_keyword(keyword, document)
 
             # self.logger.debug(f'completion: {items=}')
 
@@ -239,14 +228,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
             self.logger.debug(f'{keyword=}, {step=}')
 
-            if (
-                step is None
-                or keyword is None
-                or (
-                    keyword.lower() not in self.steps
-                    and keyword not in self.keyword_any
-                )
-            ):
+            if step is None or keyword is None or (keyword.lower() not in self.steps and keyword not in self.keyword_any):
                 return None
 
             start = current_line.index(keyword)
@@ -259,12 +241,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
             if 'Args:' in help_text:
                 pre, post = help_text.split('Args:', 1)
-                text = '\n'.join(
-                    [
-                        self._format_arg_line(arg_line)
-                        for arg_line in post.strip().split('\n')
-                    ]
-                )
+                text = '\n'.join([self._format_arg_line(arg_line) for arg_line in post.strip().split('\n')])
 
                 help_text = f'{pre}Args:\n\n{text}\n'
 
@@ -328,9 +305,7 @@ class GrizzlyLanguageServer(LanguageServer):
         except ValueError:
             return f'* {line}'
 
-    def _complete_keyword(
-        self, keyword: Optional[str], document: Document
-    ) -> List[CompletionItem]:
+    def _complete_keyword(self, keyword: Optional[str], document: Document) -> List[CompletionItem]:
         items: List[CompletionItem] = []
         if len(document.source.strip()) < 1:
             keywords = ['Feature']
@@ -378,21 +353,70 @@ class GrizzlyLanguageServer(LanguageServer):
 
         return items
 
+    def _complete_variable_name(
+        self,
+        line: str,
+        document: Document,
+        position: Position,
+    ) -> List[CompletionItem]:
+        # extract variable names in current scenario
+        variable_pattern = re.compile(r'(.*ask for value of variable "([^"]*)"$|.*value for variable "([^"]*)" is ".*?"$)')
+
+        ## find `scenario:` before current position
+        lines = document.source.splitlines()
+        before_lines = reversed(lines[0 : position.line])
+
+        variable_names: List[Tuple[str, Optional[str]]] = []
+
+        for before_line in before_lines:
+            match = variable_pattern.match(before_line)
+
+            if match:
+                variable_name = match.group(2) or match.group(3)
+                insert_text = f'{variable_name} }}}}" {line[position.character+1:]}'.strip()
+
+                # @TODO: insert text should replace all "" with "$1", ... "$N"
+
+                if variable_name is not None:
+                    variable_names.append(
+                        (
+                            variable_name,
+                            insert_text,
+                        )
+                    )
+            elif 'Scenario:' in before_line:
+                break
+
+        return [
+            CompletionItem(
+                label=variable_name,
+                kind=CompletionItemKind.Variable,
+                tags=None,
+                detail=None,
+                documentation=None,
+                deprecated=False,
+                preselect=None,
+                sort_text=None,
+                filter_text=None,
+                insert_text=insert_text,
+                insert_text_format=None,
+                insert_text_mode=None,
+                text_edit=None,
+                additional_text_edits=None,
+                commit_characters=None,
+                command=None,
+                data=None,
+            )
+            for variable_name, insert_text in variable_names
+        ]
+
     def _complete_step(
         self,
         keyword: str,
         expression: Optional[str],
     ) -> List[CompletionItem]:
         if keyword in self.keyword_any:
-            steps = list(
-                set(
-                    [
-                        re.sub(r'"[^"]*"', '""', step)
-                        for keyword_steps in self.steps.values()
-                        for step in keyword_steps
-                    ]
-                )
-            )
+            steps = list(set([re.sub(r'"[^"]*"', '""', step) for keyword_steps in self.steps.values() for step in keyword_steps]))
         else:
             steps = self.steps.get(keyword.lower(), [])
 
@@ -436,23 +460,15 @@ class GrizzlyLanguageServer(LanguageServer):
                 matched_steps_2 = set(filter(lambda s: expression_shell in s, steps))  # type: ignore
 
                 # 3. "fuzzy" matching
-                matched_steps_3 = set(
-                    get_close_matches(expression_shell, steps, len(steps), 0.6)
-                )
+                matched_steps_3 = set(get_close_matches(expression_shell, steps, len(steps), 0.6))
 
             # keep order so that 1. matches comes before 2. matches etc.
             matched_steps_container: Dict[str, CompletionItem] = {}
 
-            input_matches = list(
-                re.finditer(r'"([^"]*)"', expression, flags=re.MULTILINE)
-            )
+            input_matches = list(re.finditer(r'"([^"]*)"', expression, flags=re.MULTILINE))
 
-            for matched_step in itertools.chain(
-                matched_steps_1, matched_steps_2, matched_steps_3
-            ):
-                output_matches = list(
-                    re.finditer(r'"([^"]*)"', matched_step, flags=re.MULTILINE)
-                )
+            for matched_step in itertools.chain(matched_steps_1, matched_steps_2, matched_steps_3):
+                output_matches = list(re.finditer(r'"([^"]*)"', matched_step, flags=re.MULTILINE))
 
                 # suggest step with already entetered variables in their correct place
                 if input_matches and output_matches:
@@ -481,11 +497,7 @@ class GrizzlyLanguageServer(LanguageServer):
                     preselect = True
 
                 # if typed expression ends with whitespace, do not insert text starting with a whitespace
-                if (
-                    expression[-1] == ' '
-                    and expression[-2] != ' '
-                    and insert_text[0] == ' '
-                ):
+                if expression[-1] == ' ' and expression[-2] != ' ' and insert_text[0] == ' ':
                     insert_text = insert_text[1:]
 
                 if '""' in insert_text:
@@ -616,11 +628,7 @@ class GrizzlyLanguageServer(LanguageServer):
         step_help = self.help.get(step.strip(), None)
 
         if step_help is None:
-            possible_help = {
-                possible_step: help
-                for possible_step, help in self.help.items()
-                if possible_step.startswith(step)
-            }
+            possible_help = {possible_step: help for possible_step, help in self.help.items() if possible_step.startswith(step)}
 
             if len(possible_help) < 1:
                 return None
