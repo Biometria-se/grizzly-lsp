@@ -69,8 +69,16 @@ class TestGrizzlyLanguageServer:
     def test__format_arg_line(self, lsp_fixture: LspFixture) -> None:
         server = lsp_fixture.server
 
-        assert server._format_arg_line('hello_world (bool): foo bar description of argument') == '* hello_world `bool`: foo bar description of argument'
-        assert server._format_arg_line('hello: strange stuff (bool)') == '* hello: strange stuff (bool)'
+        assert (
+            server._format_arg_line(
+                'hello_world (bool): foo bar description of argument'
+            )
+            == '* hello_world `bool`: foo bar description of argument'
+        )
+        assert (
+            server._format_arg_line('hello: strange stuff (bool)')
+            == '* hello: strange stuff (bool)'
+        )
 
     def test__complete_keyword(self, lsp_fixture: LspFixture) -> None:
         grizzly_project = Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
@@ -82,7 +90,9 @@ class TestGrizzlyLanguageServer:
             source='',
         )
 
-        assert normalize_completion_item(server._complete_keyword(None, document), CompletionItemKind.Keyword) == [
+        assert normalize_completion_item(
+            server._complete_keyword(None, document), CompletionItemKind.Keyword
+        ) == [
             'Feature',
         ]
 
@@ -91,7 +101,9 @@ class TestGrizzlyLanguageServer:
             source='Feature:',
         )
 
-        assert normalize_completion_item(server._complete_keyword(None, document), CompletionItemKind.Keyword) == [
+        assert normalize_completion_item(
+            server._complete_keyword(None, document), CompletionItemKind.Keyword
+        ) == [
             'Background',
             'Scenario',
         ]
@@ -103,7 +115,9 @@ class TestGrizzlyLanguageServer:
 ''',
         )
 
-        assert normalize_completion_item(server._complete_keyword(None, document), CompletionItemKind.Keyword) == [
+        assert normalize_completion_item(
+            server._complete_keyword(None, document), CompletionItemKind.Keyword
+        ) == [
             'And',
             'Background',
             'But',
@@ -122,7 +136,9 @@ class TestGrizzlyLanguageServer:
 ''',
         )
 
-        assert normalize_completion_item(server._complete_keyword(None, document), CompletionItemKind.Keyword) == [
+        assert normalize_completion_item(
+            server._complete_keyword(None, document), CompletionItemKind.Keyword
+        ) == [
             'And',
             'But',
             'Given',
@@ -131,24 +147,32 @@ class TestGrizzlyLanguageServer:
             'When',
         ]
 
-        assert normalize_completion_item(server._complete_keyword('EN', document), CompletionItemKind.Keyword) == [
+        assert normalize_completion_item(
+            server._complete_keyword('EN', document), CompletionItemKind.Keyword
+        ) == [
             'Given',
             'Scenario',
             'Then',
             'When',
         ]
 
-        assert normalize_completion_item(server._complete_keyword('Giv', document), CompletionItemKind.Keyword) == [
+        assert normalize_completion_item(
+            server._complete_keyword('Giv', document), CompletionItemKind.Keyword
+        ) == [
             'Given',
         ]
 
-    def test__complete_step(self, lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> None:
+    def test__complete_step(
+        self, lsp_fixture: LspFixture, caplog: LogCaptureFixture
+    ) -> None:
         grizzly_project = Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
         server = lsp_fixture.server
         server._compile_inventory(grizzly_project.resolve(), 'project')
 
         with caplog.at_level(logging.DEBUG):
-            matched_steps = normalize_completion_item(server._complete_step('Given', 'variable'), CompletionItemKind.Function)
+            matched_steps = normalize_completion_item(
+                server._complete_step('Given', 'variable'), CompletionItemKind.Function
+            )
 
             for expected_step in [
                 'set context variable "" to ""',
@@ -159,7 +183,9 @@ class TestGrizzlyLanguageServer:
             ]:
                 assert expected_step in matched_steps
 
-            matched_steps = normalize_completion_item(server._complete_step('Then', 'save'), CompletionItemKind.Function)
+            matched_steps = normalize_completion_item(
+                server._complete_step('Then', 'save'), CompletionItemKind.Function
+            )
             for expected_step in [
                 'save response metadata "" in variable ""',
                 'save response payload "" in variable ""',
@@ -174,8 +200,12 @@ class TestGrizzlyLanguageServer:
             ]:
                 assert expected_step in matched_steps
 
-            suggested_steps = server._complete_step('Then', 'save response metadata "hello"')
-            matched_steps = normalize_completion_item(suggested_steps, CompletionItemKind.Function)
+            suggested_steps = server._complete_step(
+                'Then', 'save response metadata "hello"'
+            )
+            matched_steps = normalize_completion_item(
+                suggested_steps, CompletionItemKind.Function
+            )
 
             for expected_step in [
                 'save response metadata "hello" in variable ""',
@@ -184,14 +214,27 @@ class TestGrizzlyLanguageServer:
                 assert expected_step in matched_steps
 
             for suggested_step in suggested_steps:
-                if suggested_step.label == 'save response metadata "hello" that matches "" in variable ""':
-                    assert suggested_step.insert_text == ' that matches "$1" in variable "$2"'
-                elif suggested_step.label == 'save response metadata "hello" in variable ""':
+                if (
+                    suggested_step.label
+                    == 'save response metadata "hello" that matches "" in variable ""'
+                ):
+                    assert (
+                        suggested_step.insert_text
+                        == ' that matches "$1" in variable "$2"'
+                    )
+                elif (
+                    suggested_step.label
+                    == 'save response metadata "hello" in variable ""'
+                ):
                     assert suggested_step.insert_text == ' in variable "$1"'
                 else:
-                    raise AssertionError(f'"{suggested_step.label}" was an unexpected suggested step')
+                    raise AssertionError(
+                        f'"{suggested_step.label}" was an unexpected suggested step'
+                    )
 
-            matched_steps = normalize_completion_item(server._complete_step('When', None), CompletionItemKind.Function)
+            matched_steps = normalize_completion_item(
+                server._complete_step('When', None), CompletionItemKind.Function
+            )
 
             for expected_step in [
                 'condition "" with name "" is true, execute these tasks',
@@ -205,7 +248,9 @@ class TestGrizzlyLanguageServer:
             ]:
                 assert expected_step in matched_steps
 
-            matched_steps = normalize_completion_item(server._complete_step('When', 'response '), CompletionItemKind.Function)
+            matched_steps = normalize_completion_item(
+                server._complete_step('When', 'response '), CompletionItemKind.Function
+            )
 
             for expected_step in [
                 'response time percentile ""% is greater than "" milliseconds fail scenario',
@@ -241,12 +286,17 @@ class TestGrizzlyLanguageServer:
                 assert expected_step in matched_steps
 
             matched_steps = normalize_completion_item(
-                server._complete_step('Given', 'a user of type "RestApi" with weight "1" load'),
+                server._complete_step(
+                    'Given', 'a user of type "RestApi" with weight "1" load'
+                ),
                 CompletionItemKind.Function,
             )
 
             assert len(matched_steps) == 1
-            assert matched_steps[0] == 'a user of type "RestApi" with weight "1" load testing ""'
+            assert (
+                matched_steps[0]
+                == 'a user of type "RestApi" with weight "1" load testing ""'
+            )
 
             actual_completed_steps = server._complete_step('And', 'repeat for "1" it')
 
@@ -255,7 +305,9 @@ class TestGrizzlyLanguageServer:
                 CompletionItemKind.Function,
             )
 
-            assert sorted(matched_steps) == sorted(['repeat for "1" iterations', 'repeat for "1" iteration'])
+            assert sorted(matched_steps) == sorted(
+                ['repeat for "1" iterations', 'repeat for "1" iteration']
+            )
 
             matched_insert_text = normalize_completion_item(
                 actual_completed_steps,
@@ -272,7 +324,9 @@ class TestGrizzlyLanguageServer:
                 CompletionItemKind.Function,
             )
 
-            assert sorted(matched_steps) == sorted(['repeat for "1" iterations', 'repeat for "1" iteration'])
+            assert sorted(matched_steps) == sorted(
+                ['repeat for "1" iterations', 'repeat for "1" iteration']
+            )
 
             matched_insert_text = normalize_completion_item(
                 actual_completed_steps,
@@ -289,7 +343,9 @@ class TestGrizzlyLanguageServer:
                 CompletionItemKind.Function,
             )
 
-            assert sorted(matched_steps) == sorted(['repeat for "1" iterations', 'repeat for "1" iteration'])
+            assert sorted(matched_steps) == sorted(
+                ['repeat for "1" iterations', 'repeat for "1" iteration']
+            )
 
             matched_insert_text = normalize_completion_item(
                 actual_completed_steps,
@@ -299,17 +355,23 @@ class TestGrizzlyLanguageServer:
 
             assert sorted(matched_insert_text) == sorted(['iteration', 'iterations'])
 
-            actual_completed_steps = server._complete_step('Then', 'parse date "{{ datetime.now() }}" ')
+            actual_completed_steps = server._complete_step(
+                'Then', 'parse date "{{ datetime.now() }}" '
+            )
             assert len(actual_completed_steps) == 1
             actual_completed_step = actual_completed_steps[0]
             assert actual_completed_step.insert_text == 'and save in variable "$1"'
 
-            actual_completed_steps = server._complete_step('Then', 'parse date "{{ datetime.now() }}"')
+            actual_completed_steps = server._complete_step(
+                'Then', 'parse date "{{ datetime.now() }}"'
+            )
             assert len(actual_completed_steps) == 1
             actual_completed_step = actual_completed_steps[0]
             assert actual_completed_step.insert_text == ' and save in variable "$1"'
 
-    def test__normalize_step_expression(self, lsp_fixture: LspFixture, mocker: MockerFixture, caplog: LogCaptureFixture) -> None:
+    def test__normalize_step_expression(
+        self, lsp_fixture: LspFixture, mocker: MockerFixture, caplog: LogCaptureFixture
+    ) -> None:
         mocker.patch('parse.Parser.__init__', return_value=None)
         server = lsp_fixture.server
 
@@ -338,7 +400,9 @@ class TestGrizzlyLanguageServer:
             ]
         )
 
-        step = ParseMatcher(noop, 'send from {from_node:MessageDirection} to {to_node:MessageDirection}')
+        step = ParseMatcher(
+            noop, 'send from {from_node:MessageDirection} to {to_node:MessageDirection}'
+        )
 
         assert sorted(server._normalize_step_expression(step)) == sorted(
             [
@@ -414,7 +478,11 @@ class TestGrizzlyLanguageServer:
             ]
         )
 
-        assert sorted(server._normalize_step_expression('{method:Method} {direction:Direction} endpoint "{endpoint:s}"')) == sorted(
+        assert sorted(
+            server._normalize_step_expression(
+                '{method:Method} {direction:Direction} endpoint "{endpoint:s}"'
+            )
+        ) == sorted(
             [
                 'send to endpoint ""',
                 'send from endpoint ""',
@@ -445,16 +513,24 @@ class TestGrizzlyLanguageServer:
                 ]
             )
         assert len(caplog.messages) == 1
-        assert caplog.messages[-1] == "unhandled type: variable='{test:Unknown}', variable_type='Unknown'"
+        assert (
+            caplog.messages[-1]
+            == "unhandled type: variable='{test:Unknown}', variable_type='Unknown'"
+        )
 
         assert show_message_mock.call_count == 1
         args, kwargs = show_message_mock.call_args_list[-1]
         assert len(args) == 1
-        assert args[0] == "unhandled type: variable='{test:Unknown}', variable_type='Unknown'"
+        assert (
+            args[0]
+            == "unhandled type: variable='{test:Unknown}', variable_type='Unknown'"
+        )
         assert len(kwargs) == 1
         assert kwargs.get('msg_type', None) == 1
 
-    def test__compile_inventory(self, lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> None:
+    def test__compile_inventory(
+        self, lsp_fixture: LspFixture, caplog: LogCaptureFixture
+    ) -> None:
         server = lsp_fixture.server
 
         assert server.steps == {}
@@ -494,7 +570,9 @@ class TestGrizzlyLanguageServer:
         assert 'Given' in server.keywords  # - " -
         assert 'When' in server.keywords
 
-    def test__current_line(self, lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
+    def test__current_line(
+        self, lsp_fixture: LspFixture, mocker: MockerFixture
+    ) -> None:
         server = lsp_fixture.server
 
         mocker.patch.object(server.lsp, 'workspace', Workspace('', None))
@@ -510,13 +588,38 @@ class TestGrizzlyLanguageServer:
             ),
         )
 
-        assert server._current_line('file://test.feature', Position(line=0, character=0)).strip() == 'Feature:'
-        assert server._current_line('file://test.feature', Position(line=1, character=543)).strip() == 'Scenario: test'
-        assert server._current_line('file://test.feature', Position(line=2, character=435)).strip() == 'Then hello world!'
-        assert server._current_line('file://test.feature', Position(line=3, character=534)).strip() == 'But foo bar'
+        assert (
+            server._current_line(
+                'file://test.feature', Position(line=0, character=0)
+            ).strip()
+            == 'Feature:'
+        )
+        assert (
+            server._current_line(
+                'file://test.feature', Position(line=1, character=543)
+            ).strip()
+            == 'Scenario: test'
+        )
+        assert (
+            server._current_line(
+                'file://test.feature', Position(line=2, character=435)
+            ).strip()
+            == 'Then hello world!'
+        )
+        assert (
+            server._current_line(
+                'file://test.feature', Position(line=3, character=534)
+            ).strip()
+            == 'But foo bar'
+        )
 
         with pytest.raises(IndexError) as ie:
-            assert server._current_line('file://test.feature', Position(line=10, character=10)).strip() == 'Then hello world!'
+            assert (
+                server._current_line(
+                    'file://test.feature', Position(line=10, character=10)
+                ).strip()
+                == 'Then hello world!'
+            )
         assert str(ie.value) == 'list index out of range'
 
     def test__find_help(self, lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
@@ -529,12 +632,20 @@ class TestGrizzlyLanguageServer:
             '"" bar': 'this is the help for foo bar parameterized',
         }
 
-        assert server._find_help('Then hello world') == 'this is the help for hello world'
+        assert (
+            server._find_help('Then hello world') == 'this is the help for hello world'
+        )
         assert server._find_help('asdfasdf') is None
         assert server._find_help('And hello') == 'this is the help for hello world'
-        assert server._find_help('And hello "world"') == 'this is the help for hello world parameterized'
+        assert (
+            server._find_help('And hello "world"')
+            == 'this is the help for hello world parameterized'
+        )
         assert server._find_help('But foo') == 'this is the help for foo bar'
-        assert server._find_help('But "foo" bar') == 'this is the help for foo bar parameterized'
+        assert (
+            server._find_help('But "foo" bar')
+            == 'this is the help for foo bar parameterized'
+        )
 
     class TestGrizzlyLangageServerFeatures:
         def _initialize(self, client: LanguageServer, root: Path) -> None:
@@ -576,7 +687,9 @@ class TestGrizzlyLanguageServer:
             finally:
                 logger.setLevel(level)
 
-        def _open(self, client: LanguageServer, path: Path, text: Optional[str] = None) -> None:
+        def _open(
+            self, client: LanguageServer, path: Path, text: Optional[str] = None
+        ) -> None:
             if text is None:
                 text = path.read_text()
 
@@ -593,7 +706,12 @@ class TestGrizzlyLanguageServer:
             )
 
         def _completion(
-            self, client: LanguageServer, path: Path, content: str, context: Optional[CompletionContext] = None, position: Optional[Position] = None
+            self,
+            client: LanguageServer,
+            path: Path,
+            content: str,
+            context: Optional[CompletionContext] = None,
+            position: Optional[Position] = None,
         ) -> Optional[CompletionList]:
             self._initialize(client, path)
 
@@ -701,7 +819,9 @@ class TestGrizzlyLanguageServer:
 
             assert 'Feature' not in server.keywords  # already used once in feature file
             assert 'Background' not in server.keywords  # - " -
-            assert 'And' in server.keywords  # just an alias for Given, but we need want it
+            assert (
+                'And' in server.keywords
+            )  # just an alias for Given, but we need want it
             assert 'Scenario' in server.keywords  # can be used multiple times
             assert 'Given' in server.keywords  # - " -
             assert 'When' in server.keywords
@@ -712,7 +832,14 @@ class TestGrizzlyLanguageServer:
             def filter_keyword_properties(
                 items: List[CompletionItem],
             ) -> List[Dict[str, Any]]:
-                return [{key: getattr(item, key) for key in item.__dir__() if key in ['label', 'kind']} for item in items]
+                return [
+                    {
+                        key: getattr(item, key)
+                        for key in item.__dir__()
+                        if key in ['label', 'kind']
+                    }
+                    for item in items
+                ]
 
             # partial match, keyword containing 'B'
             response = self._completion(
@@ -769,7 +896,9 @@ class TestGrizzlyLanguageServer:
             response = self._completion(client, lsp_fixture.datadir, '')
             assert response is not None
             assert not response.is_incomplete
-            unexpected_kinds = list(filter(lambda k: k != 14, map(lambda k: k.kind, response.items)))
+            unexpected_kinds = list(
+                filter(lambda k: k != 14, map(lambda k: k.kind, response.items))
+            )
             assert len(unexpected_kinds) == 0
             labels = list(map(lambda k: k.label, response.items))
             assert all([True if label is not None else False for label in labels])
@@ -842,7 +971,9 @@ class TestGrizzlyLanguageServer:
             assert 'a user of type "" with weight "" load testing ""' in labels
             assert 'a user of type "" load testing ""' in labels
 
-            response = self._completion(client, lsp_fixture.datadir, 'Then parse date "{{ datetime.now() }}"')
+            response = self._completion(
+                client, lsp_fixture.datadir, 'Then parse date "{{ datetime.now() }}"'
+            )
             assert response is not None
             assert not response.is_incomplete
 
@@ -853,10 +984,14 @@ class TestGrizzlyLanguageServer:
                 map(lambda s: s.insert_text, response.items),
             )
 
-            assert labels == ['parse date "{{ datetime.now() }}" and save in variable ""']
+            assert labels == [
+                'parse date "{{ datetime.now() }}" and save in variable ""'
+            ]
             assert insert_texts == [' and save in variable "$1"']
 
-        def test_completion_variable_names(self, lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> None:
+        def test_completion_variable_names(
+            self, lsp_fixture: LspFixture, caplog: LogCaptureFixture
+        ) -> None:
             client = lsp_fixture.client
 
             content = '''Feature: test
@@ -875,9 +1010,13 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list([s.insert_text for s in response.items if s.insert_text is not None])
+            insert_texts = list(
+                [s.insert_text for s in response.items if s.insert_text is not None]
+            )
 
-            assert sorted(insert_texts) == sorted([' price }}"', ' foo }}"', ' test }}"', ' bar }}"'])
+            assert sorted(insert_texts) == sorted(
+                [' price }}"', ' foo }}"', ' test }}"', ' bar }}"']
+            )
             assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
 
             content = '''Feature: test
@@ -908,40 +1047,67 @@ class TestGrizzlyLanguageServer:
 
         Then log message "{{ }}"'''
 
-            response = self._completion(client, lsp_fixture.datadir, content, position=Position(line=8, character=28))
+            response = self._completion(
+                client,
+                lsp_fixture.datadir,
+                content,
+                position=Position(line=8, character=28),
+            )
 
             assert response is not None
 
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list([s.insert_text for s in response.items if s.insert_text is not None])
+            insert_texts = list(
+                [s.insert_text for s in response.items if s.insert_text is not None]
+            )
 
-            assert sorted(insert_texts) == sorted([' price }}"', ' foo }}"', ' test }}"', ' bar }}"'])
+            assert sorted(insert_texts) == sorted(
+                [' price }}"', ' foo }}"', ' test }}"', ' bar }}"']
+            )
             assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
 
-            response = self._completion(client, lsp_fixture.datadir, content, position=Position(line=17, character=28))
+            response = self._completion(
+                client,
+                lsp_fixture.datadir,
+                content,
+                position=Position(line=17, character=28),
+            )
 
             assert response is not None
 
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list([s.insert_text for s in response.items if s.insert_text is not None])
+            insert_texts = list(
+                [s.insert_text for s in response.items if s.insert_text is not None]
+            )
 
-            assert sorted(insert_texts) == sorted([' weight }}', ' hello }}', ' test }}', ' world }}'])
+            assert sorted(insert_texts) == sorted(
+                [' weight }}', ' hello }}', ' test }}', ' world }}']
+            )
             assert sorted(labels) == sorted(['weight', 'hello', 'test', 'world'])
 
-            response = self._completion(client, lsp_fixture.datadir, content, position=Position(line=26, character=28))
+            response = self._completion(
+                client,
+                lsp_fixture.datadir,
+                content,
+                position=Position(line=26, character=28),
+            )
 
             assert response is not None
 
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list([s.insert_text for s in response.items if s.insert_text is not None])
+            insert_texts = list(
+                [s.insert_text for s in response.items if s.insert_text is not None]
+            )
 
-            assert sorted(insert_texts) == sorted([' weight', ' hello', ' test', ' world'])
+            assert sorted(insert_texts) == sorted(
+                [' weight', ' hello', ' test', ' world']
+            )
             assert sorted(labels) == sorted(['weight', 'hello', 'test', 'world'])
 
             content = '''Feature: test
@@ -953,16 +1119,25 @@ class TestGrizzlyLanguageServer:
         And ask for value of variable "bar"
 
         Then parse date "{{" and save in variable ""'''
-            response = self._completion(client, lsp_fixture.datadir, content, position=Position(line=8, character=27))
+            response = self._completion(
+                client,
+                lsp_fixture.datadir,
+                content,
+                position=Position(line=8, character=27),
+            )
 
             assert response is not None
 
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list([s.insert_text for s in response.items if s.insert_text is not None])
+            insert_texts = list(
+                [s.insert_text for s in response.items if s.insert_text is not None]
+            )
 
-            assert sorted(insert_texts) == sorted([' price }}', ' foo }}', ' test }}', ' bar }}'])
+            assert sorted(insert_texts) == sorted(
+                [' price }}', ' foo }}', ' test }}', ' bar }}']
+            )
             assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
 
             content = '''Feature: test
@@ -975,27 +1150,43 @@ class TestGrizzlyLanguageServer:
 
         Then send request "test/request.j2.json" with name "{{" to endpoint ""
         Then send request "{{}}" with name "" to endpoint ""'''
-            response = self._completion(client, lsp_fixture.datadir, content, position=Position(line=8, character=62))
+            response = self._completion(
+                client,
+                lsp_fixture.datadir,
+                content,
+                position=Position(line=8, character=62),
+            )
 
             assert response is not None
 
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list([s.insert_text for s in response.items if s.insert_text is not None])
+            insert_texts = list(
+                [s.insert_text for s in response.items if s.insert_text is not None]
+            )
 
-            assert sorted(insert_texts) == sorted([' price }}', ' foo }}', ' test }}', ' bar }}'])
+            assert sorted(insert_texts) == sorted(
+                [' price }}', ' foo }}', ' test }}', ' bar }}']
+            )
             assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
 
             with caplog.at_level(logging.DEBUG):
-                response = self._completion(client, lsp_fixture.datadir, content, position=Position(line=9, character=29))
+                response = self._completion(
+                    client,
+                    lsp_fixture.datadir,
+                    content,
+                    position=Position(line=9, character=29),
+                )
 
             assert response is not None
 
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list([s.insert_text for s in response.items if s.insert_text is not None])
+            insert_texts = list(
+                [s.insert_text for s in response.items if s.insert_text is not None]
+            )
 
             assert sorted(insert_texts) == sorted(
                 [
@@ -1010,7 +1201,9 @@ class TestGrizzlyLanguageServer:
         def test_hover(self, lsp_fixture: LspFixture) -> None:
             client = lsp_fixture.client
 
-            response = self._hover(client, lsp_fixture.datadir, Position(line=2, character=31))
+            response = self._hover(
+                client, lsp_fixture.datadir, Position(line=2, character=31)
+            )
 
             assert response is not None
             assert response.range is not None
@@ -1043,7 +1236,9 @@ Args:
 '''
             )
 
-            response = self._hover(client, lsp_fixture.datadir, Position(line=0, character=1))
+            response = self._hover(
+                client, lsp_fixture.datadir, Position(line=0, character=1)
+            )
 
             assert response is None
 
@@ -1067,7 +1262,9 @@ Args:
         def test_definition(self, lsp_fixture: LspFixture) -> None:
             client = lsp_fixture.client
 
-            response = self._definition(client, lsp_fixture.datadir, Position(line=2, character=30))
+            response = self._definition(
+                client, lsp_fixture.datadir, Position(line=2, character=30)
+            )
 
             assert response is None
 
