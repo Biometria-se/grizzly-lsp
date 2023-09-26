@@ -55,6 +55,11 @@ from .utils import create_step_normalizer, load_step_registry
 from . import __version__
 
 
+VARIABLE_PATTERN = re.compile(
+    r'(.*ask for value of variable "([^"]*)"$|.*value for variable "([^"]*)" is ".*?"$)'
+)
+
+
 class GrizzlyLanguageServer(LanguageServer):
     logger: logging.Logger = logging.getLogger(__name__)
 
@@ -205,17 +210,24 @@ class GrizzlyLanguageServer(LanguageServer):
             assert self.steps is not None, 'no steps in inventory'
 
             line = self._current_line(params.text_document.uri, params.position)
-            keyword, step = get_step_parts(line)
 
             items: List[CompletionItem] = []
             document = self.workspace.get_document(params.text_document.uri)
 
-            self.logger.debug(f'{keyword=}, {step=}, {self.keywords=}')
+            self.logger.debug(
+                f'{line=}, {params.position=}, trigger=\'{line[:params.position.character]}\''
+            )
 
-            if keyword is not None and keyword in self.keywords:
-                items = self._complete_step(keyword, step)
+            if line[: params.position.character].rstrip().endswith('{{'):
+                items = self._complete_variable_name(line, document, params.position)
             else:
-                items = self._complete_keyword(keyword, document)
+                keyword, text = get_step_parts(line)
+                self.logger.debug(f'{keyword=}, {text=}, {self.keywords=}')
+
+                if keyword is not None and keyword in self.keywords:
+                    items = self._complete_step(keyword, text)
+                else:
+                    items = self._complete_keyword(keyword, document)
 
             # self.logger.debug(f'completion: {items=}')
 
@@ -348,9 +360,7 @@ class GrizzlyLanguageServer(LanguageServer):
             if keyword is not None:
                 keywords = cast(
                     List[str],
-                    list(
-                        filter(lambda k: keyword.strip().lower() in k.lower(), keywords)  # type: ignore
-                    ),
+                    list(filter(lambda k: keyword.strip().lower() in k.lower(), keywords)),  # type: ignore
                 )
 
         for keyword in sorted(keywords):
@@ -377,6 +387,84 @@ class GrizzlyLanguageServer(LanguageServer):
             )
 
         return items
+
+    def _complete_variable_name(
+        self,
+        line: str,
+        document: Document,
+        position: Position,
+    ) -> List[CompletionItem]:
+        # find `Scenario:` before current position
+        lines = document.source.splitlines()
+        before_lines = reversed(lines[0 : position.line])
+
+        variable_names: List[Tuple[str, Optional[str]]] = []
+
+        for before_line in before_lines:
+            match = VARIABLE_PATTERN.match(before_line)
+
+            if match:
+                variable_name = match.group(2) or match.group(3)
+
+                if variable_name is not None:
+                    if line[: position.character].lstrip().startswith('}}'):
+                        insert_text = None
+                    else:
+                        prefix = '' if line[: position.character].endswith(' ') else ' '
+                        suffix = (
+                            '"'
+                            if not line.rstrip().endswith('"')
+                            and line.count('"') % 2 != 0
+                            else ''
+                        )
+                        affix = (
+                            ''
+                            if line[position.character :].strip().startswith('}}')
+                            else '}}'
+                        )
+                        affix_suffix = (
+                            ''
+                            if not line[position.character :].startswith('}}')
+                            and affix != '}}'
+                            else ' '
+                        )
+                        insert_text = (
+                            f'{prefix}{variable_name}{affix_suffix}{affix}{suffix}'
+                        )
+
+                    self.logger.debug(f'{line=}, {variable_name=}, {insert_text=}')
+
+                    variable_names.append(
+                        (
+                            variable_name,
+                            insert_text,
+                        )
+                    )
+            elif 'Scenario:' in before_line:
+                break
+
+        return [
+            CompletionItem(
+                label=variable_name,
+                kind=CompletionItemKind.Variable,
+                tags=None,
+                detail=None,
+                documentation=None,
+                deprecated=False,
+                preselect=None,
+                sort_text=None,
+                filter_text=None,
+                insert_text=insert_text,
+                insert_text_format=None,
+                insert_text_mode=None,
+                text_edit=None,
+                additional_text_edits=None,
+                commit_characters=None,
+                command=None,
+                data=None,
+            )
+            for variable_name, insert_text in variable_names
+        ]
 
     def _complete_step(
         self,
@@ -466,7 +554,10 @@ class GrizzlyLanguageServer(LanguageServer):
                     # only insert the part of the step that has not already been written, up until last space, since vscode
                     # seems to insert text word wise
                     insert_text = matched_step.replace(expression, '')
-                    if not insert_text.startswith(' '):
+                    if (
+                        not insert_text.startswith(' ')
+                        and insert_text.strip().count(' ') < 1
+                    ):
                         try:
                             _, insert_text = matched_step.rsplit(' ', 1)
                         except:
@@ -487,6 +578,8 @@ class GrizzlyLanguageServer(LanguageServer):
                     and insert_text[0] == ' '
                 ):
                     insert_text = insert_text[1:]
+
+                self.logger.debug(f'{expression=}, {insert_text=}, {matched_step=}')
 
                 if '""' in insert_text:
                     snippet_matches = re.finditer(

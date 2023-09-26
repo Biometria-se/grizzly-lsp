@@ -272,6 +272,114 @@ describe('Should do completion on steps', () => {
         expect(actualInsertText).to.be.eql([' iteration', ' iterations']);
         expect(actualLabels).to.be.eql(['repeat for "1" iteration', 'repeat for "1" iterations']);
     });
+
+    it('Complete steps, complete incompleted step, no trailing space', async () => {
+        setTestContent(`Feature:
+    Background:
+    Scenario:
+        Given a user of type "RestApi"
+        `);
+        const actual = await testCompletion(docUri, new vscode.Position(3, 38));
+
+        const actualInsertText = actual.items.map((item) => {
+            if (item.insertText instanceof vscode.SnippetString) {
+                return item.insertText.value;
+            } else {
+                return item.insertText;
+            }
+        });
+
+        expect(actual.items.length).to.be.equal(2);
+
+        const expected = [
+            ' load testing "$1"',
+            ' with weight "$1" load testing "$2"',
+        ];
+
+        actual.items.forEach((item) => {
+            expect(item.kind).to.be.equal(vscode.CompletionItemKind.Function);
+        });
+
+        actualInsertText.forEach((insertText) => {
+            expect(expected).to.contain(insertText);
+        });
+    });
+
+    it('Complete steps, complete incompleted step, trailing space', async () => {
+        setTestContent('Feature:\n\tBackground:\n\tScenario:\n\t\tGiven a user of type "RestApi" \n');
+        const actual = await testCompletion(docUri, new vscode.Position(3, 39));
+
+        const actualInsertText = actual.items.map((item) => {
+            if (item.insertText instanceof vscode.SnippetString) {
+                return item.insertText.value;
+            } else {
+                return item.insertText;
+            }
+        });
+
+        expect(actual.items.length).to.be.equal(2);
+
+        const expected = [
+            'load testing "$1"',
+            'with weight "$1" load testing "$2"',
+        ];
+
+        actual.items.forEach((item) => {
+            expect(item.kind).to.be.equal(vscode.CompletionItemKind.Function);
+        });
+
+        actualInsertText.forEach((insertText) => {
+            expect(expected).to.contain(insertText);
+        });
+    });
+});
+
+describe('Should do completion on variables', () => {
+    it('Complete variable, not a complete step, no ending "', async () => {
+        setTestContent(`Feature:
+    Background:
+    Scenario:
+        And value for variable "foo" is "none"
+        And value for variable "bar" is "none"
+        And ask for value for variable "world"
+        Then log message "{{
+        `);
+
+        const actual = await testCompletion(docUri, new vscode.Position(6, 28));
+        const expected = [
+            ' foo }}"',
+            ' bar }}"',
+            ' world }}"',
+        ];
+
+        actual.items.forEach((item) => {
+            expect(item.kind).to.be.equal(vscode.CompletionItemKind.Variable);
+            expect(expected).to.contain(item.insertText);
+        });
+    });
+
+    it('Complete variable, complete step, ending }}"', async () => {
+        setTestContent(`Feature:
+    Background:
+    Scenario:
+        And value for variable "foo" is "none"
+        And value for variable "bar" is "none"
+        And ask for value for variable "world"
+        Then log message "{{}}"
+        `);
+
+        const actual = await testCompletion(docUri, new vscode.Position(6, 28));
+        const expected = [
+            ' foo ',
+            ' bar ',
+            ' world ',
+        ];
+
+        actual.items.forEach((item) => {
+            expect(item.kind).to.be.equal(vscode.CompletionItemKind.Variable);
+            expect(expected).to.contain(item.insertText);
+        });
+    });
 });
 
 async function testCompletion(docUri: vscode.Uri, position: vscode.Position): Promise<vscode.CompletionList> {

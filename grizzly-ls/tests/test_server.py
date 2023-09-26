@@ -355,6 +355,20 @@ class TestGrizzlyLanguageServer:
 
             assert sorted(matched_insert_text) == sorted(['iteration', 'iterations'])
 
+            actual_completed_steps = server._complete_step(
+                'Then', 'parse date "{{ datetime.now() }}" '
+            )
+            assert len(actual_completed_steps) == 1
+            actual_completed_step = actual_completed_steps[0]
+            assert actual_completed_step.insert_text == 'and save in variable "$1"'
+
+            actual_completed_steps = server._complete_step(
+                'Then', 'parse date "{{ datetime.now() }}"'
+            )
+            assert len(actual_completed_steps) == 1
+            actual_completed_step = actual_completed_steps[0]
+            assert actual_completed_step.insert_text == ' and save in variable "$1"'
+
     def test__normalize_step_expression(
         self, lsp_fixture: LspFixture, mocker: MockerFixture, caplog: LogCaptureFixture
     ) -> None:
@@ -697,6 +711,7 @@ class TestGrizzlyLanguageServer:
             path: Path,
             content: str,
             context: Optional[CompletionContext] = None,
+            position: Optional[Position] = None,
         ) -> Optional[CompletionList]:
             self._initialize(client, path)
 
@@ -705,16 +720,19 @@ class TestGrizzlyLanguageServer:
 
             lines = content.split('\n')
             line = len(lines) - 1
-            character = len(lines[-1]) - 1
+            character = len(lines[-1])
 
             if character < 0:
                 character = 0
+
+            if position is None:
+                position = Position(line=line, character=character)
 
             params = CompletionParams(
                 text_document=TextDocumentIdentifier(
                     uri=path.as_uri(),
                 ),
-                position=Position(line=line, character=character),
+                position=position,
                 context=context,
                 partial_result_token=None,
                 work_done_token=None,
@@ -952,6 +970,233 @@ class TestGrizzlyLanguageServer:
 
             assert 'a user of type "" with weight "" load testing ""' in labels
             assert 'a user of type "" load testing ""' in labels
+
+            response = self._completion(
+                client, lsp_fixture.datadir, 'Then parse date "{{ datetime.now() }}"'
+            )
+            assert response is not None
+            assert not response.is_incomplete
+
+            labels = list(
+                map(lambda s: s.label, response.items),
+            )
+            insert_texts = list(
+                map(lambda s: s.insert_text, response.items),
+            )
+
+            assert labels == [
+                'parse date "{{ datetime.now() }}" and save in variable ""'
+            ]
+            assert insert_texts == [' and save in variable "$1"']
+
+        def test_completion_variable_names(
+            self, lsp_fixture: LspFixture, caplog: LogCaptureFixture
+        ) -> None:
+            client = lsp_fixture.client
+
+            content = '''Feature: test
+    Scenario: test
+        Given a user of type "Dummy" load testing "dummy://test"
+        And value for variable "price" is "200"
+        And value for variable "foo" is "bar"
+        And value for variable "test" is "False"
+        And ask for value of variable "bar"
+
+        Then parse date "{{'''
+            response = self._completion(client, lsp_fixture.datadir, content)
+
+            assert response is not None
+
+            labels = list(
+                map(lambda s: s.label, response.items),
+            )
+            insert_texts = list(
+                [s.insert_text for s in response.items if s.insert_text is not None]
+            )
+
+            assert sorted(insert_texts) == sorted(
+                [' price }}"', ' foo }}"', ' test }}"', ' bar }}"']
+            )
+            assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
+
+            content = '''Feature: test
+    Scenario: test1
+        Given a user of type "Dummy" load testing "dummy://test"
+        And value for variable "price" is "200"
+        And value for variable "foo" is "bar"
+        And value for variable "test" is "False"
+        And ask for value of variable "bar"
+
+        Then log message "{{
+
+    Scenario: test2
+        Given a user of type "Dummy" load testing "dummy://test"
+        And value for variable "weight" is "200"
+        And value for variable "hello" is "bar"
+        And value for variable "test" is "False"
+        And ask for value of variable "world"
+
+        Then log message "{{ "
+
+    Scenario: test3
+        Given a user of type "Dummy" load testing "dummy://test"
+        And value for variable "weight" is "200"
+        And value for variable "hello" is "bar"
+        And value for variable "test" is "False"
+        And ask for value of variable "world"
+
+        Then log message "{{ }}"'''
+
+            response = self._completion(
+                client,
+                lsp_fixture.datadir,
+                content,
+                position=Position(line=8, character=28),
+            )
+
+            assert response is not None
+
+            labels = list(
+                map(lambda s: s.label, response.items),
+            )
+            insert_texts = list(
+                [s.insert_text for s in response.items if s.insert_text is not None]
+            )
+
+            assert sorted(insert_texts) == sorted(
+                [' price }}"', ' foo }}"', ' test }}"', ' bar }}"']
+            )
+            assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
+
+            response = self._completion(
+                client,
+                lsp_fixture.datadir,
+                content,
+                position=Position(line=17, character=28),
+            )
+
+            assert response is not None
+
+            labels = list(
+                map(lambda s: s.label, response.items),
+            )
+            insert_texts = list(
+                [s.insert_text for s in response.items if s.insert_text is not None]
+            )
+
+            assert sorted(insert_texts) == sorted(
+                [' weight }}', ' hello }}', ' test }}', ' world }}']
+            )
+            assert sorted(labels) == sorted(['weight', 'hello', 'test', 'world'])
+
+            response = self._completion(
+                client,
+                lsp_fixture.datadir,
+                content,
+                position=Position(line=26, character=28),
+            )
+
+            assert response is not None
+
+            labels = list(
+                map(lambda s: s.label, response.items),
+            )
+            insert_texts = list(
+                [s.insert_text for s in response.items if s.insert_text is not None]
+            )
+
+            assert sorted(insert_texts) == sorted(
+                [' weight', ' hello', ' test', ' world']
+            )
+            assert sorted(labels) == sorted(['weight', 'hello', 'test', 'world'])
+
+            content = '''Feature: test
+    Scenario: test
+        Given a user of type "Dummy" load testing "dummy://test"
+        And value for variable "price" is "200"
+        And value for variable "foo" is "bar"
+        And value for variable "test" is "False"
+        And ask for value of variable "bar"
+
+        Then parse date "{{" and save in variable ""'''
+            response = self._completion(
+                client,
+                lsp_fixture.datadir,
+                content,
+                position=Position(line=8, character=27),
+            )
+
+            assert response is not None
+
+            labels = list(
+                map(lambda s: s.label, response.items),
+            )
+            insert_texts = list(
+                [s.insert_text for s in response.items if s.insert_text is not None]
+            )
+
+            assert sorted(insert_texts) == sorted(
+                [' price }}', ' foo }}', ' test }}', ' bar }}']
+            )
+            assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
+
+            content = '''Feature: test
+    Scenario: test
+        Given a user of type "Dummy" load testing "dummy://test"
+        And value for variable "price" is "200"
+        And value for variable "foo" is "bar"
+        And value for variable "test" is "False"
+        And ask for value of variable "bar"
+
+        Then send request "test/request.j2.json" with name "{{" to endpoint ""
+        Then send request "{{}}" with name "" to endpoint ""'''
+            response = self._completion(
+                client,
+                lsp_fixture.datadir,
+                content,
+                position=Position(line=8, character=62),
+            )
+
+            assert response is not None
+
+            labels = list(
+                map(lambda s: s.label, response.items),
+            )
+            insert_texts = list(
+                [s.insert_text for s in response.items if s.insert_text is not None]
+            )
+
+            assert sorted(insert_texts) == sorted(
+                [' price }}', ' foo }}', ' test }}', ' bar }}']
+            )
+            assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
+
+            with caplog.at_level(logging.DEBUG):
+                response = self._completion(
+                    client,
+                    lsp_fixture.datadir,
+                    content,
+                    position=Position(line=9, character=29),
+                )
+
+            assert response is not None
+
+            labels = list(
+                map(lambda s: s.label, response.items),
+            )
+            insert_texts = list(
+                [s.insert_text for s in response.items if s.insert_text is not None]
+            )
+
+            assert sorted(insert_texts) == sorted(
+                [
+                    ' price ',
+                    ' foo ',
+                    ' test ',
+                    ' bar ',
+                ]
+            )
+            assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
 
         def test_hover(self, lsp_fixture: LspFixture) -> None:
             client = lsp_fixture.client
