@@ -490,7 +490,7 @@ class GrizzlyLanguageServer(LanguageServer):
                     # only insert the part of the step that has not already been written, up until last space, since vscode
                     # seems to insert text word wise
                     insert_text = matched_step.replace(expression, '')
-                    if not insert_text.startswith(' '):
+                    if not insert_text.startswith(' ') and insert_text.strip().count(' ') < 1:
                         try:
                             _, insert_text = matched_step.rsplit(' ', 1)
                         except:
@@ -507,6 +507,8 @@ class GrizzlyLanguageServer(LanguageServer):
                 # if typed expression ends with whitespace, do not insert text starting with a whitespace
                 if expression[-1] == ' ' and expression[-2] != ' ' and insert_text[0] == ' ':
                     insert_text = insert_text[1:]
+
+                self.logger.debug(f'{expression=}, {insert_text=}, {matched_step=}')
 
                 if '""' in insert_text:
                     snippet_matches = re.finditer(
