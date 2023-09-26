@@ -55,6 +55,9 @@ from .utils import create_step_normalizer, load_step_registry
 from . import __version__
 
 
+VARIABLE_PATTERN = re.compile(r'(.*ask for value of variable "([^"]*)"$|.*value for variable "([^"]*)" is ".*?"$)')
+
+
 class GrizzlyLanguageServer(LanguageServer):
     logger: logging.Logger = logging.getLogger(__name__)
 
@@ -195,7 +198,9 @@ class GrizzlyLanguageServer(LanguageServer):
             items: List[CompletionItem] = []
             document = self.workspace.get_document(params.text_document.uri)
 
-            if line[params.position.character - 1 : params.position.character + 1] == '{{':
+            self.logger.debug(f'{line=}, {params.position=}, trigger=\'{line[:params.position.character]}\'')
+
+            if line[: params.position.character].rstrip().endswith('{{'):
                 items = self._complete_variable_name(line, document, params.position)
             else:
                 keyword, text = get_step_parts(line)
@@ -323,9 +328,7 @@ class GrizzlyLanguageServer(LanguageServer):
             if keyword is not None:
                 keywords = cast(
                     List[str],
-                    list(
-                        filter(lambda k: keyword.strip().lower() in k.lower(), keywords)  # type: ignore
-                    ),
+                    list(filter(lambda k: keyword.strip().lower() in k.lower(), keywords)),  # type: ignore
                 )
 
         for keyword in sorted(keywords):
@@ -359,25 +362,30 @@ class GrizzlyLanguageServer(LanguageServer):
         document: Document,
         position: Position,
     ) -> List[CompletionItem]:
-        # extract variable names in current scenario
-        variable_pattern = re.compile(r'(.*ask for value of variable "([^"]*)"$|.*value for variable "([^"]*)" is ".*?"$)')
-
-        ## find `scenario:` before current position
+        ## find `Scenario:` before current position
         lines = document.source.splitlines()
         before_lines = reversed(lines[0 : position.line])
 
         variable_names: List[Tuple[str, Optional[str]]] = []
 
         for before_line in before_lines:
-            match = variable_pattern.match(before_line)
+            match = VARIABLE_PATTERN.match(before_line)
 
             if match:
                 variable_name = match.group(2) or match.group(3)
-                insert_text = f'{variable_name} }}}}" {line[position.character+1:]}'.strip()
-
-                # @TODO: insert text should replace all "" with "$1", ... "$N"
 
                 if variable_name is not None:
+                    if line[: position.character].lstrip().startswith('}}'):
+                        insert_text = None
+                    else:
+                        prefix = '' if line[: position.character].endswith(' ') else ' '
+                        suffix = '"' if not line.rstrip().endswith('"') and line.count('"') % 2 != 0 else ''
+                        affix = '' if line[position.character :].strip().startswith('}}') else '}}'
+                        affix_suffix = '' if not line[position.character :].startswith('}}') and affix != '}}' else ' '
+                        insert_text = f'{prefix}{variable_name}{affix_suffix}{affix}{suffix}'
+
+                    self.logger.debug(f'{line=}, {variable_name=}, {insert_text=}')
+
                     variable_names.append(
                         (
                             variable_name,
