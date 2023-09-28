@@ -3,6 +3,7 @@ import inspect
 import re
 import os
 import subprocess
+import logging
 
 from typing import Dict, List, Optional, Tuple
 from types import ModuleType
@@ -14,6 +15,9 @@ from behave.step_registry import registry
 from behave.runner_util import load_step_modules as behave_load_step_modules
 
 from .text import Normalizer, NormalizeHolder, Coordinate, RegexPermutationResolver
+
+
+logger = logging.getLogger(__name__)
 
 
 def load_step_registry(step_path: Path) -> Dict[str, List[ParseMatcher]]:
@@ -96,8 +100,6 @@ def create_step_normalizer() -> Normalizer:
                     ),
                 }
             )
-        else:
-            raise ValueError(f'cannot infere what {func} will return for {custom_type}')
 
     return Normalizer(custom_type_permutations)
 

@@ -1,5 +1,6 @@
 {
   "grizzly.server.connection": "socket",
   "grizzly.socket.host": "localhost",
-  "grizzly.socket.port": 4444
+  "grizzly.socket.port": 4444,
+  "grizzly.stdio.use_virtual_environment": false
 }

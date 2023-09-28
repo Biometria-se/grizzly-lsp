@@ -248,9 +248,6 @@ class Normalizer:
 
                 holder = self.custom_types.get(variable_type, None)
                 if holder is not None:
-                    # @TODO: remove after new version of grizzly has been released
-                    if variable_type == 'ContentType':
-                        holder.permutations.y = True
                     normalize.update({variable: holder})
                 elif len(variable_type) == 1:  # native types
                     normalize.update(
@@ -260,8 +257,6 @@ class Normalizer:
                             )
                         }
                     )
-                else:
-                    errors.add(f'unhandled type: {variable=}, {variable_type=}')
 
             # replace variables that does not create any variations
             normalize_no_variations = {

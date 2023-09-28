@@ -47,7 +47,7 @@ class LspFixture:
             except:
                 pass
 
-        self.server = GrizzlyLanguageServer(loop=asyncio.new_event_loop())  # type: ignore
+        self.server = GrizzlyLanguageServer(use_venv=False, loop=asyncio.new_event_loop())  # type: ignore
         self._server_thread = Thread(
             target=start, args=(self.server, cstdio, sstdout), daemon=True
         )

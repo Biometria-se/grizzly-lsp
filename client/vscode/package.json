@@ -32,9 +32,6 @@
   "engines": {
     "vscode": "^1.63.0"
   },
-  "activationEvents": [
-    "onLanguage:grizzly-gherkin"
-  ],
   "main": "./out/src/extension",
   "contributes": {
     "languages": [
@@ -83,6 +80,12 @@
           "type": "array",
           "default": [],
           "description": "Additional arguments used by the language server"
+        },
+        "grizzly.stdio.use_virtual_environment": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": true,
+          "description": "Install project dependencies in a seperate virtual environment"
         },
         "grizzly.socket.host": {
           "scope": "resource",

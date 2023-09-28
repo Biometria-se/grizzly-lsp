@@ -55,13 +55,15 @@ class TestGrizzlyLanguageServer:
         assert server.name == 'grizzly-ls'
         assert server.version == __version__
         assert server.steps == {}
-        assert server.keywords == []
-        assert server.keyword_any == [
-            'But',
-            'And',
-            '*',
-        ]
-        assert server.keywords_once == ['Feature', 'Background']
+        assert sorted(server.keywords) == sorted(['Scenario', 'And', 'But'])
+        assert sorted(server.keywords_any) == sorted(
+            [
+                '*',
+                'But',
+                'And',
+            ]
+        )
+        assert sorted(server.keywords_once) == sorted(['Feature', 'Background'])
 
         assert isinstance(server.logger, logging.Logger)
         assert server.logger.name == 'grizzly_ls.server'
@@ -512,21 +514,9 @@ class TestGrizzlyLanguageServer:
                     'unhandled type {test:Unknown} for payload',
                 ]
             )
-        assert len(caplog.messages) == 1
-        assert (
-            caplog.messages[-1]
-            == "unhandled type: variable='{test:Unknown}', variable_type='Unknown'"
-        )
 
-        assert show_message_mock.call_count == 1
-        args, kwargs = show_message_mock.call_args_list[-1]
-        assert len(args) == 1
-        assert (
-            args[0]
-            == "unhandled type: variable='{test:Unknown}', variable_type='Unknown'"
-        )
-        assert len(kwargs) == 1
-        assert kwargs.get('msg_type', None) == 1
+        assert caplog.messages == []
+        show_message_mock.assert_not_called()
 
     def test__compile_inventory(
         self, lsp_fixture: LspFixture, caplog: LogCaptureFixture
@@ -556,7 +546,6 @@ class TestGrizzlyLanguageServer:
         server = lsp_fixture.server
 
         assert server.steps == {}
-        assert server.keywords == []
 
         # create pre-requisites
         grizzly_project = Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
@@ -801,7 +790,6 @@ class TestGrizzlyLanguageServer:
             server = lsp_fixture.server
 
             assert server.steps == {}
-            assert server.keywords == []
 
             virtual_environment = Path(gettempdir()) / 'grizzly-ls-project'
 

@@ -42,6 +42,14 @@ def parse_arguments() -> argparse.Namespace:
         help='print version and exit',
     )
 
+    parser.add_argument(
+        '--no-venv',
+        action='store_false',
+        dest='use_venv',
+        default=True,
+        help='do not install projects dependencies in an isolated virtual environment for the language server',
+    )
+
     args = parser.parse_args()
 
     if args.version:
@@ -81,7 +89,7 @@ def main() -> NoReturn:  # type: ignore
 
     setup_logging(args)
 
-    server = GrizzlyLanguageServer()
+    server = GrizzlyLanguageServer(use_venv=args.use_venv)
 
     if not args.socket:
         server.start_io(sys.stdin.buffer, sys.stdout.buffer)  # type: ignore

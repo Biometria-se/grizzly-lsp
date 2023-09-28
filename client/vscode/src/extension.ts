@@ -60,11 +60,16 @@ function getOuterMostWorkspaceFolder(folder: WorkspaceFolder): WorkspaceFolder {
 function createStdioLanguageServer(
     command: string,
     args: string[],
+    useVirtualEnvironment: boolean,
     documentSelector: string[],
     outputChannel: OutputChannel
 ): LanguageClient {
     if (process.env.VERBOSE && !args.includes('--verbose')) {
         args = [...args, '--verbose'];
+    }
+
+    if (!useVirtualEnvironment) {
+        args = [...args, '--no-venv'];
     }
 
     const serverOptions: ServerOptions = {
@@ -128,6 +133,7 @@ function createLanguageClient(): LanguageClient {
             languageClient = createStdioLanguageServer(
                 configuration.get<string>('stdio.executable') || 'grizzly-ls',
                 configuration.get<Array<string>>('stdio.args') || [],
+                configuration.get<boolean>('stdio.use_virtual_environment') || true,
                 documentSelector,
                 outputChannel
             );

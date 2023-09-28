@@ -18,14 +18,35 @@ def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
     args = parse_arguments()
 
     assert args == Namespace(
-        socket=False, socket_port=4444, verbose=False, version=False
+        socket=False,
+        socket_port=4444,
+        verbose=False,
+        version=False,
+        use_venv=True,
     )
 
     sys.argv = ['grizzly-ls', '--socket', '--socket-port', '5555', '--verbose']
 
     args = parse_arguments()
 
-    assert args == Namespace(socket=True, socket_port=5555, verbose=True, version=False)
+    assert args == Namespace(
+        socket=True, socket_port=5555, verbose=True, version=False, use_venv=True
+    )
+
+    sys.argv = [
+        'grizzly-ls',
+        '--socket',
+        '--socket-port',
+        '5555',
+        '--verbose',
+        '--no-venv',
+    ]
+
+    args = parse_arguments()
+
+    assert args == Namespace(
+        socket=True, socket_port=5555, verbose=True, version=False, use_venv=False
+    )
 
     sys.argv = ['grizzly-ls', '--version']
 
