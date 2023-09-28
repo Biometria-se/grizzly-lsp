@@ -2,9 +2,8 @@ import itertools
 import logging
 import platform
 import signal
-import subprocess
-import sys
 import re
+import sys
 
 from os import environ
 from os.path import pathsep, sep
@@ -17,7 +16,9 @@ from tempfile import gettempdir
 from difflib import get_close_matches
 from urllib.parse import urlparse, unquote
 from urllib.request import url2pathname
-from time import perf_counter
+from pip._internal.configuration import Configuration as PipConfiguration
+from pip._internal.exceptions import ConfigurationError as PipConfigurationError
+from datetime import datetime
 
 import gevent.monkey  # type: ignore
 
@@ -51,7 +52,7 @@ from lsprotocol.types import (
 from behave.i18n import languages
 
 from .text import Normalizer, get_step_parts, clean_help
-from .utils import create_step_normalizer, load_step_registry
+from .utils import create_step_normalizer, load_step_registry, run_command
 from . import __version__
 
 
@@ -64,6 +65,7 @@ class GrizzlyLanguageServer(LanguageServer):
     logger: logging.Logger = logging.getLogger(__name__)
 
     root_path: Path
+    index_url: Optional[str]
     behave_steps: Dict[str, List[ParseMatcher]]
     steps: Dict[str, List[str]]
     help: Dict[str, str]
@@ -87,6 +89,7 @@ class GrizzlyLanguageServer(LanguageServer):
     def __init__(self, *args: Tuple[Any, ...], **kwargs: Dict[str, Any]) -> None:
         super().__init__(name='grizzly-ls', version=__version__, *args, **kwargs)  # type: ignore
 
+        self.index_url = environ.get('PIP_EXTRA_INDEX_URL', None)
         self.behave_steps = {}
         self.steps = {}
         self.help = {}
@@ -101,13 +104,24 @@ class GrizzlyLanguageServer(LanguageServer):
 
         signal.signal = _signal  # type: ignore
 
+        # no index-url specified as argument, check if we have it in pip configuration
+        if self.index_url is None:
+            pip_config = PipConfiguration(isolated=False)
+            try:
+                pip_config.load()
+                self.index_url = pip_config.get_value('global.index-url')
+            except PipConfigurationError:
+                pass
+        self.logger.debug(f'{self.index_url=}')
+
         @self.feature(INITIALIZE)
         def initialize(params: InitializeParams) -> None:
-            self.logger.debug(params)
+            self.logger.debug(f'{params=}')
             if params.root_path is None and params.root_uri is None:
                 error_message = 'neither root_path or root uri was received from client'
                 self.logger.error(error_message)
                 self.show_message(error_message, msg_type=MessageType.Error)
+                return
 
             root_path = (
                 Path(unquote(url2pathname(urlparse(params.root_uri).path)))
@@ -130,10 +144,9 @@ class GrizzlyLanguageServer(LanguageServer):
             project_name = root_path.stem
 
             virtual_environment = Path(gettempdir()) / f'grizzly-ls-{project_name}'
-
-            self.logger.debug(f'looking for venv at {virtual_environment}')
-
             has_venv = virtual_environment.exists()
+
+            self.logger.debug(f'looking for venv at {virtual_environment}, {has_venv=}')
 
             if not has_venv:
                 self.logger.debug(
@@ -142,7 +155,13 @@ class GrizzlyLanguageServer(LanguageServer):
                 self.show_message(
                     'creating virtual environment for language server, this could take a while'
                 )
-                venv_create(str(virtual_environment))
+                try:
+                    venv_create(str(virtual_environment), with_pip=True)
+                except:
+                    message = 'failed to create virtual environment'
+                    self.logger.error(message, exc_info=True)
+                    self.show_message(message)
+                    return
 
             if platform.system() == 'Windows':  # pragma: no cover
                 bin_dir = 'Scripts'
@@ -150,7 +169,6 @@ class GrizzlyLanguageServer(LanguageServer):
                 bin_dir = 'bin'
 
             paths = [str(virtual_environment / bin_dir), environ.get('PATH', '')]
-            self.logger.debug('updating environment variables for venv')
             environ.update(
                 {
                     'PATH': pathsep.join(paths),
@@ -159,41 +177,131 @@ class GrizzlyLanguageServer(LanguageServer):
                 }
             )
 
+            if self.index_url is not None:
+                index_url_parsed = urlparse(self.index_url)
+                if (
+                    index_url_parsed.username is None
+                    or index_url_parsed.password is None
+                ):
+                    message = 'global.index-url does not contain username and/or password, check your configuration!'
+                    self.logger.error(message)
+                    self.show_message(message, msg_type=MessageType.Error)
+                    return
+
+                environ.update(
+                    {
+                        'PIP_EXTRA_INDEX_URL': self.index_url,
+                    }
+                )
+
+            self.logger.debug(f'updating environment variables for venv, {environ=}')
+
+            requirements_file = root_path / 'requirements.txt'
+            assert requirements_file.exists()
+
+            venv_age = virtual_environment.lstat().st_mtime
+            old_venv = (datetime.today() - datetime.fromtimestamp(venv_age)).seconds > (
+                3600 * 7
+            )
+
             if not has_venv:
-                requirements_file = root_path / 'requirements.txt'
-                assert requirements_file.exists()
-                self.logger.debug(f'installing {requirements_file}')
-                start = perf_counter()
-                try:
-                    output = subprocess.check_output(
-                        [
-                            sys.executable,
-                            '-m',
-                            'pip',
-                            'install',
-                            '-r',
-                            str(requirements_file),
-                        ],
-                        env=environ,
-                    ).decode(sys.stdout.encoding)
-                    self.logger.debug(output)
-                    rc = 0
-                except subprocess.CalledProcessError as e:
-                    self.logger.error(e.output)
-                    rc = e.returncode
-                finally:
-                    delta = (perf_counter() - start) * 1000
-                    self.logger.debug(f'pip install took {delta} ms')
+                self.logger.debug(
+                    f'installing {requirements_file} in {environ["VIRTUAL_ENV"]}'
+                )
+                rc, output = run_command(
+                    [
+                        'python3',
+                        '-m',
+                        'pip',
+                        'install',
+                        '-r',
+                        str(requirements_file),
+                    ],
+                    env=environ,
+                )
+
+                for line in output:
+                    if line.strip().startswith('ERROR:'):
+                        _, line = line.split(' ', 1)
+                        log_method = self.logger.error
+                    elif rc == 0:
+                        log_method = self.logger.debug
+                    else:
+                        log_method = self.logger.warning
+
+                    if len(line.strip()) < 1:
+                        log_method(line.strip())
 
                 if rc == 0:
-                    self.show_message('virtual environment done')
+                    self.show_message('virtual environment created')
                 else:
                     self.show_message(
                         f'failed to install {requirements_file}',
                         msg_type=MessageType.Error,
                     )
+                    return
+            elif requirements_file.lstat().st_mtime > venv_age or old_venv:
+                message = f'updating {virtual_environment.name}'
+                self.logger.debug(message)
+                self.show_message(message, msg_type=MessageType.Info)
 
-            self._compile_inventory(root_path, project_name)
+                rc, output = run_command(
+                    [
+                        'python3',
+                        '-m',
+                        'pip',
+                        'install',
+                        '--upgrade' '-r',
+                        str(requirements_file),
+                    ],
+                    env=environ,
+                )
+
+                for line in output:
+                    if line.strip().startswith('ERROR:'):
+                        _, line = line.split(' ', 1)
+                        log_method = self.logger.error
+                    elif rc == 0:
+                        log_method = self.logger.debug
+                    else:
+                        log_method = self.logger.warning
+
+                    if len(line.strip()) < 1:
+                        log_method(line.strip())
+
+                if rc == 0:
+                    message = 'virtual environment updated'
+                    self.show_message(message)
+                    self.logger.debug(message)
+                else:
+                    self.show_message(
+                        'failed to update virtual environment',
+                        msg_type=MessageType.Error,
+                    )
+                    return
+            else:
+                self.logger.debug('using virtual environment as is')
+
+            # modify sys.path to use modules from virtual environment when compiling inventory
+            venv_sys_path = (
+                virtual_environment
+                / 'lib'
+                / f'python{sys.version_info.major}.{sys.version_info.minor}/site-packages'
+            )
+            sys.path.append(str(venv_sys_path))
+
+            try:
+                self.logger.debug(f'!! {sys.path=}')
+                self._compile_inventory(root_path, project_name)
+            except ModuleNotFoundError:
+                self.logger.error('failed to create step inventory', exc_info=True)
+                self.show_message(
+                    'failed to create step inventory', msg_type=MessageType.Error
+                )
+                return
+            finally:
+                # always restore to original value
+                sys.path.pop()
 
             markup_supported: List[MarkupKind] = get_capability(
                 self.client_capabilities,
@@ -207,29 +315,33 @@ class GrizzlyLanguageServer(LanguageServer):
 
         @self.feature(TEXT_DOCUMENT_COMPLETION)
         def completion(params: CompletionParams) -> CompletionList:
-            assert self.steps is not None, 'no steps in inventory'
-
-            line = self._current_line(params.text_document.uri, params.position)
-
             items: List[CompletionItem] = []
-            document = self.workspace.get_document(params.text_document.uri)
 
-            self.logger.debug(
-                f'{line=}, {params.position=}, trigger=\'{line[:params.position.character]}\''
-            )
-
-            if line[: params.position.character].rstrip().endswith('{{'):
-                items = self._complete_variable_name(line, document, params.position)
+            if len(self.steps.values()) < 1:
+                message = 'no steps i inventory'
+                self.logger.error(message)
+                self.show_message(message, msg_type=MessageType.Error)
             else:
-                keyword, text = get_step_parts(line)
-                self.logger.debug(f'{keyword=}, {text=}, {self.keywords=}')
+                line = self._current_line(params.text_document.uri, params.position)
 
-                if keyword is not None and keyword in self.keywords:
-                    items = self._complete_step(keyword, text)
+                document = self.workspace.get_document(params.text_document.uri)
+
+                self.logger.debug(
+                    f'{line=}, {params.position=}, trigger=\'{line[:params.position.character]}\''
+                )
+
+                if line[: params.position.character].rstrip().endswith('{{'):
+                    items = self._complete_variable_name(
+                        line, document, params.position
+                    )
                 else:
-                    items = self._complete_keyword(keyword, document)
+                    keyword, text = get_step_parts(line)
+                    self.logger.debug(f'{keyword=}, {text=}, {self.keywords=}')
 
-            # self.logger.debug(f'completion: {items=}')
+                    if keyword is not None and keyword in self.keywords:
+                        items = self._complete_step(keyword, text)
+                    else:
+                        items = self._complete_keyword(keyword, document)
 
             return CompletionList(
                 is_incomplete=False,
@@ -643,6 +755,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
     def _compile_inventory(self, root_path: Path, project_name: str) -> None:
         self.logger.debug('creating step registry')
+
         self.behave_steps = load_step_registry(root_path / 'features' / 'steps')
 
         try:
@@ -659,7 +772,7 @@ class GrizzlyLanguageServer(LanguageServer):
             total_steps += len(steps)
 
         self._compile_keyword_inventory()
-        message = f'found {len(self.keywords)} keywords and {total_steps} steps for grizzly project {project_name}'
+        message = f'found {len(self.keywords)} keywords and {total_steps} steps in "{project_name}"'
         self.logger.debug(message)
         self.show_message(message)
 

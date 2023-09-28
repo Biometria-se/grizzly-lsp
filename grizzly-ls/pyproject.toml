@@ -157,3 +157,6 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "pytablewriter.*"
 ignore_missing_imports = true
+
+[tool.coverage.report]
+omit = ["src/grizzly_ls/__init__.py"]

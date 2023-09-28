@@ -1,13 +1,15 @@
 import warnings
 import inspect
 import re
+import os
+import subprocess
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from types import ModuleType
 from importlib import import_module
 from pathlib import Path
-from behave.matchers import ParseMatcher
 
+from behave.matchers import ParseMatcher
 from behave.step_registry import registry
 from behave.runner_util import load_step_modules as behave_load_step_modules
 
@@ -98,3 +100,49 @@ def create_step_normalizer() -> Normalizer:
             raise ValueError(f'cannot infere what {func} will return for {custom_type}')
 
     return Normalizer(custom_type_permutations)
+
+
+def run_command(
+    command: List[str],
+    env: Optional[os._Environ[str]] = None,
+    cwd: Optional[str] = None,
+) -> Tuple[int, List[str]]:
+    output: List[str] = []
+    if env is None:
+        env = os.environ
+
+    if cwd is None:
+        cwd = os.getcwd()
+
+    process = subprocess.Popen(
+        command,
+        env=env,
+        cwd=cwd,
+        stderr=subprocess.STDOUT,
+        stdout=subprocess.PIPE,
+    )
+
+    try:
+        while process.poll() is None:
+            stdout = process.stdout
+            if stdout is None:
+                break
+
+            buffer = stdout.readline()
+            if not buffer:
+                break
+
+            output.append(buffer.decode('utf-8'))
+
+        process.terminate()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        try:
+            process.kill()
+        except Exception:
+            pass
+
+    process.wait()
+
+    return process.returncode, output
