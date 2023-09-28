@@ -5,7 +5,7 @@ import signal
 import re
 import sys
 
-from os import environ
+from os import environ, linesep
 from os.path import pathsep, sep
 from typing import Any, Tuple, Dict, List, Union, Optional, Set, cast
 from types import FrameType
@@ -293,10 +293,11 @@ class GrizzlyLanguageServer(LanguageServer):
                 self.logger.error(message)
                 self.show_message(message, msg_type=MessageType.Error)
             else:
-                # @TODO: check for `# language: <lang>` here, and set self.language
                 line = self._current_line(params.text_document.uri, params.position)
 
                 document = self.workspace.get_document(params.text_document.uri)
+
+                self.language = self._find_language(document.source)
 
                 self.logger.debug(
                     f'{line=}, {params.position=}, trigger=\'{line[:params.position.character]}\''
@@ -324,7 +325,7 @@ class GrizzlyLanguageServer(LanguageServer):
         def workspace_did_change_configuration(
             params: WorkspaceDidChangeConfigurationParams,
         ) -> None:
-            self.logger.debug(params)
+            self.logger.debug(f'workspace_did_change_configurtion: {params=}')
 
         @self.feature(TEXT_DOCUMENT_HOVER)
         def hover(params: HoverParams) -> Optional[Hover]:
@@ -335,14 +336,21 @@ class GrizzlyLanguageServer(LanguageServer):
 
             self.logger.debug(f'{keyword=}, {step=}')
 
-            if (
-                step is None
-                or keyword is None
-                or (
-                    keyword.lower() not in self.steps
-                    and keyword not in self.keywords_any
+            abort: bool = False
+
+            try:
+                abort = (
+                    step is None
+                    or keyword is None
+                    or (
+                        self._get_language_key(keyword) not in self.steps
+                        and keyword not in self.keywords_any
+                    )
                 )
-            ):
+            except:
+                abort = True
+
+            if abort or keyword is None:
                 return None
 
             start = current_line.index(keyword)
@@ -423,6 +431,7 @@ class GrizzlyLanguageServer(LanguageServer):
     @language.setter
     def language(self, value: str) -> None:
         if not hasattr(self, '_language') or self._language != value:
+            self.logger.info(f'language detected: "{value}"')
             self._language = value
             self._compile_keyword_inventory()
 
@@ -435,6 +444,17 @@ class GrizzlyLanguageServer(LanguageServer):
             return f'* {arg_name} `{arg_type}`: {description.strip()}'
         except ValueError:
             return f'* {line}'
+
+    def _find_language(self, document: str) -> str:
+        language: str = 'en'
+
+        for line in document.split(linesep):
+            line = line.strip()
+            if line.startswith('# language: '):
+                _, language = line.strip().split(': ', 1)
+                break
+
+        return language.strip()
 
     def _complete_keyword(
         self, keyword: Optional[str], document: Document
@@ -589,42 +609,22 @@ class GrizzlyLanguageServer(LanguageServer):
                 )
             )
         else:
-            steps = self.steps.get(keyword.lower(), [])
+            key = self._get_language_key(keyword)
+            steps = self.steps.get(key, []) + self.steps.get('step', [])
 
-        matched_steps: List[CompletionItem]
+        matched_steps: List[CompletionItem] = []
+        matched_steps_1: Set[str]
+        matched_steps_2: Set[str] = set()
+        matched_steps_3: Set[str] = set()
 
         if expression is None or len(expression) < 1:
-            matched_steps = [
-                CompletionItem(
-                    label=step,
-                    kind=CompletionItemKind.Function,
-                    tags=None,
-                    detail=None,
-                    documentation=None,
-                    deprecated=False,
-                    preselect=None,
-                    sort_text=None,
-                    filter_text=None,
-                    insert_text=None,
-                    insert_text_format=None,
-                    insert_text_mode=None,
-                    text_edit=None,
-                    additional_text_edits=None,
-                    commit_characters=None,
-                    command=None,
-                    data=None,
-                )
-                for step in steps
-            ]
+            matched_steps_1 = set(steps)
         else:
             # remove any user values enclosed with double-quotes
             expression_shell = re.sub(r'"[^"]*"', '""', expression)
 
             # 1. exact matching
             matched_steps_1: Set[str] = set(filter(lambda s: s.startswith(expression_shell), steps))  # type: ignore
-
-            matched_steps_2: Set[str] = set()
-            matched_steps_3: Set[str] = set()
 
             if len(matched_steps_1) < 1 or ' ' not in expression:
                 # 2. close enough matching
@@ -635,103 +635,116 @@ class GrizzlyLanguageServer(LanguageServer):
                     get_close_matches(expression_shell, steps, len(steps), 0.6)
                 )
 
-            # keep order so that 1. matches comes before 2. matches etc.
-            matched_steps_container: Dict[str, CompletionItem] = {}
+        # keep order so that 1. matches comes before 2. matches etc.
+        matched_steps_container: Dict[str, CompletionItem] = {}
 
-            input_matches = list(
-                re.finditer(r'"([^"]*)"', expression, flags=re.MULTILINE)
+        input_matches = list(
+            re.finditer(r'"([^"]*)"', expression or '', flags=re.MULTILINE)
+        )
+
+        for matched_step in itertools.chain(
+            matched_steps_1, matched_steps_2, matched_steps_3
+        ):
+            output_matches = list(
+                re.finditer(r'"([^"]*)"', matched_step, flags=re.MULTILINE)
             )
 
-            for matched_step in itertools.chain(
-                matched_steps_1, matched_steps_2, matched_steps_3
+            # suggest step with already entetered variables in their correct place
+            if input_matches and output_matches:
+                offset = 0
+                for input_match, output_match in zip(input_matches, output_matches):
+                    matched_step = f'{matched_step[0:output_match.start()+offset]}"{input_match.group(1)}"{matched_step[output_match.end()+offset:]}'
+                    offset += len(input_match.group(1))
+
+            preselect: bool = False
+            if (
+                expression is not None
+                and len(expression.strip()) > 0
+                and ' ' in expression
             ):
-                output_matches = list(
-                    re.finditer(r'"([^"]*)"', matched_step, flags=re.MULTILINE)
+                # only insert the part of the step that has not already been written, up until last space, since vscode
+                # seems to insert text word wise
+                insert_text = matched_step.replace(expression, '')
+                if (
+                    not insert_text.startswith(' ')
+                    and insert_text.strip().count(' ') < 1
+                ):
+                    try:
+                        _, insert_text = matched_step.rsplit(' ', 1)
+                    except:
+                        pass
+            else:
+                insert_text = matched_step
+
+            # do not suggest the step that is already written
+            if matched_step == expression:
+                continue
+            elif matched_step == insert_text:  # exact match, preselect it
+                preselect = True
+
+            # if typed expression ends with whitespace, do not insert text starting with a whitespace
+            if (
+                expression is not None
+                and len(expression.strip()) > 0
+                and expression[-1] == ' '
+                and expression[-2] != ' '
+                and insert_text[0] == ' '
+            ):
+                insert_text = insert_text[1:]
+
+            self.logger.debug(f'{expression=}, {insert_text=}, {matched_step=}')
+
+            if '""' in insert_text:
+                snippet_matches = re.finditer(
+                    r'""',
+                    insert_text,
+                    flags=re.MULTILINE,
                 )
 
-                # suggest step with already entetered variables in their correct place
-                if input_matches and output_matches:
-                    offset = 0
-                    for input_match, output_match in zip(input_matches, output_matches):
-                        matched_step = f'{matched_step[0:output_match.start()+offset]}"{input_match.group(1)}"{matched_step[output_match.end()+offset:]}'
-                        offset += len(input_match.group(1))
+                offset = 0
+                for index, snippet_match in enumerate(snippet_matches, start=1):
+                    snippet_placeholder = f'${index}'
+                    insert_text = f'{insert_text[0:snippet_match.start()+offset]}"{snippet_placeholder}"{insert_text[snippet_match.end()+offset:]}'
+                    offset += len(snippet_placeholder)
 
-                preselect: bool = False
-                if ' ' in expression:
-                    # only insert the part of the step that has not already been written, up until last space, since vscode
-                    # seems to insert text word wise
-                    insert_text = matched_step.replace(expression, '')
-                    if (
-                        not insert_text.startswith(' ')
-                        and insert_text.strip().count(' ') < 1
-                    ):
-                        try:
-                            _, insert_text = matched_step.rsplit(' ', 1)
-                        except:
-                            pass
-                else:
-                    insert_text = matched_step
+                insert_text_format = InsertTextFormat.Snippet
+            else:
+                insert_text_format = InsertTextFormat.PlainText
 
-                # do not suggest the step that is already written
-                if matched_step == expression:
-                    continue
-                elif matched_step == insert_text:  # exact match, preselect it
-                    preselect = True
-
-                # if typed expression ends with whitespace, do not insert text starting with a whitespace
-                if (
-                    expression[-1] == ' '
-                    and expression[-2] != ' '
-                    and insert_text[0] == ' '
-                ):
-                    insert_text = insert_text[1:]
-
-                self.logger.debug(f'{expression=}, {insert_text=}, {matched_step=}')
-
-                if '""' in insert_text:
-                    snippet_matches = re.finditer(
-                        r'""',
-                        insert_text,
-                        flags=re.MULTILINE,
+            matched_steps_container.update(
+                {
+                    matched_step: CompletionItem(
+                        label=matched_step,
+                        kind=CompletionItemKind.Function,
+                        tags=None,
+                        detail=None,
+                        documentation=self._find_help(f'{keyword} {matched_step}'),
+                        deprecated=False,
+                        preselect=preselect,
+                        sort_text=None,
+                        filter_text=None,
+                        insert_text=insert_text,
+                        insert_text_format=insert_text_format,
+                        insert_text_mode=None,
+                        text_edit=None,
+                        additional_text_edits=None,
+                        commit_characters=None,
+                        command=None,
+                        data=None,
                     )
-
-                    offset = 0
-                    for index, snippet_match in enumerate(snippet_matches, start=1):
-                        snippet_placeholder = f'${index}'
-                        insert_text = f'{insert_text[0:snippet_match.start()+offset]}"{snippet_placeholder}"{insert_text[snippet_match.end()+offset:]}'
-                        offset += len(snippet_placeholder)
-
-                    insert_text_format = InsertTextFormat.Snippet
-                else:
-                    insert_text_format = InsertTextFormat.PlainText
-
-                matched_steps_container.update(
-                    {
-                        matched_step: CompletionItem(
-                            label=matched_step,
-                            kind=CompletionItemKind.Function,
-                            tags=None,
-                            detail=None,
-                            documentation=self._find_help(f'{keyword} {matched_step}'),
-                            deprecated=False,
-                            preselect=preselect,
-                            sort_text=None,
-                            filter_text=None,
-                            insert_text=insert_text,
-                            insert_text_format=insert_text_format,
-                            insert_text_mode=None,
-                            text_edit=None,
-                            additional_text_edits=None,
-                            commit_characters=None,
-                            command=None,
-                            data=None,
-                        )
-                    }
-                )  # type: ignore
+                }
+            )  # type: ignore
 
             matched_steps = list(matched_steps_container.values())
 
         return matched_steps
+
+    def _get_language_key(self, keyword: str) -> str:
+        for key, values in self.localizations.items():
+            if keyword in values:
+                return key
+
+        raise ValueError(f'"{keyword}" is not a valid keyword')
 
     def _normalize_step_expression(self, step: Union[ParseMatcher, str]) -> List[str]:
         if isinstance(step, ParseMatcher):
