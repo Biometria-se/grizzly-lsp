@@ -261,7 +261,6 @@ class GrizzlyLanguageServer(LanguageServer):
                 sys.path.append(str(venv_sys_path))
 
             try:
-                self.logger.debug(f'!! {sys.path=}')
                 self._compile_inventory(root_path, project_name)
             except ModuleNotFoundError:
                 self.logger.error('failed to create step inventory', exc_info=True)
@@ -387,23 +386,52 @@ class GrizzlyLanguageServer(LanguageServer):
             matches = re.finditer(r'"([^"]*)"', current_line, re.MULTILINE)
             definitions: List[LocationLink] = []
 
-            for match in matches:
-                variable_value = match.group(1)
+            document = self.workspace.get_document(params.text_document.uri)
+            if document.path is None:
+                document_directory = Path.cwd()
+            else:
+                document_directory = Path(document.path).parent
 
-                if variable_value.startswith('$conf::'):
-                    # @TODO: preview with an environment file, if any exists?
-                    continue
+            for variable_match in matches:
+                variable_value = variable_match.group(1)
 
-                # @TODO: check if variable_value contains a file:// url
+                if 'file://' in variable_value:
+                    file_match = re.search(r'.*(file:\/\/)([^\$]*)', variable_value)
+                    if not file_match:
+                        continue
+                    file_url = f'{file_match.group(1)}{file_match.group(2)}'
 
-                payload_file = self.root_path / 'features' / 'requests' / variable_value
+                    if sys.platform == 'win32':
+                        file_url = file_url.replace('\\', '/')
+
+                    file_parsed = urlparse(file_url)
+
+                    # relativ or absolute?
+                    if file_parsed.netloc == '.':  # relative!
+                        relative_path = file_parsed.path
+                        if relative_path.startswith('/'):
+                            relative_path = relative_path[1:]
+
+                        payload_file = document_directory / relative_path
+                    else:  # absolute!
+                        payload_file = Path(f'{file_parsed.netloc}{file_parsed.path}')
+
+                    start_offset = file_match.start(1)
+                    end_offset = -1 if variable_value.endswith('$') else 0
+                else:
+                    # this is quite grizzly specific...
+                    payload_file = (
+                        self.root_path / 'features' / 'requests' / variable_value
+                    )
+                    start_offset = 0
+                    end_offset = 0
 
                 # just some text
                 if not payload_file.exists():
                     continue
 
-                start = match.start(1)
-                end = match.end(1)
+                start = variable_match.start(1) + start_offset
+                end = variable_match.end(1) + end_offset
 
                 range = Range(
                     start=Position(line=0, character=0),

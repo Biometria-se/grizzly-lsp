@@ -120,10 +120,9 @@ function createSocketLanguageServer(
     return new LanguageClient(`socket language server (${host}:${port})`, serverOptions, clientOptions);
 }
 
-function createLanguageClient(): LanguageClient {
+function createLanguageClient(outputChannel: OutputChannel): LanguageClient {
     const configuration = workspace.getConfiguration('grizzly');
     const documentSelector = ['grizzly-gherkin'];
-    const outputChannel: OutputChannel = Window.createOutputChannel('Grizzly Language Server');
     let languageClient: LanguageClient;
 
     const connectionType = configuration.get<string>('server.connection');
@@ -154,6 +153,8 @@ function createLanguageClient(): LanguageClient {
 }
 
 export function activate() {
+    const outputChannel: OutputChannel = Window.createOutputChannel('Grizzly Language Server');
+
     const didOpenTextDocument = async (document: TextDocument): Promise<void> => {
         if (document.languageId !== 'grizzly-gherkin') {
             return;
@@ -169,12 +170,18 @@ export function activate() {
         const folderUri = folder.uri.toString();
 
         if (!clients.has(folderUri)) {
-            const client = createLanguageClient();
+            const client = createLanguageClient(outputChannel);
             client.start();
             await client.onReady();
             clients.set(folderUri, client);
+            outputChannel.appendLine(`started language client for ${folderUri}`);
         }
     };
+
+    // disable vscode builtin handler of `file://` url's, since it interferse with grizzly-ls definitions
+    // https://github.com/microsoft/vscode/blob/f1f645f4ccbee9d56d091b819a81d34af31be17f/src/vs/editor/contrib/links/links.ts#L310-L330
+    const configuration = workspace.getConfiguration('', {languageId: 'grizzly-gherkin'});
+    configuration.update('editor.links', false, false, true);
 
     workspace.onDidOpenTextDocument(didOpenTextDocument);
     workspace.textDocuments.forEach(didOpenTextDocument);
@@ -185,6 +192,7 @@ export function activate() {
 
             if (client) {
                 clients.delete(folderUri);
+                outputChannel.appendLine(`removed workspace folder ${folderUri}`);
                 client.stop();
             }
         }
