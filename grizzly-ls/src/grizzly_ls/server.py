@@ -82,6 +82,16 @@ class GrizzlyLanguageServer(LanguageServer):
     def show_message(
         self, message: str, msg_type: Optional[MessageType] = MessageType.Info
     ) -> None:
+        if msg_type == MessageType.Info:
+            log_method = self.logger.info
+        elif msg_type == MessageType.Error:
+            log_method = self.logger.error
+        elif msg_type == MessageType.Warning:
+            log_method = self.logger.warning
+        else:
+            log_method = self.logger.debug
+
+        log_method(message)
         super().show_message(message, msg_type=msg_type)  # type: ignore
 
     def __init__(self, *args: Tuple[Any, ...], **kwargs: Dict[str, Any]) -> None:
@@ -106,11 +116,11 @@ class GrizzlyLanguageServer(LanguageServer):
 
         @self.feature(INITIALIZE)
         def initialize(params: InitializeParams) -> None:
-            self.logger.debug(f'{params=}')
             if params.root_path is None and params.root_uri is None:
-                error_message = 'neither root_path or root uri was received from client'
-                self.logger.error(error_message)
-                self.show_message(error_message, msg_type=MessageType.Error)
+                self.show_message(
+                    'neither root_path or root uri was received from client',
+                    msg_type=MessageType.Error,
+                )
                 return
 
             root_path = (
@@ -160,9 +170,10 @@ class GrizzlyLanguageServer(LanguageServer):
                     try:
                         re.compile(variable_pattern)
                     except:
-                        message = f'variable pattern "{variable_pattern}" is not valid, check grizzly.variable_pattern setting'
-                        self.logger.error(message)
-                        self.show_message(message, msg_type=MessageType.Error)
+                        self.show_message(
+                            f'variable pattern "{variable_pattern}" is not valid, check grizzly.variable_pattern setting',
+                            msg_type=MessageType.Error,
+                        )
                         return
 
                 variable_pattern = f'({"|".join(variable_patterns)})'
@@ -201,9 +212,7 @@ class GrizzlyLanguageServer(LanguageServer):
                     try:
                         venv_create(str(virtual_environment), with_pip=True)
                     except:
-                        message = 'failed to create virtual environment'
-                        self.logger.error(message, exc_info=True)
-                        self.show_message(message)
+                        self.show_message('failed to create virtual environment')
                         return
 
                 if platform.system() == 'Windows':  # pragma: no cover
@@ -226,9 +235,10 @@ class GrizzlyLanguageServer(LanguageServer):
                         index_url_parsed.username is None
                         or index_url_parsed.password is None
                     ):
-                        message = 'global.index-url does not contain username and/or password, check your configuration!'
-                        self.logger.error(message)
-                        self.show_message(message, msg_type=MessageType.Error)
+                        self.show_message(
+                            'global.index-url does not contain username and/or password, check your configuration!',
+                            msg_type=MessageType.Error,
+                        )
                         return
 
                     environ.update(
@@ -243,12 +253,13 @@ class GrizzlyLanguageServer(LanguageServer):
 
             requirements_file = root_path / 'requirements.txt'
             if not requirements_file.exists():
-                message = f'project "{project_name}" does not have a requirements.txt in {root_path}'
-                self.logger.error(message)
-                self.show_message(message, msg_type=MessageType.Error)
+                self.show_message(
+                    f'project "{project_name}" does not have a requirements.txt in {root_path}',
+                    msg_type=MessageType.Error,
+                )
                 return
 
-            # @TODO first time we should always install, no matter if venv is used or not, but then?
+            # @TODO: touch file in temp directory, and check if it's older than requirements_file, or if it's older than a week
             self.logger.debug(f'installing/upgrading from {requirements_file}')
 
             rc, output = run_command(
@@ -299,7 +310,6 @@ class GrizzlyLanguageServer(LanguageServer):
             try:
                 self._compile_inventory(root_path, project_name)
             except ModuleNotFoundError:
-                self.logger.error('failed to create step inventory', exc_info=True)
                 self.show_message(
                     'failed to create step inventory', msg_type=MessageType.Error
                 )
@@ -324,9 +334,7 @@ class GrizzlyLanguageServer(LanguageServer):
             items: List[CompletionItem] = []
 
             if len(self.steps.values()) < 1:
-                message = 'no steps i inventory'
-                self.logger.error(message)
-                self.show_message(message, msg_type=MessageType.Error)
+                self.show_message('no steps in inventory', msg_type=MessageType.Error)
             else:
                 line = self._current_line(params.text_document.uri, params.position)
 
@@ -820,7 +828,6 @@ class GrizzlyLanguageServer(LanguageServer):
         if len(errors) > 0:
             for message in errors:
                 self.show_message(message, msg_type=MessageType.Error)
-                self.logger.error(message)
 
         return patterns
 
@@ -832,9 +839,7 @@ class GrizzlyLanguageServer(LanguageServer):
         try:
             self.normalizer = create_step_normalizer()
         except ValueError as e:
-            message = str(e)
-            self.logger.error(message)
-            self.show_message(message, msg_type=MessageType.Error)
+            self.show_message(str(e), msg_type=MessageType.Error)
             return
 
         self._compile_step_inventory()
@@ -844,9 +849,9 @@ class GrizzlyLanguageServer(LanguageServer):
             total_steps += len(steps)
 
         self._compile_keyword_inventory()
-        message = f'found {len(self.keywords)} keywords and {total_steps} steps in "{project_name}"'
-        self.logger.debug(message)
-        self.show_message(message)
+        self.show_message(
+            f'found {len(self.keywords)} keywords and {total_steps} steps in "{project_name}"'
+        )
 
     def _compile_step_inventory(self) -> None:
         for keyword, steps in self.behave_steps.items():
