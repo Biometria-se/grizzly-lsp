@@ -10,10 +10,36 @@ import {
     WorkspaceFoldersChangeEvent,
     WorkspaceFolder,
     Uri,
+    ConfigurationChangeEvent,
 } from 'vscode';
 import { LanguageClient, LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
 
 const clients: Map<string, LanguageClient> = new Map();
+
+interface SettingsStdio {
+    executable: string;
+    args: string[];
+}
+
+interface SettingsSocket {
+    host: string;
+    port: number;
+}
+
+type SettingsServerConnection = 'socket' | 'stdio';
+
+interface SettingsServer {
+    connection: SettingsServerConnection;
+}
+
+interface Settings {
+    server: SettingsServer;
+    stdio: SettingsStdio;
+    socket: SettingsSocket;
+    variable_pattern: string[];
+    pip_extra_index_url: string;
+    use_virtual_environment: boolean;
+}
 
 let _sortedWorkspaceFolders: string[] | undefined;
 
@@ -60,16 +86,12 @@ function getOuterMostWorkspaceFolder(folder: WorkspaceFolder): WorkspaceFolder {
 function createStdioLanguageServer(
     command: string,
     args: string[],
-    useVirtualEnvironment: boolean,
     documentSelector: string[],
-    outputChannel: OutputChannel
+    outputChannel: OutputChannel,
+    initializationOptions: Settings,
 ): LanguageClient {
     if (process.env.VERBOSE && !args.includes('--verbose')) {
         args = [...args, '--verbose'];
-    }
-
-    if (!useVirtualEnvironment) {
-        args = [...args, '--no-venv'];
     }
 
     const serverOptions: ServerOptions = {
@@ -79,13 +101,11 @@ function createStdioLanguageServer(
 
     const clientOptions: LanguageClientOptions = {
         documentSelector: documentSelector,
-        synchronize: {
-            configurationSection: 'grizzly', // @TODO: should be implemented using a pull workspace/section thingy
-        },
         markdown: {
             isTrusted: true,
         },
         outputChannel,
+        initializationOptions,
     };
 
     return new LanguageClient(command, serverOptions, clientOptions);
@@ -95,7 +115,8 @@ function createSocketLanguageServer(
     host: string,
     port: number,
     documentSelector: string[],
-    outputChannel: OutputChannel
+    outputChannel: OutputChannel,
+    initializationOptions: Settings,
 ): LanguageClient {
     const serverOptions: ServerOptions = () => {
         return new Promise((resolve) => {
@@ -115,6 +136,7 @@ function createSocketLanguageServer(
         markdown: {
             isTrusted: true,
         },
+        initializationOptions,
     };
 
     return new LanguageClient(`socket language server (${host}:${port})`, serverOptions, clientOptions);
@@ -122,19 +144,22 @@ function createSocketLanguageServer(
 
 function createLanguageClient(outputChannel: OutputChannel): LanguageClient {
     const configuration = workspace.getConfiguration('grizzly');
+    outputChannel.appendLine(`configuration=${JSON.stringify(configuration)}`);
     const documentSelector = ['grizzly-gherkin'];
     let languageClient: LanguageClient;
 
     const connectionType = configuration.get<string>('server.connection');
+
+    const settings = <Settings>(<unknown>configuration);
 
     switch (connectionType) {
         case 'stdio':
             languageClient = createStdioLanguageServer(
                 configuration.get<string>('stdio.executable') || 'grizzly-ls',
                 configuration.get<Array<string>>('stdio.args') || [],
-                configuration.get<boolean>('stdio.use_virtual_environment') || true,
                 documentSelector,
-                outputChannel
+                outputChannel,
+                settings,
             );
             break;
         case 'socket':
@@ -142,7 +167,8 @@ function createLanguageClient(outputChannel: OutputChannel): LanguageClient {
                 configuration.get<string>('socket.host') || 'localhost',
                 configuration.get<number>('socket.port') || 4444,
                 documentSelector,
-                outputChannel
+                outputChannel,
+                settings,
             );
             break;
         default:
@@ -196,6 +222,18 @@ export function activate() {
                 client.stop();
             }
         }
+    });
+    workspace.onDidChangeConfiguration((event: ConfigurationChangeEvent) => {
+        if (!event.affectsConfiguration('grizzly')) {
+            return;
+        }
+        outputChannel.appendLine('configuration change for "grizzly"');
+        // const configuration = workspace.getConfiguration('grizzly');
+
+        /*clients.forEach((client) => {
+            client.sendRequest('workspace/configuration', configuration);
+        });*/
+
     });
 }
 

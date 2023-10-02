@@ -59,11 +59,11 @@
         }
       }
     },
-      {
+    {
       "label": "debug client",
       "dependsOn": [
-          "tsc watch",
-          "language server"
+        "tsc watch",
+        "language server"
       ]
     }
   ]

@@ -383,7 +383,6 @@ def get_step_parts(line: str) -> Tuple[Optional[str], Optional[str]]:
 def clean_help(text: str) -> str:
     matches = re.finditer(r'\{@pylink ([^\}]*)}', text, re.MULTILINE)
 
-    # @TODO: can we reverse engineer the URL based on the text?
     for match in matches:
         _, replacement_text = match.group(1).rsplit('.', 1)
         text = text.replace(match.group(), replacement_text)

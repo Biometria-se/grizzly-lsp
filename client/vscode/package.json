@@ -81,12 +81,6 @@
           "default": [],
           "description": "Additional arguments used by the language server"
         },
-        "grizzly.stdio.use_virtual_environment": {
-          "scope": "resource",
-          "type": "boolean",
-          "default": true,
-          "description": "Install project dependencies in a seperate virtual environment"
-        },
         "grizzly.socket.host": {
           "scope": "resource",
           "type": "string",
@@ -96,6 +90,27 @@
           "scope": "resource",
           "type": "number",
           "default": 4444
+        },
+        "grizzly.variable_pattern": {
+          "scope": "resource",
+          "type": "array",
+          "default": [
+            ".*ask for value of variable \"([^\"]*)\"$",
+            ".*value for variable \"([^\"]*)\" is \".*?\"$"
+          ],
+          "description": "A list of regular expressions matching step expressions that sets variables, this is needed for being able to auto-complete variable names. The regular expression must have one matching group, being the position with the variable name"
+        },
+        "grizzly.use_virtual_environment": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": true,
+          "description": "Install project dependencies in a seperate virtual environment"
+        },
+        "grizzly.pip_extra_index_url": {
+          "scope": "resource",
+          "type": "string",
+          "default": "",
+          "description": "URL to index that dependencies should be downloaded from instead of pypi.org"
         }
       }
     }

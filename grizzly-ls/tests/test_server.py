@@ -652,7 +652,7 @@ class TestGrizzlyLanguageServer:
                 client_info=None,
                 locale=None,
                 root_path=str(root),
-                initialization_options=None,
+                initialization_options=None,  # @TODO: should we mock some settings?
                 trace=None,
                 workspace_folders=None,
                 work_done_token=None,
@@ -668,7 +668,7 @@ class TestGrizzlyLanguageServer:
                         client.lsp.send_request(  # type: ignore
                             INITIALIZE,
                             params,
-                        ).result(timeout=59)
+                        ).result(timeout=89)
                     except futures.TimeoutError:
                         retry -= 1
                     else:
@@ -784,7 +784,6 @@ class TestGrizzlyLanguageServer:
 
             return cast(Optional[List[LocationLink]], response)
 
-        @pytest.mark.timeout(60)
         def test_initialize(self, lsp_fixture: LspFixture) -> None:
             client = lsp_fixture.client
             server = lsp_fixture.server

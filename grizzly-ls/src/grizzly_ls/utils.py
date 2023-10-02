@@ -110,6 +110,7 @@ def run_command(
     cwd: Optional[str] = None,
 ) -> Tuple[int, List[str]]:
     output: List[str] = []
+
     if env is None:
         env = os.environ
 

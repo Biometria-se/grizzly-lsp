@@ -55,14 +55,12 @@ from .utils import create_step_normalizer, load_step_registry, run_command
 from . import __version__
 
 
-# @TODO: should be possible to set in feature file with a comment
-VARIABLE_PATTERN = re.compile(
-    r'(.*ask for value of variable "([^"]*)"$|.*value for variable "([^"]*)" is ".*?"$)'
-)
-
-
 class GrizzlyLanguageServer(LanguageServer):
     logger: logging.Logger = logging.getLogger(__name__)
+
+    variable_pattern: re.Pattern[str] = re.compile(
+        r'(.*ask for value of variable "([^"]*)"$|.*value for variable "([^"]*)" is ".*?"$)'
+    )
 
     root_path: Path
     index_url: Optional[str]
@@ -72,8 +70,7 @@ class GrizzlyLanguageServer(LanguageServer):
     keywords: List[str]
     keywords_once: List[str] = []
     keywords_any: List[str] = []
-    use_venv: bool
-    executable: str
+    client_configuration: Dict[str, Any]
 
     _language: str
     localizations: Dict[str, List[str]]
@@ -87,12 +84,9 @@ class GrizzlyLanguageServer(LanguageServer):
     ) -> None:
         super().show_message(message, msg_type=msg_type)  # type: ignore
 
-    def __init__(
-        self, use_venv: bool, *args: Tuple[Any, ...], **kwargs: Dict[str, Any]
-    ) -> None:
+    def __init__(self, *args: Tuple[Any, ...], **kwargs: Dict[str, Any]) -> None:
         super().__init__(name='grizzly-ls', version=__version__, *args, **kwargs)  # type: ignore
 
-        self.use_venv = use_venv
         self.index_url = environ.get('PIP_EXTRA_INDEX_URL', None)
         self.behave_steps = {}
         self.steps = {}
@@ -101,11 +95,6 @@ class GrizzlyLanguageServer(LanguageServer):
         self.markup_kind = MarkupKind.Markdown  # assume, until initialized request
         self.language = 'en'  # assumed default
 
-        if self.use_venv:
-            self.executable = 'python3'
-        else:
-            self.executable = sys.executable
-
         # monkey patch functions to short-circuit them (causes problems in this context)
         gevent.monkey.patch_all = lambda: None
 
@@ -113,16 +102,7 @@ class GrizzlyLanguageServer(LanguageServer):
             return
 
         signal.signal = _signal  # type: ignore
-
-        # no index-url specified as argument, check if we have it in pip configuration
-        if self.index_url is None:
-            pip_config = PipConfiguration(isolated=False)
-            try:
-                pip_config.load()
-                self.index_url = pip_config.get_value('global.index-url')
-            except PipConfigurationError:
-                pass
-        self.logger.debug(f'{self.index_url=}')
+        self.client_configuration = {}
 
         @self.feature(INITIALIZE)
         def initialize(params: InitializeParams) -> None:
@@ -147,6 +127,53 @@ class GrizzlyLanguageServer(LanguageServer):
             ):
                 root_path = Path(str(root_path)[1:])
 
+            client_configuration = params.initialization_options
+            if client_configuration is not None:
+                self.client_configuration = cast(Dict[str, Any], client_configuration)
+
+            # <!-- set index url
+            # no index-url specified as argument, check if we have it in pip configuration
+            if self.index_url is None:
+                pip_config = PipConfiguration(isolated=False)
+                try:
+                    pip_config.load()
+                    self.index_url = pip_config.get_value('global.index-url')
+                except PipConfigurationError:
+                    pass
+
+            # no index-url specified in pip config, check if we have it in extension configuration
+            if self.index_url is None:
+                self.index_url = self.client_configuration.get(
+                    'pip_extra_index_url', None
+                )
+                if self.index_url is not None and len(self.index_url.strip()) < 1:
+                    self.index_url = None
+
+            self.logger.debug(f'{self.index_url=}')
+            # // -->
+
+            # <!-- set variable pattern
+            variable_patterns = self.client_configuration.get('variable_pattern', [])
+            if len(variable_patterns) > 0:
+                # validate patterns
+                for variable_pattern in variable_patterns:
+                    try:
+                        re.compile(variable_pattern)
+                    except:
+                        message = f'variable pattern "{variable_pattern}" is not valid, check grizzly.variable_pattern setting'
+                        self.logger.error(message)
+                        self.show_message(message, msg_type=MessageType.Error)
+                        return
+
+                variable_pattern = f'({"|".join(variable_patterns)})'
+                self.variable_pattern = re.compile(variable_pattern)
+            # // -->
+
+            # <!-- should a virtual environment be used?
+            use_venv = self.client_configuration.get('use_virtual_environment', True)
+            executable = 'python3' if use_venv else sys.executable
+            # // -->
+
             self.root_path = root_path
 
             self.logger.debug(f'workspace root: {root_path}')
@@ -154,8 +181,9 @@ class GrizzlyLanguageServer(LanguageServer):
             project_name = root_path.stem
 
             virtual_environment: Optional[Path] = None
+            has_venv: bool = False
 
-            if self.use_venv:
+            if use_venv:
                 virtual_environment = Path(gettempdir()) / f'grizzly-ls-{project_name}'
                 has_venv = virtual_environment.exists()
 
@@ -214,12 +242,18 @@ class GrizzlyLanguageServer(LanguageServer):
                 )
 
             requirements_file = root_path / 'requirements.txt'
-            assert requirements_file.exists()
+            if not requirements_file.exists():
+                message = f'project "{project_name}" does not have a requirements.txt in {root_path}'
+                self.logger.error(message)
+                self.show_message(message, msg_type=MessageType.Error)
+                return
 
-            self.logger.debug(f'installing {requirements_file}')
+            # @TODO first time we should always install, no matter if venv is used or not, but then?
+            self.logger.debug(f'installing/upgrading from {requirements_file}')
+
             rc, output = run_command(
                 [
-                    self.executable,
+                    executable,
                     '-m',
                     'pip',
                     'install',
@@ -239,8 +273,10 @@ class GrizzlyLanguageServer(LanguageServer):
                 else:
                     log_method = self.logger.warning
 
-                if len(line.strip()) < 1:
+                if len(line.strip()) > 1:
                     log_method(line.strip())
+
+            self.logger.debug('done installing')
 
             if rc == 0:
                 self.show_message('virtual environment created')
@@ -251,7 +287,7 @@ class GrizzlyLanguageServer(LanguageServer):
                 )
                 return
 
-            if self.use_venv and virtual_environment is not None:
+            if use_venv and virtual_environment is not None:
                 # modify sys.path to use modules from virtual environment when compiling inventory
                 venv_sys_path = (
                     virtual_environment
@@ -269,7 +305,7 @@ class GrizzlyLanguageServer(LanguageServer):
                 )
                 return
             finally:
-                if self.use_venv and virtual_environment is not None:
+                if use_venv and virtual_environment is not None:
                     # always restore to original value
                     sys.path.pop()
 
@@ -324,7 +360,7 @@ class GrizzlyLanguageServer(LanguageServer):
         def workspace_did_change_configuration(
             params: WorkspaceDidChangeConfigurationParams,
         ) -> None:
-            self.logger.debug(f'workspace_did_change_configurtion: {params=}')
+            self.logger.debug(f'{WORKSPACE_DID_CHANGE_CONFIGURATION}: {params=}')
 
         @self.feature(TEXT_DOCUMENT_HOVER)
         def hover(params: HoverParams) -> Optional[Hover]:
@@ -543,7 +579,6 @@ class GrizzlyLanguageServer(LanguageServer):
         document: Document,
         position: Position,
     ) -> List[CompletionItem]:
-        self.logger.debug(f'_complete_variable_name()')
         # find `Scenario:` before current position
         lines = document.source.splitlines()
         before_lines = reversed(lines[0 : position.line])
@@ -551,7 +586,7 @@ class GrizzlyLanguageServer(LanguageServer):
         variable_names: List[Tuple[str, Optional[str]]] = []
 
         for before_line in before_lines:
-            match = VARIABLE_PATTERN.match(before_line)
+            match = self.variable_pattern.match(before_line)
 
             if match:
                 variable_name = match.group(2) or match.group(3)
@@ -897,9 +932,5 @@ class GrizzlyLanguageServer(LanguageServer):
                 return None
 
             step_help = possible_help[sorted(possible_help.keys(), reverse=True)[0]]
-
-            if self.markup_kind == MarkupKind.PlainText:
-                # @TODO: normalize markdown to plain text
-                pass
 
         return step_help

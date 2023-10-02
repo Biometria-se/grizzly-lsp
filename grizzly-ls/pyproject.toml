@@ -42,6 +42,9 @@ keywords = [
 [project.scripts]
 grizzly-ls = 'grizzly_ls.__main__:main'
 
+[tool.setuptools.package-data]
+grizzly_ls = ["py.typed"]
+
 [project.urls]
 Documentation = 'https://biometria-se.github.io/grizzly/'
 Code = 'https://github.com/biometria-se/grizzly-lsp/'

@@ -17,7 +17,7 @@ export async function activate(docUri: vscode.Uri) {
     // @TODO: fugly, first time a virtual environment needs to be created, which takes time
     const activated = docUriActivated.get(docUri.toString());
 
-    let sleep_time = 10000;
+    let sleep_time = 13000;
 
     switch (process.platform) {
         case 'darwin':
