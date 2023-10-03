@@ -16,6 +16,11 @@ import { LanguageClient, LanguageClientOptions, ServerOptions } from 'vscode-lan
 
 const clients: Map<string, LanguageClient> = new Map();
 
+interface ExtensionStatus {
+    isActivated: () => boolean;
+    setActivated: () => void;
+}
+
 interface SettingsStdio {
     executable: string;
     args: string[];
@@ -178,8 +183,19 @@ function createLanguageClient(outputChannel: OutputChannel): LanguageClient {
     return languageClient;
 }
 
-export function activate() {
+export function activate(): ExtensionStatus {
     const outputChannel: OutputChannel = Window.createOutputChannel('Grizzly Language Server');
+
+    let activated = false;
+
+    const status: ExtensionStatus = {
+        isActivated: () => {
+            return activated;
+        },
+        setActivated: () => {
+            activated = true;
+        }
+    };
 
     const didOpenTextDocument = async (document: TextDocument): Promise<void> => {
         if (document.languageId !== 'grizzly-gherkin') {
@@ -197,12 +213,12 @@ export function activate() {
 
         if (!clients.has(folderUri)) {
             const client = createLanguageClient(outputChannel);
-            client.start();
-            await client.onReady();
+            await client.start();
             clients.set(folderUri, client);
             outputChannel.appendLine(`started language client for ${folderUri}`);
             await client.sendRequest('grizzly-ls/install', {});
             outputChannel.appendLine('ensured dependencies');
+            status.setActivated();
         }
     };
 
@@ -213,38 +229,34 @@ export function activate() {
 
     workspace.onDidOpenTextDocument(didOpenTextDocument);
     workspace.textDocuments.forEach(didOpenTextDocument);
-    workspace.onDidChangeWorkspaceFolders((event: WorkspaceFoldersChangeEvent) => {
-        for (const folder of event.removed) {
+    workspace.onDidChangeWorkspaceFolders(async (event: WorkspaceFoldersChangeEvent) => {
+        event.removed.forEach(async (folder) => {
             const folderUri = folder.uri.toString();
             const client = clients.get(folderUri);
 
             if (client) {
                 clients.delete(folderUri);
                 outputChannel.appendLine(`removed workspace folder ${folderUri}`);
-                client.stop();
+                await client.stop();
             }
-        }
+        });
     });
     workspace.onDidChangeConfiguration((event: ConfigurationChangeEvent) => {
         if (!event.affectsConfiguration('grizzly')) {
             return;
         }
         outputChannel.appendLine('configuration change for "grizzly"');
-        // const configuration = workspace.getConfiguration('grizzly');
-
-        /*clients.forEach((client) => {
-            client.sendRequest('workspace/configuration', configuration);
-        });*/
-
     });
+
+    return status;
 }
 
 export async function deactivate() {
     const promises: Thenable<void>[] = [];
 
-    for (const client of clients.values()) {
+    clients.forEach((client) => {
         promises.push(client.stop());
-    }
+    });
 
     await Promise.all(promises);
 }
