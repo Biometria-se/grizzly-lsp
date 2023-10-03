@@ -201,6 +201,8 @@ export function activate() {
             await client.onReady();
             clients.set(folderUri, client);
             outputChannel.appendLine(`started language client for ${folderUri}`);
+            await client.sendRequest('grizzly-ls/install', {});
+            outputChannel.appendLine('ensured dependencies');
         }
     };
 

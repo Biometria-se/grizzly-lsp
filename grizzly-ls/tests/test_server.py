@@ -46,6 +46,7 @@ from behave.matchers import ParseMatcher
 from .fixtures import LspFixture
 from .helpers import normalize_completion_item
 from grizzly_ls import __version__
+from grizzly_ls.server import GrizzlyLanguageServer
 
 
 class TestGrizzlyLanguageServer:
@@ -668,6 +669,11 @@ class TestGrizzlyLanguageServer:
                         client.lsp.send_request(  # type: ignore
                             INITIALIZE,
                             params,
+                        ).result(timeout=89)
+
+                        client.lsp.send_request(  # type: ignore
+                            GrizzlyLanguageServer.FEATURE_INSTALL,
+                            {},
                         ).result(timeout=89)
                     except futures.TimeoutError:
                         retry -= 1

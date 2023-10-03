@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 import logging
 import platform
@@ -7,8 +9,8 @@ import sys
 
 from os import environ, linesep
 from os.path import pathsep, sep
-from typing import Any, Tuple, Dict, List, Union, Optional, Set, cast
-from types import FrameType
+from typing import Any, Tuple, Dict, List, Union, Optional, Set, Type, cast
+from types import FrameType, TracebackType
 from pathlib import Path
 from behave.matchers import ParseMatcher
 from venv import create as venv_create
@@ -18,10 +20,12 @@ from urllib.parse import urlparse, unquote
 from urllib.request import url2pathname
 from pip._internal.configuration import Configuration as PipConfiguration
 from pip._internal.exceptions import ConfigurationError as PipConfigurationError
+from uuid import uuid4
 
 import gevent.monkey  # type: ignore
 
 from pygls.server import LanguageServer
+from pygls.progress import Progress as PyglsProgress
 from pygls.workspace import Document
 from pygls.capabilities import get_capability
 from lsprotocol.types import (
@@ -46,16 +50,69 @@ from lsprotocol.types import (
     MarkupKind,
     Range,
     LocationLink,
+    WorkDoneProgressBegin,
+    WorkDoneProgressReport,
+    WorkDoneProgressEnd,
 )
 
 from behave.i18n import languages
 
 from .text import Normalizer, get_step_parts, clean_help
-from .utils import create_step_normalizer, load_step_registry, run_command
+from .utils import (
+    create_step_normalizer,
+    load_step_registry,
+    run_command,
+)
 from . import __version__
 
 
+class Progress:
+    progress: PyglsProgress
+    title: str
+    token: str
+
+    def __init__(self, progress: PyglsProgress, title: str) -> None:
+        self.progress = progress
+        self.title = title
+        self.token = str(uuid4())
+
+    def __enter__(self) -> Progress:
+        def callback(*args: Any, **kwargs: Any) -> None:
+            return
+
+        self.progress.create(self.token, callback)  # type: ignore
+
+        self.progress.begin(
+            self.token,
+            WorkDoneProgressBegin(title=self.title, percentage=0, cancellable=False),
+        )
+
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> bool:
+        self.report(None, 100)
+
+        self.progress.end(self.token, WorkDoneProgressEnd())
+
+        return exc is None
+
+    def report(
+        self, message: Optional[str] = None, percentage: Optional[int] = None
+    ) -> None:
+        self.progress.report(
+            self.token,
+            WorkDoneProgressReport(message=message, percentage=percentage),
+        )
+
+
 class GrizzlyLanguageServer(LanguageServer):
+    FEATURE_INSTALL = 'grizzly-ls/install'
+
     logger: logging.Logger = logging.getLogger(__name__)
 
     variable_pattern: re.Pattern[str] = re.compile(
@@ -114,6 +171,172 @@ class GrizzlyLanguageServer(LanguageServer):
         signal.signal = _signal  # type: ignore
         self.client_configuration = {}
 
+        @self.feature(self.FEATURE_INSTALL)
+        def install(params: Dict[str, Any]) -> None:
+            self.logger.debug(f'{self.FEATURE_INSTALL}: installing {params=}')
+
+            with Progress(self.progress, 'grizzly-ls') as progress:
+                # <!-- should a virtual environment be used?
+                use_venv = self.client_configuration.get(
+                    'use_virtual_environment', True
+                )
+                executable = 'python3' if use_venv else sys.executable
+                # // -->
+
+                self.logger.debug(f'workspace root: {self.root_path}')
+
+                project_name = self.root_path.stem
+
+                virtual_environment: Optional[Path] = None
+                has_venv: bool = False
+
+                if use_venv:
+                    virtual_environment = (
+                        Path(gettempdir()) / f'grizzly-ls-{project_name}'
+                    )
+                    has_venv = virtual_environment.exists()
+
+                    self.logger.debug(
+                        f'looking for venv at {virtual_environment}, {has_venv=}'
+                    )
+
+                    if not has_venv:
+                        self.logger.debug(
+                            f'creating virtual environment: {virtual_environment}'
+                        )
+                        self.show_message(
+                            'creating virtual environment for language server, this could take a while'
+                        )
+                        try:
+                            progress.report('creating venv', 33)
+                            venv_create(str(virtual_environment), with_pip=True)
+                        except:
+                            self.show_message('failed to create virtual environment')
+                            return
+
+                    if platform.system() == 'Windows':  # pragma: no cover
+                        bin_dir = 'Scripts'
+                    else:
+                        bin_dir = 'bin'
+
+                    paths = [
+                        str(virtual_environment / bin_dir),
+                        environ.get('PATH', ''),
+                    ]
+                    environ.update(
+                        {
+                            'PATH': pathsep.join(paths),
+                            'VIRTUAL_ENV': str(virtual_environment),
+                            'PYTHONPATH': str(self.root_path / 'features'),
+                        }
+                    )
+
+                    if self.index_url is not None:
+                        index_url_parsed = urlparse(self.index_url)
+                        if (
+                            index_url_parsed.username is None
+                            or index_url_parsed.password is None
+                        ):
+                            self.show_message(
+                                'global.index-url does not contain username and/or password, check your configuration!',
+                                msg_type=MessageType.Error,
+                            )
+                            return
+
+                        environ.update(
+                            {
+                                'PIP_EXTRA_INDEX_URL': self.index_url,
+                            }
+                        )
+
+                requirements_file = self.root_path / 'requirements.txt'
+                if not requirements_file.exists():
+                    self.show_message(
+                        f'project "{project_name}" does not have a requirements.txt in {self.root_path}',
+                        msg_type=MessageType.Error,
+                    )
+                    return
+
+                project_age_file = (
+                    Path(gettempdir()) / f'grizzly-ls-{project_name}' / '.age'
+                )
+
+                # pip install (slow operation) if:
+                # - age file does not exist
+                # - requirements file has been modified since age file was last touched
+                if not project_age_file.exists() or (
+                    requirements_file.lstat().st_mtime
+                    > project_age_file.lstat().st_mtime
+                ):
+                    action = 'install' if not project_age_file.exists() else 'upgrade'
+
+                    self.logger.debug(f'{action} from {requirements_file}')
+
+                    # <!-- install dependencies
+                    progress.report(f'{action} dependencies', 50)
+
+                    rc, output = run_command(
+                        [
+                            executable,
+                            '-m',
+                            'pip',
+                            'install',
+                            '--upgrade',
+                            '-r',
+                            str(requirements_file),
+                        ],
+                        env=environ,
+                    )
+
+                    for line in output:
+                        if line.strip().startswith('ERROR:'):
+                            _, line = line.split(' ', 1)
+                            log_method = self.logger.error
+                        elif rc == 0:
+                            log_method = self.logger.debug
+                        else:
+                            log_method = self.logger.warning
+
+                        if len(line.strip()) > 1:
+                            log_method(line.strip())
+
+                    self.logger.debug(f'{action} done {rc=}')
+
+                    if rc != 0:
+                        self.show_message(
+                            f'failed to {action} from {requirements_file}',
+                            msg_type=MessageType.Error,
+                        )
+                        return
+
+                    project_age_file.parent.mkdir(parents=True, exist_ok=True)
+                    project_age_file.touch()
+                    # // -->
+
+                if use_venv and virtual_environment is not None:
+                    # modify sys.path to use modules from virtual environment when compiling inventory
+                    venv_sys_path = (
+                        virtual_environment
+                        / 'lib'
+                        / f'python{sys.version_info.major}.{sys.version_info.minor}/site-packages'
+                    )
+                    sys.path.append(str(venv_sys_path))
+
+                try:
+                    # <!-- compile inventory
+                    progress.report('compile inventory', 85)
+                    self._compile_inventory(self.root_path, project_name)
+                    # // ->
+                except ModuleNotFoundError:
+                    self.show_message(
+                        'failed to create step inventory', msg_type=MessageType.Error
+                    )
+                    return
+                finally:
+                    if use_venv and virtual_environment is not None:
+                        # always restore to original value
+                        sys.path.pop()
+
         @self.feature(INITIALIZE)
         def initialize(params: InitializeParams) -> None:
             if params.root_path is None and params.root_uri is None:
@@ -137,9 +360,21 @@ class GrizzlyLanguageServer(LanguageServer):
             ):
                 root_path = Path(str(root_path)[1:])
 
+            self.root_path = root_path
+
             client_configuration = params.initialization_options
             if client_configuration is not None:
                 self.client_configuration = cast(Dict[str, Any], client_configuration)
+
+            markup_supported: List[MarkupKind] = get_capability(
+                self.client_capabilities,
+                'text_document.completion.completion_item.documentation_format',
+                [MarkupKind.Markdown],
+            )
+            if len(markup_supported) < 1:
+                self.markup_kind = MarkupKind.PlainText
+            else:
+                self.markup_kind = markup_supported[0]
 
             # <!-- set index url
             # no index-url specified as argument, check if we have it in pip configuration
@@ -179,155 +414,6 @@ class GrizzlyLanguageServer(LanguageServer):
                 variable_pattern = f'({"|".join(variable_patterns)})'
                 self.variable_pattern = re.compile(variable_pattern)
             # // -->
-
-            # <!-- should a virtual environment be used?
-            use_venv = self.client_configuration.get('use_virtual_environment', True)
-            executable = 'python3' if use_venv else sys.executable
-            # // -->
-
-            self.root_path = root_path
-
-            self.logger.debug(f'workspace root: {root_path}')
-
-            project_name = root_path.stem
-
-            virtual_environment: Optional[Path] = None
-            has_venv: bool = False
-
-            if use_venv:
-                virtual_environment = Path(gettempdir()) / f'grizzly-ls-{project_name}'
-                has_venv = virtual_environment.exists()
-
-                self.logger.debug(
-                    f'looking for venv at {virtual_environment}, {has_venv=}'
-                )
-
-                if not has_venv:
-                    self.logger.debug(
-                        f'creating virtual environment: {virtual_environment}'
-                    )
-                    self.show_message(
-                        'creating virtual environment for language server, this could take a while'
-                    )
-                    try:
-                        venv_create(str(virtual_environment), with_pip=True)
-                    except:
-                        self.show_message('failed to create virtual environment')
-                        return
-
-                if platform.system() == 'Windows':  # pragma: no cover
-                    bin_dir = 'Scripts'
-                else:
-                    bin_dir = 'bin'
-
-                paths = [str(virtual_environment / bin_dir), environ.get('PATH', '')]
-                environ.update(
-                    {
-                        'PATH': pathsep.join(paths),
-                        'VIRTUAL_ENV': str(virtual_environment),
-                        'PYTHONPATH': str(root_path / 'features'),
-                    }
-                )
-
-                if self.index_url is not None:
-                    index_url_parsed = urlparse(self.index_url)
-                    if (
-                        index_url_parsed.username is None
-                        or index_url_parsed.password is None
-                    ):
-                        self.show_message(
-                            'global.index-url does not contain username and/or password, check your configuration!',
-                            msg_type=MessageType.Error,
-                        )
-                        return
-
-                    environ.update(
-                        {
-                            'PIP_EXTRA_INDEX_URL': self.index_url,
-                        }
-                    )
-
-                self.logger.debug(
-                    f'updating environment variables for venv, {environ=}'
-                )
-
-            requirements_file = root_path / 'requirements.txt'
-            if not requirements_file.exists():
-                self.show_message(
-                    f'project "{project_name}" does not have a requirements.txt in {root_path}',
-                    msg_type=MessageType.Error,
-                )
-                return
-
-            # @TODO: touch file in temp directory, and check if it's older than requirements_file, or if it's older than a week
-            self.logger.debug(f'installing/upgrading from {requirements_file}')
-
-            rc, output = run_command(
-                [
-                    executable,
-                    '-m',
-                    'pip',
-                    'install',
-                    '--upgrade',
-                    '-r',
-                    str(requirements_file),
-                ],
-                env=environ,
-            )
-
-            for line in output:
-                if line.strip().startswith('ERROR:'):
-                    _, line = line.split(' ', 1)
-                    log_method = self.logger.error
-                elif rc == 0:
-                    log_method = self.logger.debug
-                else:
-                    log_method = self.logger.warning
-
-                if len(line.strip()) > 1:
-                    log_method(line.strip())
-
-            self.logger.debug('done installing')
-
-            if rc == 0:
-                self.show_message('virtual environment created')
-            else:
-                self.show_message(
-                    f'failed to install {requirements_file}',
-                    msg_type=MessageType.Error,
-                )
-                return
-
-            if use_venv and virtual_environment is not None:
-                # modify sys.path to use modules from virtual environment when compiling inventory
-                venv_sys_path = (
-                    virtual_environment
-                    / 'lib'
-                    / f'python{sys.version_info.major}.{sys.version_info.minor}/site-packages'
-                )
-                sys.path.append(str(venv_sys_path))
-
-            try:
-                self._compile_inventory(root_path, project_name)
-            except ModuleNotFoundError:
-                self.show_message(
-                    'failed to create step inventory', msg_type=MessageType.Error
-                )
-                return
-            finally:
-                if use_venv and virtual_environment is not None:
-                    # always restore to original value
-                    sys.path.pop()
-
-            markup_supported: List[MarkupKind] = get_capability(
-                self.client_capabilities,
-                'text_document.completion.completion_item.documentation_format',
-                [MarkupKind.Markdown],
-            )
-            if len(markup_supported) < 1:
-                self.markup_kind = MarkupKind.PlainText
-            else:
-                self.markup_kind = markup_supported[0]
 
         @self.feature(TEXT_DOCUMENT_COMPLETION)
         def completion(params: CompletionParams) -> CompletionList:
