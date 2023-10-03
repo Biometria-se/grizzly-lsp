@@ -79,6 +79,7 @@ jobs:
         run: |
           bash ./script/install.sh client/vscode
           bash ./script/install.sh server +e
+          npm install -g vsce
 
       - name: test
         id: test
@@ -95,6 +96,13 @@ jobs:
         if: always()
         run: |
           cat tests/project/grizzly-ls.log
+
+      - name: test package
+        id: test-package
+        with:
+          run: |
+            vsce package
+          working-directory: './client/vscode'
 
   linting:
     name: linting
