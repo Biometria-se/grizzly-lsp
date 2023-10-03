@@ -76,11 +76,12 @@ class Progress:
         self.title = title
         self.token = str(uuid4())
 
-    def __enter__(self) -> Progress:
-        def callback(*args: Any, **kwargs: Any) -> None:
-            return
+    @staticmethod
+    def callback(*args: Any, **kwargs: Any) -> None:
+        return  # pragma: no cover
 
-        self.progress.create(self.token, callback)  # type: ignore
+    def __enter__(self) -> Progress:
+        self.progress.create(self.token, self.__class__.callback)  # type: ignore
 
         self.progress.begin(
             self.token,
@@ -173,6 +174,16 @@ class GrizzlyLanguageServer(LanguageServer):
 
         @self.feature(self.FEATURE_INSTALL)
         def install(params: Dict[str, Any]) -> None:
+            """
+            See https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize
+
+            > Until the server has responded to the initialize request with an InitializeResult, the client must not send any
+            > additional requests or notifications to the server. In addition the server is not allowed to send any requests
+            > or notifications to the client until it has responded with an InitializeResult
+
+            This custom feature handles being able to send progress report of the, slow, process of installing dependencies needed
+            for it to function properly on the project it is being used.
+            """
             self.logger.debug(f'{self.FEATURE_INSTALL}: installing {params=}')
 
             with Progress(self.progress, 'grizzly-ls') as progress:
