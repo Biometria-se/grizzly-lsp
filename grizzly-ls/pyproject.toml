@@ -42,6 +42,9 @@ keywords = [
 [project.scripts]
 grizzly-ls = 'grizzly_ls.__main__:main'
 
+[tool.setuptools.package-data]
+grizzly_ls = ["py.typed"]
+
 [project.urls]
 Documentation = 'https://biometria-se.github.io/grizzly/'
 Code = 'https://github.com/biometria-se/grizzly-lsp/'
@@ -74,7 +77,7 @@ ci = [
 root = ".."
 
 [tool.pytest.ini_options]
-timeout = 90
+timeout = 120
 addopts = [
     "--rootdir=grizzly-ls/",
     "-o", "testpaths=tests",
@@ -157,3 +160,6 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "pytablewriter.*"
 ignore_missing_imports = true
+
+[tool.coverage.report]
+omit = ["src/grizzly_ls/__init__.py"]

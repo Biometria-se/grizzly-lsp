@@ -8,42 +8,21 @@ export let platformEol: string;
 
 export const testWorkspace: string = path.resolve(__dirname, '../../../../tests/project');
 
-const docUriActivated: Map<string, boolean> = new Map();
-
 /**
  * Activates the biometria-se.vscode-grizzly extension
  */
 export async function activate(docUri: vscode.Uri) {
-    // @TODO: fugly, first time a virtual environment needs to be created, which takes time
-    const activated = docUriActivated.get(docUri.toString());
-
-    let sleep_time = 0;
-
-    switch (process.platform) {
-        case 'darwin':
-            sleep_time = 20000;
-            break;
-        case 'win32':
-            sleep_time = 10000;
-            break;
-        default:
-            sleep_time = 6000;
-            break;
-    }
-
-    if (activated) {
-        sleep_time = 500;
-    } else {
-        docUriActivated.set(docUri.toString(), true);
-    }
-
     // The extensionId is `publisher.name` from package.json
     const ext = vscode.extensions.getExtension('biometria-se.grizzly-loadtester-vscode');
     await ext.activate();
     try {
         doc = await vscode.workspace.openTextDocument(docUri);
         editor = await vscode.window.showTextDocument(doc);
-        await sleep(sleep_time); // Wait for server activation
+
+        // wait until language server is done with everything
+        while (!ext.exports.isActivated()) {
+            await sleep(1000);
+        }
     } catch (e) {
         console.error(e);
     }

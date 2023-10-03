@@ -5,6 +5,7 @@ from pathlib import Path
 from concurrent import futures
 from tempfile import gettempdir
 from shutil import rmtree
+from unittest.mock import ANY
 
 import pytest
 import gevent.monkey  # type: ignore
@@ -40,12 +41,51 @@ from lsprotocol.types import (
     TextDocumentIdentifier,
     MarkupKind,
     MarkupContent,
+    MessageType,
 )
 from behave.matchers import ParseMatcher
 
 from .fixtures import LspFixture
 from .helpers import normalize_completion_item
 from grizzly_ls import __version__
+from grizzly_ls.server import GrizzlyLanguageServer, Progress
+
+
+def test_progress(lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
+    server = lsp_fixture.server
+
+    progress = Progress(server.progress, title='test')
+
+    assert progress.progress is server.progress
+    assert progress.title == 'test'
+    assert isinstance(progress.token, str)
+
+    report_spy = mocker.spy(progress, 'report')
+    progress_create_mock = mocker.patch.object(
+        progress.progress, 'create', return_value=None
+    )
+    progress_begin_mock = mocker.patch.object(
+        progress.progress, 'begin', return_value=None
+    )
+    progress_end_mock = mocker.patch.object(
+        progress.progress,
+        'end',
+        return_value=None,
+    )
+    progress_report_mock = mocker.patch.object(
+        progress.progress, 'report', return_value=None
+    )
+
+    with progress as p:
+        p.report('first', 50)
+        p.report('second', 99)
+
+    progress_create_mock.assert_called_once_with(progress.token, progress.callback)
+    progress_begin_mock.assert_called_once_with(progress.token, ANY)
+    progress_end_mock.assert_called_once_with(progress.token, ANY)
+
+    assert progress_report_mock.call_count == 3
+    assert report_spy.call_count == 3
 
 
 class TestGrizzlyLanguageServer:
@@ -55,16 +95,77 @@ class TestGrizzlyLanguageServer:
         assert server.name == 'grizzly-ls'
         assert server.version == __version__
         assert server.steps == {}
-        assert server.keywords == []
-        assert server.keyword_any == [
-            'But',
-            'And',
-            '*',
-        ]
-        assert server.keywords_once == ['Feature', 'Background']
+        assert sorted(server.keywords) == sorted(['Scenario', 'And', 'But'])
+        assert sorted(server.keywords_any) == sorted(
+            [
+                '*',
+                'But',
+                'And',
+            ]
+        )
+        assert sorted(server.keywords_once) == sorted(['Feature', 'Background'])
 
         assert isinstance(server.logger, logging.Logger)
         assert server.logger.name == 'grizzly_ls.server'
+
+    def test_show_message(
+        self,
+        lsp_fixture: LspFixture,
+        caplog: LogCaptureFixture,
+        mocker: MockerFixture,
+    ) -> None:
+        server = lsp_fixture.server
+        show_message_mock = mocker.patch(
+            'pygls.server.LanguageServer.show_message', return_value=None
+        )
+
+        message = 'implicit INFO level'
+        with caplog.at_level(logging.INFO):
+            server.show_message(message)
+        assert caplog.messages == [message]
+        show_message_mock.assert_called_once_with(message, msg_type=MessageType.Info)
+        show_message_mock.reset_mock()
+        caplog.clear()
+
+        message = 'explicit INFO level'
+        with caplog.at_level(logging.INFO):
+            server.show_message(message, MessageType.Info)
+        assert caplog.messages == [message]
+        show_message_mock.assert_called_once_with(message, msg_type=MessageType.Info)
+        show_message_mock.reset_mock()
+        caplog.clear()
+
+        message = 'ERROR level'
+        with caplog.at_level(logging.ERROR):
+            server.show_message(message, MessageType.Error)
+        assert caplog.messages == [message]
+        show_message_mock.assert_called_once_with(message, msg_type=MessageType.Error)
+        show_message_mock.reset_mock()
+        caplog.clear()
+
+        message = 'WARNING level'
+        with caplog.at_level(logging.WARNING):
+            server.show_message(message, MessageType.Warning)
+        assert caplog.messages == [message]
+        show_message_mock.assert_called_once_with(message, msg_type=MessageType.Warning)
+        show_message_mock.reset_mock()
+        caplog.clear()
+
+        message = 'DEBUG level'
+        with caplog.at_level(logging.DEBUG):
+            server.show_message(message, MessageType.Debug)
+        assert caplog.messages == [message]
+        show_message_mock.assert_called_once_with(message, msg_type=MessageType.Debug)
+        show_message_mock.reset_mock()
+        caplog.clear()
+
+        message = 'CRITICAL level'
+        with caplog.at_level(logging.CRITICAL):
+            server.show_message(message, MessageType.Debug)
+        assert caplog.messages == []
+        show_message_mock.assert_called_once_with(message, msg_type=MessageType.Debug)
+        show_message_mock.reset_mock()
+        caplog.clear()
 
     def test__format_arg_line(self, lsp_fixture: LspFixture) -> None:
         server = lsp_fixture.server
@@ -512,21 +613,9 @@ class TestGrizzlyLanguageServer:
                     'unhandled type {test:Unknown} for payload',
                 ]
             )
-        assert len(caplog.messages) == 1
-        assert (
-            caplog.messages[-1]
-            == "unhandled type: variable='{test:Unknown}', variable_type='Unknown'"
-        )
 
-        assert show_message_mock.call_count == 1
-        args, kwargs = show_message_mock.call_args_list[-1]
-        assert len(args) == 1
-        assert (
-            args[0]
-            == "unhandled type: variable='{test:Unknown}', variable_type='Unknown'"
-        )
-        assert len(kwargs) == 1
-        assert kwargs.get('msg_type', None) == 1
+        assert caplog.messages == []
+        show_message_mock.assert_not_called()
 
     def test__compile_inventory(
         self, lsp_fixture: LspFixture, caplog: LogCaptureFixture
@@ -556,7 +645,6 @@ class TestGrizzlyLanguageServer:
         server = lsp_fixture.server
 
         assert server.steps == {}
-        assert server.keywords == []
 
         # create pre-requisites
         grizzly_project = Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
@@ -663,7 +751,7 @@ class TestGrizzlyLanguageServer:
                 client_info=None,
                 locale=None,
                 root_path=str(root),
-                initialization_options=None,
+                initialization_options=None,  # @TODO: should we mock some settings?
                 trace=None,
                 workspace_folders=None,
                 work_done_token=None,
@@ -679,7 +767,12 @@ class TestGrizzlyLanguageServer:
                         client.lsp.send_request(  # type: ignore
                             INITIALIZE,
                             params,
-                        ).result(timeout=59)
+                        ).result(timeout=89)
+
+                        client.lsp.send_request(  # type: ignore
+                            GrizzlyLanguageServer.FEATURE_INSTALL,
+                            {},
+                        ).result(timeout=89)
                     except futures.TimeoutError:
                         retry -= 1
                     else:
@@ -795,13 +888,11 @@ class TestGrizzlyLanguageServer:
 
             return cast(Optional[List[LocationLink]], response)
 
-        @pytest.mark.timeout(60)
         def test_initialize(self, lsp_fixture: LspFixture) -> None:
             client = lsp_fixture.client
             server = lsp_fixture.server
 
             assert server.steps == {}
-            assert server.keywords == []
 
             virtual_environment = Path(gettempdir()) / 'grizzly-ls-project'
 

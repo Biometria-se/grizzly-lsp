@@ -32,9 +32,6 @@
   "engines": {
     "vscode": "^1.63.0"
   },
-  "activationEvents": [
-    "onLanguage:grizzly-gherkin"
-  ],
   "main": "./out/src/extension",
   "contributes": {
     "languages": [
@@ -93,6 +90,27 @@
           "scope": "resource",
           "type": "number",
           "default": 4444
+        },
+        "grizzly.variable_pattern": {
+          "scope": "resource",
+          "type": "array",
+          "default": [
+            ".*ask for value of variable \"([^\"]*)\"$",
+            ".*value for variable \"([^\"]*)\" is \".*?\"$"
+          ],
+          "description": "A list of regular expressions matching step expressions that sets variables, this is needed for being able to auto-complete variable names. The regular expression must have one matching group, being the position with the variable name"
+        },
+        "grizzly.use_virtual_environment": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": true,
+          "description": "Install project dependencies in a seperate virtual environment"
+        },
+        "grizzly.pip_extra_index_url": {
+          "scope": "resource",
+          "type": "string",
+          "default": "",
+          "description": "URL to index that dependencies should be downloaded from instead of pypi.org"
         }
       }
     }
@@ -111,26 +129,26 @@
     "licenses": "npm-license-crawler --json"
   },
   "dependencies": {
-    "vscode-languageclient": "^7.0.0"
+    "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
-    "@types/chai": "^4.3.3",
+    "@types/chai": "^4.3.6",
     "@types/glob": "^8.0.0",
-    "@types/mocha": "^9.1.0",
-    "@types/node": "^16.11.58",
+    "@types/mocha": "^10.0.2",
+    "@types/node": "^20.8.2",
     "@types/vscode": "^1.63.0",
-    "@typescript-eslint/eslint-plugin": "^5.33.1",
-    "@typescript-eslint/parser": "^5.33.1",
-    "@vscode/test-electron": "^2.1.2",
-    "chai": "^4.3.6",
-    "esbuild": "^0.15.7",
+    "@typescript-eslint/eslint-plugin": "^6.7.4",
+    "@typescript-eslint/parser": "^6.7.4",
+    "@vscode/test-electron": "^2.3.4",
+    "chai": "^4.3.10",
+    "esbuild": "^0.19.4",
     "eslint": "^8.22.0",
-    "eslint-config-standard-with-typescript": "^22.0.0",
+    "eslint-config-standard-with-typescript": "^39.1.0",
     "eslint-plugin-import": "^2.26.0",
-    "eslint-plugin-n": "^15.2.4",
+    "eslint-plugin-n": "^16.1.0",
     "eslint-plugin-promise": "^6.0.0",
-    "mocha": "^9.2.1",
+    "mocha": "^10.2.0",
     "npm-license-crawler": "^0.2.1",
-    "typescript": "^4.7.4"
+    "typescript": "^5.2.2"
   }
 }

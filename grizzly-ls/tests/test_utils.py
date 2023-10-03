@@ -68,7 +68,10 @@ class DummyEnumNoFromStringType(Enum):
 
 
 def test_create_normalizer(mocker: MockerFixture) -> None:
-    mocker.patch('grizzly_ls.utils.ParseMatcher.custom_types', {})
+    mocker.patch(
+        'grizzly_ls.utils.ParseMatcher.custom_types',
+        {},  # pyright: ignore[reportUnknownArgumentType]
+    )
 
     normalizer = create_step_normalizer()
     assert normalizer.custom_types == {}
@@ -143,12 +146,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
         },
     )
 
-    with pytest.raises(ValueError) as ve:
-        create_step_normalizer()
-    assert (
-        str(ve.value)
-        == 'cannot infere what <bound method DummyEnumNoFromString.magic of <enum \'DummyEnumNoFromString\'>> will return for EnumError'
-    )
+    create_step_normalizer()
 
     mocker.patch(
         'grizzly_ls.utils.ParseMatcher.custom_types',

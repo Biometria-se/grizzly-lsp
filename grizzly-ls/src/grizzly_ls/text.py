@@ -248,9 +248,6 @@ class Normalizer:
 
                 holder = self.custom_types.get(variable_type, None)
                 if holder is not None:
-                    # @TODO: remove after new version of grizzly has been released
-                    if variable_type == 'ContentType':
-                        holder.permutations.y = True
                     normalize.update({variable: holder})
                 elif len(variable_type) == 1:  # native types
                     normalize.update(
@@ -260,8 +257,6 @@ class Normalizer:
                             )
                         }
                     )
-                else:
-                    errors.add(f'unhandled type: {variable=}, {variable_type=}')
 
             # replace variables that does not create any variations
             normalize_no_variations = {
@@ -388,7 +383,6 @@ def get_step_parts(line: str) -> Tuple[Optional[str], Optional[str]]:
 def clean_help(text: str) -> str:
     matches = re.finditer(r'\{@pylink ([^\}]*)}', text, re.MULTILINE)
 
-    # @TODO: can we reverse engineer the URL based on the text?
     for match in matches:
         _, replacement_text = match.group(1).rsplit('.', 1)
         text = text.replace(match.group(), replacement_text)

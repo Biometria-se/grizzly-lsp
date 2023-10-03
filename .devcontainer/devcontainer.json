@@ -32,17 +32,11 @@
         "flake8.args": [
           "--config=${containerWorkspaceFolder}/grizzly-ls/pyproject.toml"
         ],
-        "[python]": {
-          "editor.defaultFormatter": "ms-python.black-formatter",
-          "editor.formatOnSave": true
-        },
         "black-formatter.path": [
           "black"
         ],
         "black-formatter.args": [
-          "--config=${containerWorkspaceFolder}/grizzly-ls/pyproject.toml",
-          "-S",
-          "-l 180"
+          "--config=${containerWorkspaceFolder}/grizzly-ls/pyproject.toml"
         ],
         "pylint.args": [
           "--rcfile=${containerWorkspaceFolder}/grizzly-ls/pyproject.toml"
@@ -66,15 +60,19 @@
           "${containerWorkspaceFolder}/grizzly-ls/.coverage.xml"
         ],
         "coverage-gutters.ignoredPathGlobs": "**/{node_modules,venv,.venv,vendor,tests}/**",
-        "[typescript]": {
-          "editor.defaultFormatter": "dbaeumer.vscode-eslint"
-        },
         "editor.codeActionsOnSave": {
           "source.fixAll.eslint": true
         },
         "eslint.validate": [
           "typescript"
-        ]
+        ],
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.black-formatter",
+          "editor.formatOnSave": true
+        },
+        "[typescript]": {
+          "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+        }
       },
       // Add the IDs of extensions you want installed when the container is created.
       "extensions": [
