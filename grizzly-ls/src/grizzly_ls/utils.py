@@ -106,13 +106,13 @@ def create_step_normalizer() -> Normalizer:
 
 def run_command(
     command: List[str],
-    env: Optional[os._Environ[str]] = None,
+    env: Optional[Dict[str, str]] = None,
     cwd: Optional[str] = None,
 ) -> Tuple[int, List[str]]:
     output: List[str] = []
 
     if env is None:
-        env = os.environ
+        env = os.environ.copy()
 
     if cwd is None:
         cwd = os.getcwd()

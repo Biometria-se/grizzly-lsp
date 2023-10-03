@@ -196,6 +196,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
                 self.logger.debug(f'workspace root: {self.root_path}')
 
+                env = environ.copy()
                 project_name = self.root_path.stem
 
                 virtual_environment: Optional[Path] = None
@@ -232,9 +233,9 @@ class GrizzlyLanguageServer(LanguageServer):
 
                     paths = [
                         str(virtual_environment / bin_dir),
-                        environ.get('PATH', ''),
+                        env.get('PATH', ''),
                     ]
-                    environ.update(
+                    env.update(
                         {
                             'PATH': pathsep.join(paths),
                             'VIRTUAL_ENV': str(virtual_environment),
@@ -254,7 +255,7 @@ class GrizzlyLanguageServer(LanguageServer):
                             )
                             return
 
-                        environ.update(
+                        env.update(
                             {
                                 'PIP_EXTRA_INDEX_URL': self.index_url,
                             }
@@ -296,7 +297,7 @@ class GrizzlyLanguageServer(LanguageServer):
                             '-r',
                             str(requirements_file),
                         ],
-                        env=environ,
+                        env=env,
                     )
 
                     for line in output:
