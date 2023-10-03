@@ -99,10 +99,9 @@ jobs:
 
       - name: test package
         id: test-package
-        with:
-          run: |
-            vsce package
-          working-directory: './client/vscode'
+        working-directory: './client/vscode'
+        run: |
+          vsce package
 
   linting:
     name: linting
