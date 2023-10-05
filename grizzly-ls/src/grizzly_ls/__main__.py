@@ -45,12 +45,7 @@ def parse_arguments() -> argparse.Namespace:
     args = parser.parse_args()
 
     if args.version:
-        from importlib.metadata import version, PackageNotFoundError
-
-        try:
-            __version__ = version('grizzly-ls')
-        except PackageNotFoundError:
-            __version__ = '<not installed>'
+        from grizzly_ls import __version__
 
         print(__version__, file=sys.stderr)
 

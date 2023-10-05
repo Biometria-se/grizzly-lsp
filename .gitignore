@@ -12,5 +12,5 @@
 **/src/grizzly_ls/__version__.py
 **/setup.cfg
 **/.vscode-test
-**/tests/*
-!**/tests/project
+tests/*
+!tests/project
