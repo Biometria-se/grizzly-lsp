@@ -9,8 +9,8 @@ import sys
 
 from os import environ, linesep
 from os.path import pathsep, sep
-from typing import Any, Tuple, Dict, List, Union, Optional, Set, Type, cast
-from types import FrameType, TracebackType
+from typing import Any, Tuple, Dict, List, Union, Optional, Set, cast
+from types import FrameType
 from pathlib import Path
 from behave.matchers import ParseMatcher
 from venv import create as venv_create
@@ -20,12 +20,10 @@ from urllib.parse import urlparse, unquote
 from urllib.request import url2pathname
 from pip._internal.configuration import Configuration as PipConfiguration
 from pip._internal.exceptions import ConfigurationError as PipConfigurationError
-from uuid import uuid4
 
 import gevent.monkey  # type: ignore
 
 from pygls.server import LanguageServer
-from pygls.progress import Progress as PyglsProgress
 from pygls.workspace import Document
 from pygls.capabilities import get_capability
 from lsprotocol.types import (
@@ -50,9 +48,6 @@ from lsprotocol.types import (
     MarkupKind,
     Range,
     LocationLink,
-    WorkDoneProgressBegin,
-    WorkDoneProgressReport,
-    WorkDoneProgressEnd,
 )
 
 from behave.i18n import languages
@@ -63,52 +58,8 @@ from .utils import (
     load_step_registry,
     run_command,
 )
+from .progress import Progress
 from . import __version__
-
-
-class Progress:
-    progress: PyglsProgress
-    title: str
-    token: str
-
-    def __init__(self, progress: PyglsProgress, title: str) -> None:
-        self.progress = progress
-        self.title = title
-        self.token = str(uuid4())
-
-    @staticmethod
-    def callback(*args: Any, **kwargs: Any) -> None:
-        return  # pragma: no cover
-
-    def __enter__(self) -> Progress:
-        self.progress.create(self.token, self.__class__.callback)  # type: ignore
-
-        self.progress.begin(
-            self.token,
-            WorkDoneProgressBegin(title=self.title, percentage=0, cancellable=False),
-        )
-
-        return self
-
-    def __exit__(
-        self,
-        exc_type: Optional[Type[BaseException]],
-        exc: Optional[BaseException],
-        traceback: Optional[TracebackType],
-    ) -> bool:
-        self.report(None, 100)
-
-        self.progress.end(self.token, WorkDoneProgressEnd())
-
-        return exc is None
-
-    def report(
-        self, message: Optional[str] = None, percentage: Optional[int] = None
-    ) -> None:
-        self.progress.report(
-            self.token,
-            WorkDoneProgressReport(message=message, percentage=percentage),
-        )
 
 
 class GrizzlyLanguageServer(LanguageServer):
