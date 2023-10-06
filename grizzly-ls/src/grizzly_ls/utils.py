@@ -20,10 +20,10 @@ from .text import Normalizer, NormalizeHolder, Coordinate, RegexPermutationResol
 logger = logging.getLogger(__name__)
 
 
-def load_step_registry(step_path: Path) -> Dict[str, List[ParseMatcher]]:
+def load_step_registry(step_paths: List[Path]) -> Dict[str, List[ParseMatcher]]:
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        behave_load_step_modules([str(step_path)])
+        behave_load_step_modules([str(step_path) for step_path in step_paths])
 
     return registry.steps
 
