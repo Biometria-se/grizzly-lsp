@@ -2,7 +2,7 @@ import os
 import asyncio
 
 from types import TracebackType
-from typing import Literal, Optional, Type
+from typing import Literal, Optional, Type, Any
 from threading import Thread
 from pathlib import Path
 from importlib import reload as reload_module
@@ -12,6 +12,15 @@ from pytest_mock import MockerFixture
 from pygls.server import LanguageServer
 from lsprotocol.types import EXIT
 from grizzly_ls.server import GrizzlyLanguageServer
+
+
+class DummyClient(LanguageServer):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)  # type: ignore
+
+        @self.feature('window/workDoneProgress/create')
+        def window_work_done_progress_create(*args: Any, **kwargs: Any) -> None:
+            return
 
 
 class LspFixture:
@@ -53,7 +62,7 @@ class LspFixture:
         )
         self._server_thread.start()
 
-        self.client = LanguageServer(
+        self.client = DummyClient(
             loop=asyncio.new_event_loop(), name='dummy client', version='0.0.0'
         )
         self._client_thread = Thread(
