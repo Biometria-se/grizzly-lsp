@@ -883,7 +883,15 @@ class GrizzlyLanguageServer(LanguageServer):
     def _compile_inventory(self, root_path: Path, project_name: str) -> None:
         self.logger.debug('creating step registry')
 
-        self.behave_steps = load_step_registry(root_path / 'features' / 'steps')
+        try:
+            self.behave_steps = load_step_registry(
+                [path.parent for path in root_path.rglob('*.py')]
+            )
+        except ModuleNotFoundError:
+            self.show_message(
+                'unable to load behave step expressions', msg_type=MessageType.Error
+            )
+            return
 
         try:
             self.normalizer = create_step_normalizer()
