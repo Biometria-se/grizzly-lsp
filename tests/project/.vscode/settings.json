@@ -3,6 +3,10 @@
   "grizzly.socket.host": "localhost",
   "grizzly.socket.port": 4444,
   "grizzly.use_virtual_environment": false,
+  "grizzly.variable_pattern": [
+    "ask for value of variable \"([^\"]*)\"",
+    "value for variable \"([^\"]*)\" is \".*?\""
+  ],
   "[grizzly-gherkin]": {
     "editor.links": false
   }

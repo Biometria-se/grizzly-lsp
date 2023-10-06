@@ -1,4 +1,5 @@
 import logging
+import re
 
 from typing import Optional, Dict, Any, List, cast
 from pathlib import Path
@@ -736,7 +737,12 @@ class TestGrizzlyLanguageServer:
         )
 
     class TestGrizzlyLangageServerFeatures:
-        def _initialize(self, client: LanguageServer, root: Path) -> None:
+        def _initialize(
+            self,
+            client: LanguageServer,
+            root: Path,
+            options: Optional[Dict[str, Any]] = None,
+        ) -> None:
             retry = 3
             params = InitializeParams(
                 process_id=1337,
@@ -751,7 +757,7 @@ class TestGrizzlyLanguageServer:
                 client_info=None,
                 locale=None,
                 root_path=str(root),
-                initialization_options=None,  # @TODO: should we mock some settings?
+                initialization_options=options,
                 trace=None,
                 workspace_folders=None,
                 work_done_token=None,
@@ -803,10 +809,11 @@ class TestGrizzlyLanguageServer:
             client: LanguageServer,
             path: Path,
             content: str,
+            options: Optional[Dict[str, str]] = None,
             context: Optional[CompletionContext] = None,
             position: Optional[Position] = None,
         ) -> Optional[CompletionList]:
-            self._initialize(client, path)
+            self._initialize(client, path, options)
 
             path = path / 'features' / 'project.feature'
             self._open(client, path, content)
@@ -844,7 +851,7 @@ class TestGrizzlyLanguageServer:
             position: Position,
             content: Optional[str] = None,
         ) -> Optional[Hover]:
-            self._initialize(client, path)
+            self._initialize(client, path, options=None)
 
             path = path / 'features' / 'project.feature'
 
@@ -870,7 +877,7 @@ class TestGrizzlyLanguageServer:
             position: Position,
             content: Optional[str] = None,
         ) -> Optional[List[LocationLink]]:
-            self._initialize(client, path)
+            self._initialize(client, path, options=None)
 
             path = path / 'features' / 'project.feature'
             self._open(client, path, content)
@@ -899,9 +906,33 @@ class TestGrizzlyLanguageServer:
             if virtual_environment.exists():
                 rmtree(virtual_environment)
 
-            self._initialize(client, lsp_fixture.datadir)
+            self._initialize(
+                client,
+                lsp_fixture.datadir,
+                options={
+                    'variable_pattern': [
+                        'hello "([^"]*)"!$',
+                        'foo bar is a (nice|bad) word',
+                        '.*and they lived (happy|unfortunate) ever after',
+                        '^foo(bar)$',
+                    ]
+                },
+            )
 
             assert not server.steps == {}
+            assert isinstance(server.variable_pattern, re.Pattern)
+            assert '^.*hello "([^"]*)"!$' in server.variable_pattern.pattern
+            assert '^.*foo bar is a (nice|bad) word$' in server.variable_pattern.pattern
+            assert (
+                '^.*and they lived (happy|unfortunate) ever after$'
+                in server.variable_pattern.pattern
+            )
+            assert '^foo(bar)$' in server.variable_pattern.pattern
+            assert (
+                server.variable_pattern.pattern.count('^') == 4 + 1
+            )  # first pattern has ^ in the pattern...
+            assert server.variable_pattern.pattern.count('(') == 5
+            assert server.variable_pattern.pattern.count(')') == 5
 
             keywords = list(server.steps.keys())
 
@@ -939,6 +970,7 @@ class TestGrizzlyLanguageServer:
                 ''''Feature:
     Scenario:
         B''',
+                options=None,
             )
 
             assert response is not None
@@ -961,6 +993,7 @@ class TestGrizzlyLanguageServer:
                 '''Feature:
     Scenario:
         en''',
+                options=None,
             )
             assert response is not None
             assert not response.is_incomplete
@@ -984,7 +1017,7 @@ class TestGrizzlyLanguageServer:
             ]
 
             # all keywords
-            response = self._completion(client, lsp_fixture.datadir, '')
+            response = self._completion(client, lsp_fixture.datadir, '', options=None)
             assert response is not None
             assert not response.is_incomplete
             unexpected_kinds = list(
@@ -1000,7 +1033,9 @@ class TestGrizzlyLanguageServer:
 
             # all Given/And steps
             for keyword in ['Given', 'And']:
-                response = self._completion(client, lsp_fixture.datadir, keyword)
+                response = self._completion(
+                    client, lsp_fixture.datadir, keyword, options=None
+                )
                 assert response is not None
                 assert not response.is_incomplete
                 unexpected_kinds = list(
@@ -1022,7 +1057,9 @@ class TestGrizzlyLanguageServer:
                 assert 'spawn rate is "" users per second' in labels
                 assert 'a user of type "" with weight "" load testing ""' in labels
 
-            response = self._completion(client, lsp_fixture.datadir, 'Given value')
+            response = self._completion(
+                client, lsp_fixture.datadir, 'Given value', options=None
+            )
             assert response is not None
             assert not response.is_incomplete
             unexpected_kinds = list(
