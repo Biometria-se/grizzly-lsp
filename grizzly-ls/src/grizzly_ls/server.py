@@ -79,7 +79,7 @@ class GrizzlyLanguageServer(LanguageServer):
     keywords: List[str]
     keywords_once: List[str] = []
     keywords_any: List[str] = []
-    client_configuration: Dict[str, Any]
+    client_settings: Dict[str, Any]
 
     _language: str
     localizations: Dict[str, List[str]]
@@ -121,7 +121,7 @@ class GrizzlyLanguageServer(LanguageServer):
             return
 
         signal.signal = _signal  # type: ignore
-        self.client_configuration = {}
+        self.client_settings = {}
 
         @self.feature(self.FEATURE_INSTALL)
         def install(params: Dict[str, Any]) -> None:
@@ -139,9 +139,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
             with Progress(self.progress, 'grizzly-ls') as progress:
                 # <!-- should a virtual environment be used?
-                use_venv = self.client_configuration.get(
-                    'use_virtual_environment', True
-                )
+                use_venv = self.client_settings.get('use_virtual_environment', True)
                 executable = 'python3' if use_venv else sys.executable
                 # // -->
 
@@ -325,9 +323,9 @@ class GrizzlyLanguageServer(LanguageServer):
 
             self.root_path = root_path
 
-            client_configuration = params.initialization_options
-            if client_configuration is not None:
-                self.client_configuration = cast(Dict[str, Any], client_configuration)
+            client_settings = params.initialization_options
+            if client_settings is not None:
+                self.client_settings = cast(Dict[str, Any], client_settings)
 
             markup_supported: List[MarkupKind] = get_capability(
                 self.client_capabilities,
@@ -351,9 +349,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
             # no index-url specified in pip config, check if we have it in extension configuration
             if self.index_url is None:
-                self.index_url = self.client_configuration.get(
-                    'pip_extra_index_url', None
-                )
+                self.index_url = self.client_settings.get('pip_extra_index_url', None)
                 if self.index_url is not None and len(self.index_url.strip()) < 1:
                     self.index_url = None
 
@@ -361,12 +357,37 @@ class GrizzlyLanguageServer(LanguageServer):
             # // -->
 
             # <!-- set variable pattern
-            variable_patterns = self.client_configuration.get('variable_pattern', [])
+            variable_patterns = self.client_settings.get('variable_pattern', [])
             if len(variable_patterns) > 0:
-                # validate patterns
+                # validate and normalize patterns
+                normalized_variable_patterns: Set[str] = set()
                 for variable_pattern in variable_patterns:
                     try:
-                        re.compile(variable_pattern)
+                        original_variable_pattern = variable_pattern
+                        if not variable_pattern.startswith(
+                            '.*'
+                        ) and not variable_pattern.startswith('^'):
+                            variable_pattern = f'.*{variable_pattern}'
+
+                        if not variable_pattern.startswith('^'):
+                            variable_pattern = f'^{variable_pattern}'
+
+                        if not variable_pattern.endswith('$'):
+                            variable_pattern = f'{variable_pattern}$'
+
+                        self.logger.error(
+                            f'{original_variable_pattern} -> {variable_pattern}'
+                        )
+
+                        pattern = re.compile(variable_pattern)
+
+                        if pattern.groups != 1:
+                            self.show_message(
+                                f'variable pattern "{original_variable_pattern}" contains {pattern.groups} match groups, it must be exactly one'
+                            )
+                            return
+
+                        normalized_variable_patterns.add(variable_pattern)
                     except:
                         self.show_message(
                             f'variable pattern "{variable_pattern}" is not valid, check grizzly.variable_pattern setting',
@@ -374,7 +395,7 @@ class GrizzlyLanguageServer(LanguageServer):
                         )
                         return
 
-                variable_pattern = f'({"|".join(variable_patterns)})'
+                variable_pattern = f'({"|".join(normalized_variable_patterns)})'
                 self.variable_pattern = re.compile(variable_pattern)
             # // -->
 
