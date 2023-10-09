@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
-export let doc: vscode.TextDocument;
-export let editor: vscode.TextEditor;
+export let doc: vscode.TextDocument | undefined = undefined;
+export let editor: vscode.TextEditor | undefined = undefined;
 export let documentEol: string;
 export let platformEol: string;
 
@@ -11,13 +11,15 @@ export const testWorkspace: string = path.resolve(__dirname, '../../../../tests/
 /**
  * Activates the biometria-se.vscode-grizzly extension
  */
-export async function activate(docUri: vscode.Uri) {
+export async function activate(docUri: vscode.Uri, content: string) {
     // The extensionId is `publisher.name` from package.json
     const ext = vscode.extensions.getExtension('biometria-se.grizzly-loadtester-vscode');
     await ext.activate();
     try {
         doc = await vscode.workspace.openTextDocument(docUri);
         editor = await vscode.window.showTextDocument(doc);
+
+        await setTestContent(content);
 
         // wait until language server is done with everything
         while (!ext.exports.isActivated()) {
@@ -39,7 +41,7 @@ export const getDocUri = (p: string) => {
     return vscode.Uri.file(getDocPath(p));
 };
 
-export async function setTestContent(content: string): Promise<boolean> {
+async function setTestContent(content: string): Promise<boolean> {
     const all = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
     return editor.edit((eb) => eb.replace(all, content));
 }

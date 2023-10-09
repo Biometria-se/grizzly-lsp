@@ -1,29 +1,27 @@
 import * as vscode from 'vscode';
 import { expect } from 'chai';
-import { getDocUri, activate, setTestContent } from './helper';
+import { getDocUri, activate } from './helper';
 import { describe, it } from 'mocha';
-
-const docUri = getDocUri('features/empty.feature');
 
 describe('Should show help on hover step expression', () => {
     it('Hover in empty file', async () => {
-        const actual = await testHover(docUri, new vscode.Position(0, 0));
+        const actual = await testHover('', new vscode.Position(0, 0));
         expect(actual).to.be.undefined;
     });
 
     it('Hover `Given a user...`', async () => {
-        setTestContent(`Feature:
+        const content = `Feature:
     Scenario: test scenario
         Given a user of type "RestApi" with weight "1" load testing "$conf::template.host"
         And restart scenario on failure
-`);
+`;
 
         let end = 89;
         if (process.platform == 'win32') {
             end = 90;  // due to \r\n on win32?
         }
 
-        const actual = await testHover(docUri, new vscode.Position(2, 35));
+        const actual = await testHover(content, new vscode.Position(2, 35));
 
         expect(actual.range?.start.line).to.be.equal(2);
         expect(actual.range?.start.character).to.be.equal(8);
@@ -52,18 +50,18 @@ Args:
     });
 
     it('Hover `And restart scenario on failure`', async () => {
-        setTestContent(`Feature:
+        const content = `Feature:
     Scenario: test scenario
         Given a user of type "RestApi" with weight "1" load testing "$conf::template.host"
         And restart scenario on failure
-`);
+`;
 
         let end = 38;
         if (process.platform == 'win32') {
             end = 39;  // due to \r\n on win32?
         }
 
-        const actual = await testHover(docUri, new vscode.Position(3, 13));
+        const actual = await testHover(content, new vscode.Position(3, 13));
 
         expect(actual.range?.start.line).to.be.equal(3);
         expect(actual.range?.start.character).to.be.equal(8);
@@ -86,8 +84,9 @@ And restart scenario on failure
 
 });
 
-async function testHover(docUri: vscode.Uri, position: vscode.Position): Promise<vscode.Hover> {
-    await activate(docUri);
+async function testHover(content: string, position: vscode.Position): Promise<vscode.Hover> {
+    const docUri = getDocUri('features/empty.feature');
+    await activate(docUri, content);
 
     const [hover] = (await vscode.commands.executeCommand(
         'vscode.executeHoverProvider',

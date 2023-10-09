@@ -47,7 +47,7 @@ from lsprotocol.types import (
 from behave.matchers import ParseMatcher
 
 from .fixtures import LspFixture
-from .helpers import normalize_completion_item
+from .helpers import normalize_completion_item, normalize_completion_text_edit
 from grizzly_ls import __version__
 from grizzly_ls.server import GrizzlyLanguageServer, Progress
 
@@ -273,7 +273,10 @@ class TestGrizzlyLanguageServer:
 
         with caplog.at_level(logging.DEBUG):
             matched_steps = normalize_completion_item(
-                server._complete_step('Given', 'variable'), CompletionItemKind.Function
+                server._complete_step(
+                    'Given', Position(line=0, character=6), 'variable'
+                ),
+                CompletionItemKind.Function,
             )
 
             for expected_step in [
@@ -286,7 +289,8 @@ class TestGrizzlyLanguageServer:
                 assert expected_step in matched_steps
 
             matched_steps = normalize_completion_item(
-                server._complete_step('Then', 'save'), CompletionItemKind.Function
+                server._complete_step('Then', Position(line=0, character=5), 'save'),
+                CompletionItemKind.Function,
             )
             for expected_step in [
                 'save response metadata "" in variable ""',
@@ -303,7 +307,7 @@ class TestGrizzlyLanguageServer:
                 assert expected_step in matched_steps
 
             suggested_steps = server._complete_step(
-                'Then', 'save response metadata "hello"'
+                'Then', Position(line=0, character=35), 'save response metadata "hello"'
             )
             matched_steps = normalize_completion_item(
                 suggested_steps, CompletionItemKind.Function
@@ -321,21 +325,26 @@ class TestGrizzlyLanguageServer:
                     == 'save response metadata "hello" that matches "" in variable ""'
                 ):
                     assert (
-                        suggested_step.insert_text
+                        suggested_step.text_edit is not None
+                        and suggested_step.text_edit.new_text
                         == ' that matches "$1" in variable "$2"'
                     )
                 elif (
                     suggested_step.label
                     == 'save response metadata "hello" in variable ""'
                 ):
-                    assert suggested_step.insert_text == ' in variable "$1"'
+                    assert (
+                        suggested_step.text_edit is not None
+                        and suggested_step.text_edit.new_text == ' in variable "$1"'
+                    )
                 else:
                     raise AssertionError(
                         f'"{suggested_step.label}" was an unexpected suggested step'
                     )
 
             matched_steps = normalize_completion_item(
-                server._complete_step('When', None), CompletionItemKind.Function
+                server._complete_step('When', Position(line=0, character=4), None),
+                CompletionItemKind.Function,
             )
 
             for expected_step in [
@@ -351,7 +360,10 @@ class TestGrizzlyLanguageServer:
                 assert expected_step in matched_steps
 
             matched_steps = normalize_completion_item(
-                server._complete_step('When', 'response '), CompletionItemKind.Function
+                server._complete_step(
+                    'When', Position(line=0, character=13), 'response '
+                ),
+                CompletionItemKind.Function,
             )
 
             for expected_step in [
@@ -364,7 +376,9 @@ class TestGrizzlyLanguageServer:
                 assert expected_step in matched_steps
 
             matched_steps = normalize_completion_item(
-                server._complete_step('When', 'response fail request'),
+                server._complete_step(
+                    'When', Position(line=0, character=25), 'response fail request'
+                ),
                 CompletionItemKind.Function,
             )
 
@@ -377,7 +391,11 @@ class TestGrizzlyLanguageServer:
                 assert expected_step in matched_steps
 
             matched_steps = normalize_completion_item(
-                server._complete_step('When', 'response payload "" is fail request'),
+                server._complete_step(
+                    'When',
+                    Position(line=0, character=39),
+                    'response payload "" is fail request',
+                ),
                 CompletionItemKind.Function,
             )
 
@@ -389,7 +407,9 @@ class TestGrizzlyLanguageServer:
 
             matched_steps = normalize_completion_item(
                 server._complete_step(
-                    'Given', 'a user of type "RestApi" with weight "1" load'
+                    'Given',
+                    Position(line=0, character=50),
+                    'a user of type "RestApi" with weight "1" load',
                 ),
                 CompletionItemKind.Function,
             )
@@ -400,7 +420,9 @@ class TestGrizzlyLanguageServer:
                 == 'a user of type "RestApi" with weight "1" load testing ""'
             )
 
-            actual_completed_steps = server._complete_step('And', 'repeat for "1" it')
+            actual_completed_steps = server._complete_step(
+                'And', Position(line=0, character=20), 'repeat for "1" it'
+            )
 
             matched_steps = normalize_completion_item(
                 actual_completed_steps,
@@ -411,65 +433,75 @@ class TestGrizzlyLanguageServer:
                 ['repeat for "1" iterations', 'repeat for "1" iteration']
             )
 
-            matched_insert_text = normalize_completion_item(
-                actual_completed_steps,
-                CompletionItemKind.Function,
-                'insert_text',
+            matched_text_edit = normalize_completion_text_edit(
+                actual_completed_steps, CompletionItemKind.Function
             )
 
-            assert sorted(matched_insert_text) == sorted(['iteration', 'iterations'])
-
-            actual_completed_steps = server._complete_step('And', 'repeat for "1"')
-
-            matched_steps = normalize_completion_item(
-                actual_completed_steps,
-                CompletionItemKind.Function,
-            )
-
-            assert sorted(matched_steps) == sorted(
-                ['repeat for "1" iterations', 'repeat for "1" iteration']
-            )
-
-            matched_insert_text = normalize_completion_item(
-                actual_completed_steps,
-                CompletionItemKind.Function,
-                'insert_text',
-            )
-
-            assert sorted(matched_insert_text) == sorted([' iteration', ' iterations'])
-
-            actual_completed_steps = server._complete_step('And', 'repeat for "1" ')
-
-            matched_steps = normalize_completion_item(
-                actual_completed_steps,
-                CompletionItemKind.Function,
-            )
-
-            assert sorted(matched_steps) == sorted(
-                ['repeat for "1" iterations', 'repeat for "1" iteration']
-            )
-
-            matched_insert_text = normalize_completion_item(
-                actual_completed_steps,
-                CompletionItemKind.Function,
-                'insert_text',
-            )
-
-            assert sorted(matched_insert_text) == sorted(['iteration', 'iterations'])
+            assert sorted(matched_text_edit) == sorted(['iteration', 'iterations'])
 
             actual_completed_steps = server._complete_step(
-                'Then', 'parse date "{{ datetime.now() }}" '
+                'And', Position(line=0, character=16), 'repeat for "1"'
+            )
+
+            matched_steps = normalize_completion_item(
+                actual_completed_steps,
+                CompletionItemKind.Function,
+            )
+
+            assert sorted(matched_steps) == sorted(
+                ['repeat for "1" iterations', 'repeat for "1" iteration']
+            )
+
+            matched_text_edit = normalize_completion_text_edit(
+                actual_completed_steps, CompletionItemKind.Function
+            )
+
+            assert sorted(matched_text_edit) == sorted([' iteration', ' iterations'])
+
+            actual_completed_steps = server._complete_step(
+                'And', Position(line=0, character=17), 'repeat for "1" '
+            )
+
+            matched_steps = normalize_completion_item(
+                actual_completed_steps,
+                CompletionItemKind.Function,
+            )
+
+            assert sorted(matched_steps) == sorted(
+                ['repeat for "1" iterations', 'repeat for "1" iteration']
+            )
+
+            matched_text_edit = normalize_completion_text_edit(
+                actual_completed_steps, CompletionItemKind.Function
+            )
+
+            assert sorted(matched_text_edit) == sorted(['iteration', 'iterations'])
+
+            actual_completed_steps = server._complete_step(
+                'Then',
+                Position(line=0, character=38),
+                'parse date "{{ datetime.now() }}" ',
             )
             assert len(actual_completed_steps) == 1
             actual_completed_step = actual_completed_steps[0]
-            assert actual_completed_step.insert_text == 'and save in variable "$1"'
+            assert (
+                actual_completed_step.text_edit is not None
+                and actual_completed_step.text_edit.new_text
+                == 'and save in variable "$1"'
+            )
 
             actual_completed_steps = server._complete_step(
-                'Then', 'parse date "{{ datetime.now() }}"'
+                'Then',
+                Position(line=0, character=37),
+                'parse date "{{ datetime.now() }}"',
             )
             assert len(actual_completed_steps) == 1
             actual_completed_step = actual_completed_steps[0]
-            assert actual_completed_step.insert_text == ' and save in variable "$1"'
+            assert (
+                actual_completed_step.text_edit is not None
+                and actual_completed_step.text_edit.new_text
+                == ' and save in variable "$1"'
+            )
 
     def test__normalize_step_expression(
         self, lsp_fixture: LspFixture, mocker: MockerFixture, caplog: LogCaptureFixture
@@ -664,9 +696,9 @@ class TestGrizzlyLanguageServer:
     ) -> None:
         server = lsp_fixture.server
 
-        mocker.patch.object(server.lsp, 'workspace', Workspace('', None))
+        mocker.patch.object(server.lsp, '_workspace', Workspace(''))
         mocker.patch(
-            'tests.test_server.Workspace.get_document',
+            'tests.test_server.Workspace.get_text_document',
             return_value=Document(
                 'file://test.feature',
                 '''Feature:
@@ -1046,16 +1078,20 @@ class TestGrizzlyLanguageServer:
                 )
                 assert len(unexpected_kinds) == 0
 
-                labels = list(
-                    map(lambda s: s.label, response.items),
-                )
+                labels = [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
                 assert len(labels) > 0
                 assert all([True if label is not None else False for label in labels])
 
-                assert 'ask for value of variable ""' in labels
-                assert 'spawn rate is "" user per second' in labels
-                assert 'spawn rate is "" users per second' in labels
-                assert 'a user of type "" with weight "" load testing ""' in labels
+                assert 'ask for value of variable "$1"' in labels
+                assert 'spawn rate is "$1" user per second' in labels
+                assert 'spawn rate is "$1" users per second' in labels
+                assert (
+                    'a user of type "$1" with weight "$2" load testing "$3"' in labels
+                )
 
             response = self._completion(
                 client, lsp_fixture.datadir, 'Given value', options=None
@@ -1108,9 +1144,9 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                map(lambda s: s.insert_text, response.items),
-            )
+            insert_texts = [
+                s.text_edit.new_text for s in response.items if s.text_edit is not None
+            ]
 
             assert labels == [
                 'parse date "{{ datetime.now() }}" and save in variable ""'

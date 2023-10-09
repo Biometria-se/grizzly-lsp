@@ -411,7 +411,7 @@ class GrizzlyLanguageServer(LanguageServer):
             else:
                 line = self._current_line(params.text_document.uri, params.position)
 
-                document = self.workspace.get_document(params.text_document.uri)
+                document = self.workspace.get_text_document(params.text_document.uri)
 
                 self.language = self._find_language(document.source)
 
@@ -436,7 +436,7 @@ class GrizzlyLanguageServer(LanguageServer):
                     self.logger.debug(f'{keyword=}, {text=}, {self.keywords=}')
 
                     if keyword is not None and keyword in self.keywords:
-                        items = self._complete_step(keyword, text)
+                        items = self._complete_step(keyword, params.position, text)
                     else:
                         items = self._complete_keyword(keyword, document)
 
@@ -511,11 +511,8 @@ class GrizzlyLanguageServer(LanguageServer):
             matches = re.finditer(r'"([^"]*)"', current_line, re.MULTILINE)
             definitions: List[LocationLink] = []
 
-            document = self.workspace.get_document(params.text_document.uri)
-            if document.path is None:
-                document_directory = Path.cwd()
-            else:
-                document_directory = Path(document.path).parent
+            document = self.workspace.get_text_document(params.text_document.uri)
+            document_directory = Path(document.path).parent
 
             for variable_match in matches:
                 variable_value = variable_match.group(1)
@@ -783,6 +780,7 @@ class GrizzlyLanguageServer(LanguageServer):
     def _complete_step(
         self,
         keyword: str,
+        position: Position,
         expression: Optional[str],
     ) -> List[CompletionItem]:
         if keyword in self.keywords_any:
@@ -851,22 +849,19 @@ class GrizzlyLanguageServer(LanguageServer):
             ):
                 # only insert the part of the step that has not already been written, up until last space, since vscode
                 # seems to insert text word wise
-                insert_text = matched_step.replace(expression, '')
-                if (
-                    not insert_text.startswith(' ')
-                    and insert_text.strip().count(' ') < 1
-                ):
+                new_text = matched_step.replace(expression, '')
+                if not new_text.startswith(' ') and new_text.strip().count(' ') < 1:
                     try:
-                        _, insert_text = matched_step.rsplit(' ', 1)
+                        _, new_text = matched_step.rsplit(' ', 1)
                     except:
                         pass
             else:
-                insert_text = matched_step
+                new_text = matched_step
 
             # do not suggest the step that is already written
             if matched_step == expression:
                 continue
-            elif matched_step == insert_text:  # exact match, preselect it
+            elif matched_step == new_text:  # exact match, preselect it
                 preselect = True
 
             # if typed expression ends with whitespace, do not insert text starting with a whitespace
@@ -875,28 +870,33 @@ class GrizzlyLanguageServer(LanguageServer):
                 and len(expression.strip()) > 0
                 and expression[-1] == ' '
                 and expression[-2] != ' '
-                and insert_text[0] == ' '
+                and new_text[0] == ' '
             ):
-                insert_text = insert_text[1:]
+                new_text = new_text[1:]
 
-            self.logger.debug(f'{expression=}, {insert_text=}, {matched_step=}')
+            self.logger.debug(f'{expression=}, {new_text=}, {matched_step=}')
 
-            if '""' in insert_text:
+            if '""' in new_text:
                 snippet_matches = re.finditer(
                     r'""',
-                    insert_text,
+                    new_text,
                     flags=re.MULTILINE,
                 )
 
                 offset = 0
                 for index, snippet_match in enumerate(snippet_matches, start=1):
                     snippet_placeholder = f'${index}'
-                    insert_text = f'{insert_text[0:snippet_match.start()+offset]}"{snippet_placeholder}"{insert_text[snippet_match.end()+offset:]}'
+                    new_text = f'{new_text[0:snippet_match.start()+offset]}"{snippet_placeholder}"{new_text[snippet_match.end()+offset:]}'
                     offset += len(snippet_placeholder)
 
                 insert_text_format = InsertTextFormat.Snippet
             else:
                 insert_text_format = InsertTextFormat.PlainText
+
+            text_edit = TextEdit(
+                range=Range(start=position, end=position),
+                new_text=new_text,
+            )
 
             matched_steps_container.update(
                 {
@@ -906,8 +906,8 @@ class GrizzlyLanguageServer(LanguageServer):
                         documentation=self._find_help(f'{keyword} {matched_step}'),
                         deprecated=False,
                         preselect=preselect,
-                        insert_text=insert_text,
                         insert_text_format=insert_text_format,
+                        text_edit=text_edit,
                     )
                 }
             )  # type: ignore
@@ -1024,7 +1024,7 @@ class GrizzlyLanguageServer(LanguageServer):
                 self.keywords.append(value.strip())
 
     def _current_line(self, uri: str, position: Position) -> str:
-        document = self.workspace.get_document(uri)
+        document = self.workspace.get_text_document(uri)
         content = document.source
         line = content.split('\n')[position.line]
 
