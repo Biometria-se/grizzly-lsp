@@ -1138,11 +1138,15 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(
+            assert sorted(text_edits) == sorted(
                 [' price }}"', ' foo }}"', ' test }}"', ' bar }}"']
             )
             assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
@@ -1159,22 +1163,25 @@ class TestGrizzlyLanguageServer:
 
     Scenario: test2
         Given a user of type "Dummy" load testing "dummy://test"
-        And value for variable "weight" is "200"
-        And value for variable "hello" is "bar"
-        And value for variable "test" is "False"
-        And ask for value of variable "world"
+        And value for variable "weight1" is "200"
+        And value for variable "hello1" is "bar"
+        And value for variable "test1" is "False"
+        And ask for value of variable "world1"
 
         Then log message "{{ "
+        Then log message "{{ w"
 
     Scenario: test3
         Given a user of type "Dummy" load testing "dummy://test"
-        And value for variable "weight" is "200"
-        And value for variable "hello" is "bar"
-        And value for variable "test" is "False"
-        And ask for value of variable "world"
+        And value for variable "weight2" is "200"
+        And value for variable "hello2" is "bar"
+        And value for variable "test2" is "False"
+        And ask for value of variable "world2"
 
-        Then log message "{{ }}"'''
+        Then log message "{{ }}"
+        Then log message "{{ w}}"'''
 
+            # <!-- Scenario: test1
             response = self._completion(
                 client,
                 lsp_fixture.datadir,
@@ -1187,15 +1194,21 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(
+            assert sorted(text_edits) == sorted(
                 [' price }}"', ' foo }}"', ' test }}"', ' bar }}"']
             )
             assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
+            # // -->
 
+            # <!-- Scenario: test2
             response = self._completion(
                 client,
                 lsp_fixture.datadir,
@@ -1208,20 +1221,25 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(
-                [' weight }}', ' hello }}', ' test }}', ' world }}']
+            assert sorted(text_edits) == sorted(
+                [' weight1 }}', ' hello1 }}', ' test1 }}', ' world1 }}']
             )
-            assert sorted(labels) == sorted(['weight', 'hello', 'test', 'world'])
+            assert sorted(labels) == sorted(['weight1', 'hello1', 'test1', 'world1'])
 
+            # partial variable name
             response = self._completion(
                 client,
                 lsp_fixture.datadir,
                 content,
-                position=Position(line=26, character=28),
+                position=Position(line=18, character=30),
             )
 
             assert response is not None
@@ -1229,14 +1247,68 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(
-                [' weight', ' hello', ' test', ' world']
+            assert sorted(text_edits) == sorted(['weight1 }}', 'world1 }}'])
+            assert sorted(labels) == sorted(['weight1', 'world1'])
+            # // -->
+
+            # <!-- Scenario: test3
+            response = self._completion(
+                client,
+                lsp_fixture.datadir,
+                content,
+                position=Position(line=27, character=28),
             )
-            assert sorted(labels) == sorted(['weight', 'hello', 'test', 'world'])
+
+            assert response is not None
+
+            labels = list(
+                map(lambda s: s.label, response.items),
+            )
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
+            )
+
+            assert sorted(text_edits) == sorted(
+                [' weight2', ' hello2', ' test2', ' world2']
+            )
+            assert sorted(labels) == sorted(['weight2', 'hello2', 'test2', 'world2'])
+
+            # partial variable name
+            response = self._completion(
+                client,
+                lsp_fixture.datadir,
+                content,
+                position=Position(line=28, character=30),
+            )
+
+            assert response is not None
+
+            labels = list(
+                map(lambda s: s.label, response.items),
+            )
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
+            )
+
+            assert sorted(text_edits) == sorted(['weight2 ', 'world2 '])
+            assert sorted(labels) == sorted(['weight2', 'world2'])
+            # // -->
 
             content = '''Feature: test
     Scenario: test
@@ -1259,11 +1331,15 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(
+            assert sorted(text_edits) == sorted(
                 [' price }}', ' foo }}', ' test }}', ' bar }}']
             )
             assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
@@ -1290,11 +1366,15 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(
+            assert sorted(text_edits) == sorted(
                 [' price }}', ' foo }}', ' test }}', ' bar }}']
             )
             assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
@@ -1312,11 +1392,15 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(
+            assert sorted(text_edits) == sorted(
                 [
                     ' price ',
                     ' foo ',

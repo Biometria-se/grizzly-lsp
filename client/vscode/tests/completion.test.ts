@@ -8,6 +8,7 @@ const docUri = getDocUri('features/empty.feature');
 describe('Should do completion on keywords', () => {
     it('Complete keywords, empty file, only suggest first-level keyword(s)', async () => {
         // empty document, only suggest "Feature"
+        setTestContent('');
         const actual = await testCompletion(docUri, new vscode.Position(0, 0));
 
         expect(actual.items.length).to.be.equal(1);
@@ -358,6 +359,29 @@ describe('Should do completion on variables', () => {
         });
     });
 
+    it('Complete variable, partial variable, not a complete step, no ending "', async () => {
+        setTestContent(`Feature:
+    Background:
+    Scenario:
+        And value for variable "foo" is "none"
+        And value for variable "bar" is "none"
+        And value for variable "boo" is "none"
+        And ask for value for variable "world"
+        Then log message "{{ b
+        `);
+
+        const actual = await testCompletion(docUri, new vscode.Position(7, 30));
+        const expected = [
+            'bar }}"',
+            'boo }}"',
+        ];
+
+        actual.items.forEach((item) => {
+            expect(item.kind).to.be.equal(vscode.CompletionItemKind.Variable);
+            expect(expected).to.contain(item.insertText);
+        });
+    });
+
     it('Complete variable, complete step, ending }}"', async () => {
         setTestContent(`Feature:
     Background:
@@ -373,6 +397,28 @@ describe('Should do completion on variables', () => {
             ' foo ',
             ' bar ',
             ' world ',
+        ];
+
+        actual.items.forEach((item) => {
+            expect(item.kind).to.be.equal(vscode.CompletionItemKind.Variable);
+            expect(expected).to.contain(item.insertText);
+        });
+    });
+
+    it('Complete variable, partial variable, complete step, ending }}"', async () => {
+        setTestContent(`Feature:
+    Background:
+    Scenario:
+        And value for variable "foo" is "none"
+        And value for variable "bar" is "none"
+        And ask for value for variable "boo"
+        Then log message "{{ b}}"
+        `);
+
+        const actual = await testCompletion(docUri, new vscode.Position(6, 30));
+        const expected = [
+            'bar ',
+            'boo ',
         ];
 
         actual.items.forEach((item) => {

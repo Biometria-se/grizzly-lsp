@@ -20,6 +20,8 @@ from urllib.parse import urlparse, unquote
 from urllib.request import url2pathname
 from pip._internal.configuration import Configuration as PipConfiguration
 from pip._internal.exceptions import ConfigurationError as PipConfigurationError
+from tokenize import tokenize, NAME, OP, TokenError, TokenInfo
+from io import BytesIO
 
 import gevent.monkey  # type: ignore
 
@@ -48,6 +50,7 @@ from lsprotocol.types import (
     MarkupKind,
     Range,
     LocationLink,
+    TextEdit,
 )
 
 from behave.i18n import languages
@@ -412,13 +415,21 @@ class GrizzlyLanguageServer(LanguageServer):
 
                 self.language = self._find_language(document.source)
 
+                trigger = line[: params.position.character]
+
+                variable_name_trigger = self.get_variable_name_trigger(trigger)
+
                 self.logger.debug(
-                    f'{line=}, {params.position=}, trigger=\'{line[:params.position.character]}\''
+                    f'{line=}, {params.position=}, {trigger=}, {variable_name_trigger=}'
                 )
 
-                if line[: params.position.character].rstrip().endswith('{{'):
+                if variable_name_trigger is not None and variable_name_trigger[0]:
+                    _, partial_variable_name = variable_name_trigger
                     items = self._complete_variable_name(
-                        line, document, params.position
+                        line,
+                        document,
+                        params.position,
+                        partial=partial_variable_name,
                     )
                 else:
                     keyword, text = get_step_parts(line)
@@ -577,6 +588,52 @@ class GrizzlyLanguageServer(LanguageServer):
             self._language = value
             self._compile_keyword_inventory()
 
+    def get_variable_name_trigger(
+        self, trigger: str
+    ) -> Optional[Tuple[bool, Optional[str]]]:
+        self.logger.debug(f'{trigger=}')
+        partial_variable_name: Optional[str] = None
+
+        token_list = self._get_tokens(trigger)
+
+        tokens_reversed = list(reversed(token_list))
+
+        for index, token in enumerate(tokens_reversed):
+            self.logger.debug(f'{index=}, {token=}')
+            if index == 0 and token.type == NAME:
+                partial_variable_name = token.string
+                continue
+
+            try:
+                next_token = tokens_reversed[index + 1]
+                if (
+                    token.type == OP
+                    and token.string == '{'
+                    and next_token.type == OP
+                    and next_token.string == '{'
+                ):
+                    return (
+                        True,
+                        partial_variable_name,
+                    )
+            except IndexError:  # no variable name...
+                continue
+
+        return None
+
+    def _get_tokens(self, text: str) -> List[TokenInfo]:
+        tokens: List[TokenInfo] = []
+
+        # convert generator to list
+        try:
+            for token in tokenize(BytesIO(text.encode('utf8')).readline):
+                tokens.append(token)
+        except TokenError as e:
+            if 'EOF in multi-line statement' not in str(e):
+                raise
+
+        return tokens
+
     def _format_arg_line(self, line: str) -> str:
         try:
             argument, description = line.split(':', 1)
@@ -631,21 +688,7 @@ class GrizzlyLanguageServer(LanguageServer):
                 CompletionItem(
                     label=keyword,
                     kind=CompletionItemKind.Keyword,
-                    tags=None,
-                    detail=None,
-                    documentation=None,
                     deprecated=False,
-                    preselect=None,
-                    sort_text=None,
-                    filter_text=None,
-                    insert_text=None,
-                    insert_text_format=None,
-                    insert_text_mode=None,
-                    text_edit=None,
-                    additional_text_edits=None,
-                    commit_characters=None,
-                    command=None,
-                    data=None,
                 )
             )
 
@@ -656,12 +699,14 @@ class GrizzlyLanguageServer(LanguageServer):
         line: str,
         document: Document,
         position: Position,
+        *,
+        partial: Optional[str] = None,
     ) -> List[CompletionItem]:
+        items: List[CompletionItem] = []
+
         # find `Scenario:` before current position
         lines = document.source.splitlines()
         before_lines = reversed(lines[0 : position.line])
-
-        variable_names: List[Tuple[str, Optional[str]]] = []
 
         for before_line in before_lines:
             match = self.variable_pattern.match(before_line)
@@ -669,40 +714,62 @@ class GrizzlyLanguageServer(LanguageServer):
             if match:
                 variable_name = match.group(2) or match.group(3)
 
-                if variable_name is not None:
-                    if line[: position.character].lstrip().startswith('}}'):
-                        insert_text = None
-                    else:
-                        prefix = '' if line[: position.character].endswith(' ') else ' '
-                        suffix = (
-                            '"'
-                            if not line.rstrip().endswith('"')
-                            and line.count('"') % 2 != 0
-                            else ''
-                        )
-                        affix = (
-                            ''
-                            if line[position.character :].strip().startswith('}}')
-                            else '}}'
-                        )
-                        affix_suffix = (
-                            ''
-                            if not line[position.character :].startswith('}}')
-                            and affix != '}}'
-                            else ' '
-                        )
-                        insert_text = (
-                            f'{prefix}{variable_name}{affix_suffix}{affix}{suffix}'
-                        )
+                if variable_name is None:
+                    continue
 
-                    self.logger.debug(f'{line=}, {variable_name=}, {insert_text=}')
+                if partial is not None and not variable_name.startswith(partial):
+                    continue
 
-                    variable_names.append(
-                        (
-                            variable_name,
-                            insert_text,
-                        )
+                text_edit: Optional[TextEdit] = None
+
+                if partial is not None:
+                    prefix = ''
+                else:
+                    prefix = '' if line[: position.character].endswith(' ') else ' '
+
+                suffix = (
+                    '"'
+                    if not line.rstrip().endswith('"') and line.count('"') % 2 != 0
+                    else ''
+                )
+                affix = (
+                    '' if line[position.character :].strip().startswith('}}') else '}}'
+                )
+                affix_suffix = (
+                    ''
+                    if not line[position.character :].startswith('}}') and affix != '}}'
+                    else ' '
+                )
+                new_text = f'{prefix}{variable_name}{affix_suffix}{affix}{suffix}'
+
+                start = Position(
+                    line=position.line,
+                    character=position.character - len(partial or ''),
+                )
+                text_edit = TextEdit(
+                    range=Range(
+                        start=start,
+                        end=Position(
+                            line=position.line,
+                            character=start.character + len(partial or ''),
+                        ),
+                    ),
+                    new_text=new_text,
+                )
+
+                self.logger.debug(
+                    f'{line=}, {variable_name=}, {partial=}, {text_edit=}'
+                )
+
+                items.append(
+                    CompletionItem(
+                        label=variable_name,
+                        kind=CompletionItemKind.Variable,
+                        deprecated=False,
+                        insert_text=None,
+                        text_edit=text_edit,
                     )
+                )
             elif any(
                 [
                     scenario_keyword in before_line
@@ -711,28 +778,7 @@ class GrizzlyLanguageServer(LanguageServer):
             ):
                 break
 
-        return [
-            CompletionItem(
-                label=variable_name,
-                kind=CompletionItemKind.Variable,
-                tags=None,
-                detail=None,
-                documentation=None,
-                deprecated=False,
-                preselect=None,
-                sort_text=None,
-                filter_text=None,
-                insert_text=insert_text,
-                insert_text_format=None,
-                insert_text_mode=None,
-                text_edit=None,
-                additional_text_edits=None,
-                commit_characters=None,
-                command=None,
-                data=None,
-            )
-            for variable_name, insert_text in variable_names
-        ]
+        return items
 
     def _complete_step(
         self,
@@ -857,21 +903,11 @@ class GrizzlyLanguageServer(LanguageServer):
                     matched_step: CompletionItem(
                         label=matched_step,
                         kind=CompletionItemKind.Function,
-                        tags=None,
-                        detail=None,
                         documentation=self._find_help(f'{keyword} {matched_step}'),
                         deprecated=False,
                         preselect=preselect,
-                        sort_text=None,
-                        filter_text=None,
                         insert_text=insert_text,
                         insert_text_format=insert_text_format,
-                        insert_text_mode=None,
-                        text_edit=None,
-                        additional_text_edits=None,
-                        commit_characters=None,
-                        command=None,
-                        data=None,
                     )
                 }
             )  # type: ignore
