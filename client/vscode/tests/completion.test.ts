@@ -17,10 +17,9 @@ describe('Should do completion on keywords', () => {
         // only "Feature" present in document, suggest the two second-level keywords
         const actual = await testCompletion('Feature:\n\t', new vscode.Position(2, 4));
 
-        expect(actual.items.length).to.be.equal(2);
-        expect(actual.items.map((value) => value.label)).to.deep.equal(['Background', 'Scenario']);
+        expect(actual.items.map((value) => value.label)).to.deep.equal(['Background', 'Scenario', 'Scenario Outline', 'Scenario Template']);
         expect(actual.items.map((value) => value.kind)).to.deep.equal(
-            new Array(2).fill(vscode.CompletionItemKind.Keyword)
+            new Array(4).fill(vscode.CompletionItemKind.Keyword)
         );
     });
 
@@ -32,10 +31,9 @@ describe('Should do completion on keywords', () => {
 
         const actual = await testCompletion(content, new vscode.Position(2, 0));
 
-        expect(actual.items.length).to.be.equal(1);
-        expect(actual.items.map((value) => value.label)).to.deep.equal(['Scenario']);
+        expect(actual.items.map((value) => value.label)).to.deep.equal(['Scenario', 'Scenario Outline', 'Scenario Template']);
         expect(actual.items.map((value) => value.kind)).to.deep.equal(
-            new Array(1).fill(vscode.CompletionItemKind.Keyword)
+            new Array(3).fill(vscode.CompletionItemKind.Keyword)
         );
     });
 
@@ -48,18 +46,28 @@ describe('Should do completion on keywords', () => {
 
         const actual = await testCompletion(content, new vscode.Position(3, 0));
 
-        expect(actual.items.length).to.be.equal(6);
         expect(actual.items.map((value) => value.label)).to.deep.equal([
             'And',
             'But',
+            'Examples',
             'Given',
             'Scenario',
+            'Scenario Outline',
+            'Scenario Template',
+            'Scenarios',
             'Then',
             'When',
         ]);
         expect(actual.items.map((value) => value.kind)).to.deep.equal(
-            new Array(6).fill(vscode.CompletionItemKind.Keyword)
+            new Array(10).fill(vscode.CompletionItemKind.Keyword)
         );
+        expect(actual.items.map((value) => {
+            if (value.insertText instanceof vscode.SnippetString) {
+                return value.insertText.value;
+            } else {
+                return value.insertText;
+            }
+        })).to.deep.equal(['And ', 'But ', 'Examples: ', 'Given ', 'Scenario: ', 'Scenario Outline: ', 'Scenario Template: ', 'Scenarios: ', 'Then ', 'When ']);
     });
 
     it('Complete keywords, keywords containing `en` (fuzzy matching)', async () => {
@@ -71,10 +79,9 @@ describe('Should do completion on keywords', () => {
 
         const actual = await testCompletion(content, new vscode.Position(3, 3));
 
-        expect(actual.items.length).to.be.equal(4);
-        expect(actual.items.map((value) => value.label)).to.deep.equal(['Given', 'Scenario', 'Then', 'When']);
+        expect(actual.items.map((value) => value.label)).to.deep.equal(['Given', 'Scenario', 'Scenario Outline', 'Scenario Template', 'Scenarios', 'Then', 'When']);
         expect(actual.items.map((value) => value.kind)).to.deep.equal(
-            new Array(4).fill(vscode.CompletionItemKind.Keyword)
+            new Array(7).fill(vscode.CompletionItemKind.Keyword)
         );
     });
 });

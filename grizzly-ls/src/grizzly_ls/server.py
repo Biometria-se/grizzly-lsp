@@ -82,6 +82,7 @@ class GrizzlyLanguageServer(LanguageServer):
     keywords: List[str]
     keywords_once: List[str] = []
     keywords_any: List[str] = []
+    keywords_headers: List[str] = []
     client_settings: Dict[str, Any]
 
     _language: str
@@ -438,7 +439,9 @@ class GrizzlyLanguageServer(LanguageServer):
                     if keyword is not None and keyword in self.keywords:
                         items = self._complete_step(keyword, params.position, text)
                     else:
-                        items = self._complete_keyword(keyword, document)
+                        items = self._complete_keyword(
+                            keyword, params.position, document
+                        )
 
             return CompletionList(
                 is_incomplete=False,
@@ -653,19 +656,24 @@ class GrizzlyLanguageServer(LanguageServer):
         return language.strip()
 
     def _complete_keyword(
-        self, keyword: Optional[str], document: Document
+        self, keyword: Optional[str], position: Position, document: Document
     ) -> List[CompletionItem]:
         items: List[CompletionItem] = []
         if len(document.source.strip()) < 1:
             keywords = [*self.localizations.get('feature', [])]
         else:
+            scenario_keywords = [
+                *self.localizations.get('scenario', []),
+                *self.localizations.get('scenario_outline', []),
+            ]
+
             if not any(
                 [
                     scenario_keyword in document.source
-                    for scenario_keyword in self.localizations.get('scenario', [])
+                    for scenario_keyword in scenario_keywords
                 ]
             ):
-                keywords = [*self.localizations.get('scenario', [])]
+                keywords = scenario_keywords
             else:
                 keywords = self.keywords.copy()
 
@@ -675,17 +683,30 @@ class GrizzlyLanguageServer(LanguageServer):
 
             # check for partial matches
             if keyword is not None:
-                keywords = cast(
-                    List[str],
-                    list(filter(lambda k: keyword.strip().lower() in k.lower(), keywords)),  # type: ignore
-                )
+                keywords = [k for k in keywords if keyword.strip().lower() in k.lower()]
 
-        for keyword in sorted(keywords):
+        for suggested_keyword in sorted(keywords):
+            start = Position(
+                line=position.line, character=position.character - len(keyword or '')
+            )
+            if suggested_keyword in self.keywords_headers:
+                suffix = ': '
+            else:
+                suffix = ' '
+
+            text_edit = TextEdit(
+                range=Range(
+                    start=start,
+                    end=position,
+                ),
+                new_text=f'{suggested_keyword}{suffix}',
+            )
             items.append(
                 CompletionItem(
-                    label=keyword,
+                    label=suggested_keyword,
                     kind=CompletionItemKind.Keyword,
                     deprecated=False,
+                    text_edit=text_edit,
                 )
             )
 
@@ -763,7 +784,6 @@ class GrizzlyLanguageServer(LanguageServer):
                         label=variable_name,
                         kind=CompletionItemKind.Variable,
                         deprecated=False,
-                        insert_text=None,
                         text_edit=text_edit,
                     )
                 )
@@ -1009,9 +1029,21 @@ class GrizzlyLanguageServer(LanguageServer):
             )
         )
 
+        self.keywords_headers = []
+        for key, values in self.localizations.items():
+            if values[0] != u'*':
+                self.keywords_headers.extend([*self.localizations.get(key, [])])
+
         # localized keywords
         self.keywords = list(
-            set([*self.localizations.get('scenario', []), *self.keywords_any])
+            set(
+                [
+                    *self.localizations.get('scenario', []),
+                    *self.localizations.get('scenario_outline', []),
+                    *self.localizations.get('examples', []),
+                    *self.keywords_any,
+                ]
+            )
         )
         self.keywords.remove('*')
 

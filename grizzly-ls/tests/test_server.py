@@ -90,21 +90,70 @@ def test_progress(lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
 
 
 class TestGrizzlyLanguageServer:
-    def test___init__(self, lsp_fixture: LspFixture) -> None:
+    @pytest.mark.parametrize(
+        'language,words',
+        [
+            (
+                'en',
+                {
+                    'keywords': [
+                        'Scenario',
+                        'Scenario Outline',
+                        'Scenario Template',
+                        'Examples',
+                        'Scenarios',
+                        'And',
+                        'But',
+                    ],
+                    'keywords_any': ['*', 'But', 'And'],
+                    'keywords_once': ['Feature', 'Background'],
+                },
+            ),
+            (
+                'sv',
+                {
+                    'keywords': [
+                        'Scenario',
+                        'Abstrakt Scenario',
+                        'Scenariomall',
+                        'Exempel',
+                        'Och',
+                        'Men',
+                    ],
+                    'keywords_any': ['*', 'Men', 'Och'],
+                    'keywords_once': ['Egenskap', 'Bakgrund'],
+                },
+            ),
+            (
+                'de',
+                {
+                    'keywords': [
+                        'Szenario',
+                        'Szenariogrundriss',
+                        'Beispiele',
+                        'Und',
+                        'Aber',
+                    ],
+                    'keywords_any': ['*', 'Und', 'Aber'],
+                    'keywords_once': ['Grundlage', u'Funktionalit\xe4t'],
+                },
+            ),
+        ],
+    )
+    def test___init__(
+        self, language: str, words: Dict[str, List[str]], lsp_fixture: LspFixture
+    ) -> None:
         server = lsp_fixture.server
+        server.language = language
 
         assert server.name == 'grizzly-ls'
         assert server.version == __version__
         assert server.steps == {}
-        assert sorted(server.keywords) == sorted(['Scenario', 'And', 'But'])
-        assert sorted(server.keywords_any) == sorted(
-            [
-                '*',
-                'But',
-                'And',
-            ]
+        assert sorted(server.keywords) == sorted(
+            words.get('keywords', []),
         )
-        assert sorted(server.keywords_once) == sorted(['Feature', 'Background'])
+        assert sorted(server.keywords_any) == sorted(words.get('keywords_any', []))
+        assert sorted(server.keywords_once) == sorted(words.get('keywords_once', []))
 
         assert isinstance(server.logger, logging.Logger)
         assert server.logger.name == 'grizzly_ls.server'
@@ -192,8 +241,11 @@ class TestGrizzlyLanguageServer:
             source='',
         )
 
+        null_position = Position(line=0, character=0)
+
         assert normalize_completion_item(
-            server._complete_keyword(None, document), CompletionItemKind.Keyword
+            server._complete_keyword(None, null_position, document),
+            CompletionItemKind.Keyword,
         ) == [
             'Feature',
         ]
@@ -203,12 +255,19 @@ class TestGrizzlyLanguageServer:
             source='Feature:',
         )
 
-        assert normalize_completion_item(
-            server._complete_keyword(None, document), CompletionItemKind.Keyword
-        ) == [
-            'Background',
-            'Scenario',
-        ]
+        assert sorted(
+            normalize_completion_item(
+                server._complete_keyword(None, null_position, document),
+                CompletionItemKind.Keyword,
+            )
+        ) == sorted(
+            [
+                'Background',
+                'Scenario',
+                'Scenario Outline',
+                'Scenario Template',
+            ]
+        )
 
         document = Document(
             uri='dummy.feature',
@@ -217,17 +276,26 @@ class TestGrizzlyLanguageServer:
 ''',
         )
 
-        assert normalize_completion_item(
-            server._complete_keyword(None, document), CompletionItemKind.Keyword
-        ) == [
-            'And',
-            'Background',
-            'But',
-            'Given',
-            'Scenario',
-            'Then',
-            'When',
-        ]
+        assert sorted(
+            normalize_completion_item(
+                server._complete_keyword(None, null_position, document),
+                CompletionItemKind.Keyword,
+            )
+        ) == sorted(
+            [
+                'And',
+                'Background',
+                'But',
+                'Given',
+                'Scenario',
+                'Scenario Outline',
+                'Scenario Template',
+                'Then',
+                'When',
+                'Examples',
+                'Scenarios',
+            ]
+        )
 
         document = Document(
             uri='dummy.feature',
@@ -238,28 +306,46 @@ class TestGrizzlyLanguageServer:
 ''',
         )
 
-        assert normalize_completion_item(
-            server._complete_keyword(None, document), CompletionItemKind.Keyword
-        ) == [
-            'And',
-            'But',
-            'Given',
-            'Scenario',
-            'Then',
-            'When',
-        ]
+        assert sorted(
+            normalize_completion_item(
+                server._complete_keyword(None, null_position, document),
+                CompletionItemKind.Keyword,
+            )
+        ) == sorted(
+            [
+                'And',
+                'But',
+                'Given',
+                'Scenario',
+                'Scenario Outline',
+                'Scenario Template',
+                'Examples',
+                'Scenarios',
+                'Then',
+                'When',
+            ]
+        )
+
+        assert sorted(
+            normalize_completion_item(
+                server._complete_keyword('EN', Position(line=0, character=2), document),
+                CompletionItemKind.Keyword,
+            )
+        ) == sorted(
+            [
+                'Given',
+                'Scenario',
+                'Scenario Template',
+                'Scenario Outline',
+                'Scenarios',
+                'Then',
+                'When',
+            ]
+        )
 
         assert normalize_completion_item(
-            server._complete_keyword('EN', document), CompletionItemKind.Keyword
-        ) == [
-            'Given',
-            'Scenario',
-            'Then',
-            'When',
-        ]
-
-        assert normalize_completion_item(
-            server._complete_keyword('Giv', document), CompletionItemKind.Keyword
+            server._complete_keyword('Giv', Position(line=0, character=4), document),
+            CompletionItemKind.Keyword,
         ) == [
             'Given',
         ]
@@ -988,9 +1074,11 @@ class TestGrizzlyLanguageServer:
             ) -> List[Dict[str, Any]]:
                 return [
                     {
-                        key: getattr(item, key)
-                        for key in item.__dir__()
-                        if key in ['label', 'kind']
+                        'label': item.label,
+                        'kind': item.kind,
+                        'text_edit': item.text_edit.new_text
+                        if item.text_edit is not None
+                        else None,
                     }
                     for item in items
                 ]
@@ -1008,13 +1096,11 @@ class TestGrizzlyLanguageServer:
             assert response is not None
             assert not response.is_incomplete
             assert filter_keyword_properties(response.items) == [
-                {
-                    'label': 'Background',
-                    'kind': 14,
-                },
+                {'label': 'Background', 'kind': 14, 'text_edit': 'Background: '},
                 {
                     'label': 'But',
                     'kind': 14,
+                    'text_edit': 'But ',
                 },
             ]
 
@@ -1033,18 +1119,37 @@ class TestGrizzlyLanguageServer:
                 {
                     'label': 'Given',
                     'kind': 14,
+                    'text_edit': 'Given ',
                 },
                 {
                     'label': 'Scenario',
                     'kind': 14,
+                    'text_edit': 'Scenario: ',
+                },
+                {
+                    'label': 'Scenario Outline',
+                    'kind': 14,
+                    'text_edit': 'Scenario Outline: ',
+                },
+                {
+                    'label': 'Scenario Template',
+                    'kind': 14,
+                    'text_edit': 'Scenario Template: ',
+                },
+                {
+                    'label': 'Scenarios',
+                    'kind': 14,
+                    'text_edit': 'Scenarios: ',
                 },
                 {
                     'label': 'Then',
                     'kind': 14,
+                    'text_edit': 'Then ',
                 },
                 {
                     'label': 'When',
                     'kind': 14,
+                    'text_edit': 'When ',
                 },
             ]
 
@@ -1052,13 +1157,15 @@ class TestGrizzlyLanguageServer:
             response = self._completion(client, lsp_fixture.datadir, '', options=None)
             assert response is not None
             assert not response.is_incomplete
-            unexpected_kinds = list(
-                filter(lambda k: k != 14, map(lambda k: k.kind, response.items))
-            )
+            unexpected_kinds = [k.kind for k in response.items if k.kind != 14]
             assert len(unexpected_kinds) == 0
-            labels = list(map(lambda k: k.label, response.items))
+            labels = [k.label for k in response.items]
+            text_edits = [
+                k.text_edit.new_text for k in response.items if k.text_edit is not None
+            ]
             assert all([True if label is not None else False for label in labels])
             assert labels == ['Feature']
+            assert text_edits == ['Feature: ']
 
         def test_completion_steps(self, lsp_fixture: LspFixture) -> None:
             client = lsp_fixture.client
