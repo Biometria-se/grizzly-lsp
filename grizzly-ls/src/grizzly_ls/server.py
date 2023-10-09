@@ -9,7 +9,7 @@ import sys
 
 from os import environ, linesep
 from os.path import pathsep, sep
-from typing import Any, Tuple, Dict, List, Union, Optional, Set, cast
+from typing import Any, Tuple, Dict, List, Union, Optional, Set, Callable, cast
 from types import FrameType
 from pathlib import Path
 from behave.matchers import ParseMatcher
@@ -22,6 +22,7 @@ from pip._internal.configuration import Configuration as PipConfiguration
 from pip._internal.exceptions import ConfigurationError as PipConfigurationError
 from tokenize import tokenize, NAME, OP, TokenError, TokenInfo
 from io import BytesIO
+from dataclasses import dataclass, field
 
 import gevent.monkey  # type: ignore
 
@@ -65,6 +66,14 @@ from .progress import Progress
 from . import __version__
 
 
+@dataclass
+class Step:
+    keyword: str
+    expression: str
+    func: Callable[..., None]
+    help: Optional[str] = field(default=None)
+
+
 class GrizzlyLanguageServer(LanguageServer):
     FEATURE_INSTALL = 'grizzly-ls/install'
 
@@ -77,8 +86,7 @@ class GrizzlyLanguageServer(LanguageServer):
     root_path: Path
     index_url: Optional[str]
     behave_steps: Dict[str, List[ParseMatcher]]
-    steps: Dict[str, List[str]]
-    help: Dict[str, str]
+    steps: Dict[str, List[Step]]
     keywords: List[str]
     keywords_once: List[str] = []
     keywords_any: List[str] = []
@@ -113,7 +121,6 @@ class GrizzlyLanguageServer(LanguageServer):
         self.index_url = environ.get('PIP_EXTRA_INDEX_URL', None)
         self.behave_steps = {}
         self.steps = {}
-        self.help = {}
         self.keywords = []
         self.markup_kind = MarkupKind.Markdown  # assume, until initialized request
         self.language = 'en'  # assumed default
@@ -511,69 +518,21 @@ class GrizzlyLanguageServer(LanguageServer):
         @self.feature(TEXT_DOCUMENT_DEFINITION)
         def definition(params: DefinitionParams) -> Optional[List[LocationLink]]:
             current_line = self._current_line(params.text_document.uri, params.position)
-            matches = re.finditer(r'"([^"]*)"', current_line, re.MULTILINE)
             definitions: List[LocationLink] = []
 
-            document = self.workspace.get_text_document(params.text_document.uri)
-            document_directory = Path(document.path).parent
+            definitions.extend(self._get_file_url_definition(params, current_line))
 
-            for variable_match in matches:
-                variable_value = variable_match.group(1)
+            keyword, expression = get_step_parts(current_line)
 
-                if 'file://' in variable_value:
-                    file_match = re.search(r'.*(file:\/\/)([^\$]*)', variable_value)
-                    if not file_match:
-                        continue
-                    file_url = f'{file_match.group(1)}{file_match.group(2)}'
-
-                    if sys.platform == 'win32':
-                        file_url = file_url.replace('\\', '/')
-
-                    file_parsed = urlparse(file_url)
-
-                    # relativ or absolute?
-                    if file_parsed.netloc == '.':  # relative!
-                        relative_path = file_parsed.path
-                        if relative_path.startswith('/'):
-                            relative_path = relative_path[1:]
-
-                        payload_file = document_directory / relative_path
-                    else:  # absolute!
-                        payload_file = Path(f'{file_parsed.netloc}{file_parsed.path}')
-
-                    start_offset = file_match.start(1)
-                    end_offset = -1 if variable_value.endswith('$') else 0
-                else:
-                    # this is quite grizzly specific...
-                    payload_file = (
-                        self.root_path / 'features' / 'requests' / variable_value
-                    )
-                    start_offset = 0
-                    end_offset = 0
-
-                # just some text
-                if not payload_file.exists():
-                    continue
-
-                start = variable_match.start(1) + start_offset
-                end = variable_match.end(1) + end_offset
-
-                range = Range(
-                    start=Position(line=0, character=0),
-                    end=Position(line=0, character=0),
-                )
-
-                definitions.append(
-                    LocationLink(
-                        target_uri=payload_file.as_uri(),
-                        target_range=range,
-                        target_selection_range=range,
-                        origin_selection_range=Range(
-                            start=Position(line=params.position.line, character=start),
-                            end=Position(line=params.position.line, character=end),
-                        ),
-                    )
-                )
+            if keyword is not None and expression is not None:
+                expression = re.sub(r'"[^"]*"', '""', expression)
+                try:
+                    key = self._get_language_key(keyword)
+                    self.logger.debug(f'{expression=}, {key=}')
+                    steps = self.behave_steps.get(key, [])
+                    self.logger.debug(f'{steps=}')
+                except ValueError:
+                    pass
 
             return definitions if len(definitions) > 0 else None
 
@@ -620,6 +579,72 @@ class GrizzlyLanguageServer(LanguageServer):
                 continue
 
         return None
+
+    def _get_file_url_definition(
+        self, params: DefinitionParams, current_line: str
+    ) -> List[LocationLink]:
+        document = self.workspace.get_text_document(params.text_document.uri)
+        document_directory = Path(document.path).parent
+        definitions: List[LocationLink] = []
+        matches = re.finditer(r'"([^"]*)"', current_line, re.MULTILINE)
+
+        for variable_match in matches:
+            variable_value = variable_match.group(1)
+
+            if 'file://' in variable_value:
+                file_match = re.search(r'.*(file:\/\/)([^\$]*)', variable_value)
+                if not file_match:
+                    continue
+                file_url = f'{file_match.group(1)}{file_match.group(2)}'
+
+                if sys.platform == 'win32':
+                    file_url = file_url.replace('\\', '/')
+
+                file_parsed = urlparse(file_url)
+
+                # relativ or absolute?
+                if file_parsed.netloc == '.':  # relative!
+                    relative_path = file_parsed.path
+                    if relative_path.startswith('/'):
+                        relative_path = relative_path[1:]
+
+                    payload_file = document_directory / relative_path
+                else:  # absolute!
+                    payload_file = Path(f'{file_parsed.netloc}{file_parsed.path}')
+
+                start_offset = file_match.start(1)
+                end_offset = -1 if variable_value.endswith('$') else 0
+            else:
+                # this is quite grizzly specific...
+                payload_file = self.root_path / 'features' / 'requests' / variable_value
+                start_offset = 0
+                end_offset = 0
+
+            # just some text
+            if not payload_file.exists():
+                continue
+
+            start = variable_match.start(1) + start_offset
+            end = variable_match.end(1) + end_offset
+
+            range = Range(
+                start=Position(line=0, character=0),
+                end=Position(line=0, character=0),
+            )
+
+            definitions.append(
+                LocationLink(
+                    target_uri=payload_file.as_uri(),
+                    target_range=range,
+                    target_selection_range=range,
+                    origin_selection_range=Range(
+                        start=Position(line=params.position.line, character=start),
+                        end=Position(line=params.position.line, character=end),
+                    ),
+                )
+            )
+
+        return definitions
 
     def _get_tokens(self, text: str) -> List[TokenInfo]:
         tokens: List[TokenInfo] = []
@@ -807,7 +832,7 @@ class GrizzlyLanguageServer(LanguageServer):
             steps = list(
                 set(
                     [
-                        re.sub(r'"[^"]*"', '""', step)
+                        step.expression
                         for keyword_steps in self.steps.values()
                         for step in keyword_steps
                     ]
@@ -815,7 +840,10 @@ class GrizzlyLanguageServer(LanguageServer):
             )
         else:
             key = self._get_language_key(keyword)
-            steps = self.steps.get(key, []) + self.steps.get('step', [])
+            steps = [
+                step.expression
+                for step in self.steps.get(key, []) + self.steps.get('step', [])
+            ]
 
         matched_steps: List[CompletionItem] = []
         matched_steps_1: Set[str]
@@ -937,6 +965,9 @@ class GrizzlyLanguageServer(LanguageServer):
         return matched_steps
 
     def _get_language_key(self, keyword: str) -> str:
+        if keyword in self.keywords_any:
+            return 'step'
+
         for key, values in self.localizations.items():
             if keyword in values:
                 return key
@@ -989,17 +1020,26 @@ class GrizzlyLanguageServer(LanguageServer):
 
     def _compile_step_inventory(self) -> None:
         for keyword, steps in self.behave_steps.items():
-            normalized_steps_all: List[str] = []
+            normalized_steps_all: List[Step] = []
             for step in steps:
                 normalized_steps = self._normalize_step_expression(step)
+                steps_holder: List[Step] = []
 
                 for normalized_step in normalized_steps:
                     help = getattr(step.func, '__doc__', None)
 
                     if help is not None:
-                        self.help.update({normalized_step: clean_help(help)})
+                        help = clean_help(help)
 
-                normalized_steps_all += normalized_steps
+                    step_holder = Step(
+                        keyword,
+                        normalized_step,
+                        func=step.func,
+                        help=help,
+                    )
+                    steps_holder.append(step_holder)
+
+                normalized_steps_all += steps_holder
 
             self.steps.update({keyword: normalized_steps_all})
 
@@ -1063,25 +1103,26 @@ class GrizzlyLanguageServer(LanguageServer):
         return line
 
     def _find_help(self, line: str) -> Optional[str]:
-        _, step = get_step_parts(line)
+        keyword, expression = get_step_parts(line)
 
-        if step is None:
+        if expression is None or keyword is None:
             return None
 
-        step = re.sub(r'"[^"]*"', '""', step)
+        possible_help: Dict[str, str] = {}
 
-        step_help = self.help.get(step.strip(), None)
+        key = self._get_language_key(keyword)
+        expression = re.sub(r'"[^"]*"', '""', expression)
 
-        if step_help is None:
-            possible_help = {
-                possible_step: help
-                for possible_step, help in self.help.items()
-                if possible_step.startswith(step)
-            }
+        for steps in self.steps.values():
+            for step in steps:
+                if step.expression.strip() == expression.strip() and (
+                    key == keyword or key == 'step'
+                ):
+                    return step.help
+                elif step.expression.startswith(expression) and step.help is not None:
+                    possible_help.update({step.expression: step.help})
 
-            if len(possible_help) < 1:
-                return None
+        if len(possible_help) < 1:
+            return None
 
-            step_help = possible_help[sorted(possible_help.keys(), reverse=True)[0]]
-
-        return step_help
+        return possible_help[sorted(possible_help.keys(), reverse=True)[0]]

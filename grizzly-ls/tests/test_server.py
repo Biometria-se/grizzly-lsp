@@ -49,7 +49,8 @@ from behave.matchers import ParseMatcher
 from .fixtures import LspFixture
 from .helpers import normalize_completion_item, normalize_completion_text_edit
 from grizzly_ls import __version__
-from grizzly_ls.server import GrizzlyLanguageServer, Progress
+from grizzly_ls.server import GrizzlyLanguageServer, Step
+from grizzly_ls.progress import Progress
 
 
 def test_progress(lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
@@ -758,8 +759,6 @@ class TestGrizzlyLanguageServer:
         for keyword in ['given', 'then', 'when']:
             assert keyword in keywords
 
-        assert len(server.help.keys()) >= 0
-
     def test__compile_keyword_inventory(self, lsp_fixture: LspFixture) -> None:
         server = lsp_fixture.server
 
@@ -832,16 +831,31 @@ class TestGrizzlyLanguageServer:
     def test__find_help(self, lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
         server = lsp_fixture.server
 
-        server.help = {
-            'hello world': 'this is the help for hello world',
-            'hello ""': 'this is the help for hello world parameterized',
-            'foo bar': 'this is the help for foo bar',
-            '"" bar': 'this is the help for foo bar parameterized',
+        def noop() -> None:
+            pass
+
+        server.steps = {
+            'then': [
+                Step('Then', 'hello world', noop, 'this is the help for hello world'),
+            ],
+            'step': [
+                Step(
+                    'And',
+                    'hello ""',
+                    noop,
+                    'this is the help for hello world parameterized',
+                ),
+                Step('But', 'foo bar', noop, 'this is the help for foo bar'),
+                Step(
+                    'But', '"" bar', noop, 'this is the help for foo bar parameterized'
+                ),
+            ],
         }
 
         assert (
             server._find_help('Then hello world') == 'this is the help for hello world'
         )
+        assert server._find_help('Then hello') == 'this is the help for hello world'
         assert server._find_help('asdfasdf') is None
         assert server._find_help('And hello') == 'this is the help for hello world'
         assert (
