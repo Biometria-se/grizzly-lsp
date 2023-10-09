@@ -15,3 +15,16 @@ def normalize_completion_item(
         labels.append(value)
 
     return labels
+
+
+def normalize_completion_text_edit(
+    steps: List[CompletionItem],
+    kind: CompletionItemKind,
+) -> List[str]:
+    labels: List[str] = []
+    for step in steps:
+        assert step.kind == kind
+        assert step.text_edit is not None
+        labels.append(step.text_edit.new_text)
+
+    return labels

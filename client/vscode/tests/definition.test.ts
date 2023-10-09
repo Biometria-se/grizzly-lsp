@@ -2,28 +2,26 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { expect } from 'chai';
-import { getDocUri, activate, setTestContent, testWorkspace } from './helper';
+import { getDocUri, activate, testWorkspace } from './helper';
 import { describe, it } from 'mocha';
-
-const docUri = getDocUri('features/empty.feature');
 
 describe('Should do definitions for step expressions', () => {
     it('Request payload reference in step does not exist in features/requests', async () => {
-        setTestContent(`Feature: test feature
+        const content = `Feature: test feature
   Scenario: test scenario
     Given a user of type "RestApi" with weight "1" load testing "$conf::template.host"
     Then post request "hello.txt" with name "hello" to endpoint "/hello"
-`);
-        const actual = await testDefintion(docUri, new vscode.Position(3, 26));
+`;
+        const actual = await testDefintion(content, new vscode.Position(3, 26));
         expect(actual).to.deep.equal([]);
     });
 
     it('Request payload reference in step does exist in features/requests', async () => {
-        setTestContent(`Feature: test feature
+        const content = `Feature: test feature
   Scenario: test scenario
     Given a user of type "RestApi" with weight "1" load testing "$conf::template.host"
     Then post request "hello.txt" with name "hello" to endpoint "/hello"
-`);
+`;
         const payload_dir = path.resolve(testWorkspace, 'features', 'requests');
         await fs.promises.mkdir(payload_dir, {recursive: true});
 
@@ -40,7 +38,7 @@ describe('Should do definitions for step expressions', () => {
                     expectedTargetUri = test_txt;
                     break;
             }
-            const actual = await testDefintion(docUri, new vscode.Position(3, 26));
+            const actual = await testDefintion(content, new vscode.Position(3, 26));
             expect(actual.length).to.be.equal(1);
             const actual_definition = actual[0];
             expect(actual_definition.targetUri.path).to.equal(expectedTargetUri);
@@ -55,8 +53,9 @@ describe('Should do definitions for step expressions', () => {
     });
 });
 
-async function testDefintion(docUri: vscode.Uri, position: vscode.Position): Promise<vscode.LocationLink[]> {
-    await activate(docUri);
+async function testDefintion(content: string, position: vscode.Position): Promise<vscode.LocationLink[]> {
+    const docUri = getDocUri('features/empty.feature');
+    await activate(docUri, content);
 
     return (await vscode.commands.executeCommand(
         'vscode.executeDefinitionProvider',
