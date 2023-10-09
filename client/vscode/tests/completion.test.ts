@@ -8,6 +8,7 @@ const docUri = getDocUri('features/empty.feature');
 describe('Should do completion on keywords', () => {
     it('Complete keywords, empty file, only suggest first-level keyword(s)', async () => {
         // empty document, only suggest "Feature"
+        setTestContent('');
         const actual = await testCompletion(docUri, new vscode.Position(0, 0));
 
         expect(actual.items.length).to.be.equal(1);

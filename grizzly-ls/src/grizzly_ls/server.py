@@ -50,6 +50,7 @@ from lsprotocol.types import (
     MarkupKind,
     Range,
     LocationLink,
+    TextEdit,
 )
 
 from behave.i18n import languages
@@ -701,12 +702,11 @@ class GrizzlyLanguageServer(LanguageServer):
         *,
         partial: Optional[str] = None,
     ) -> List[CompletionItem]:
+        items: List[CompletionItem] = []
+
         # find `Scenario:` before current position
         lines = document.source.splitlines()
         before_lines = reversed(lines[0 : position.line])
-
-        variable_names: List[Tuple[str, Optional[str]]] = []
-        has_partial = partial is not None
 
         for before_line in before_lines:
             match = self.variable_pattern.match(before_line)
@@ -714,49 +714,62 @@ class GrizzlyLanguageServer(LanguageServer):
             if match:
                 variable_name = match.group(2) or match.group(3)
 
-                if variable_name is not None:
-                    if has_partial and not partial in variable_name:
-                        continue
+                if variable_name is None:
+                    continue
 
-                    if line[: position.character].lstrip().startswith('}}'):
-                        insert_text = None
-                    else:
-                        if has_partial:
-                            prefix = ''
-                        else:
-                            prefix = (
-                                '' if line[: position.character].endswith(' ') else ' '
-                            )
+                if partial is not None and not variable_name.startswith(partial):
+                    continue
 
-                        suffix = (
-                            '"'
-                            if not line.rstrip().endswith('"')
-                            and line.count('"') % 2 != 0
-                            else ''
-                        )
-                        affix = (
-                            ''
-                            if line[position.character :].strip().startswith('}}')
-                            else '}}'
-                        )
-                        affix_suffix = (
-                            ''
-                            if not line[position.character :].startswith('}}')
-                            and affix != '}}'
-                            else ' '
-                        )
-                        insert_text = (
-                            f'{prefix}{variable_name}{affix_suffix}{affix}{suffix}'
-                        )
+                text_edit: Optional[TextEdit] = None
 
-                    self.logger.debug(f'{line=}, {variable_name=}, {insert_text=}')
+                if partial is not None:
+                    prefix = ''
+                else:
+                    prefix = '' if line[: position.character].endswith(' ') else ' '
 
-                    variable_names.append(
-                        (
-                            variable_name,
-                            insert_text,
-                        )
+                suffix = (
+                    '"'
+                    if not line.rstrip().endswith('"') and line.count('"') % 2 != 0
+                    else ''
+                )
+                affix = (
+                    '' if line[position.character :].strip().startswith('}}') else '}}'
+                )
+                affix_suffix = (
+                    ''
+                    if not line[position.character :].startswith('}}') and affix != '}}'
+                    else ' '
+                )
+                new_text = f'{prefix}{variable_name}{affix_suffix}{affix}{suffix}'
+
+                start = Position(
+                    line=position.line,
+                    character=position.character - len(partial or ''),
+                )
+                text_edit = TextEdit(
+                    range=Range(
+                        start=start,
+                        end=Position(
+                            line=position.line,
+                            character=start.character + len(partial or ''),
+                        ),
+                    ),
+                    new_text=new_text,
+                )
+
+                self.logger.debug(
+                    f'{line=}, {variable_name=}, {partial=}, {text_edit=}'
+                )
+
+                items.append(
+                    CompletionItem(
+                        label=variable_name,
+                        kind=CompletionItemKind.Variable,
+                        deprecated=False,
+                        insert_text=None,
+                        text_edit=text_edit,
                     )
+                )
             elif any(
                 [
                     scenario_keyword in before_line
@@ -765,15 +778,7 @@ class GrizzlyLanguageServer(LanguageServer):
             ):
                 break
 
-        return [
-            CompletionItem(
-                label=variable_name,
-                kind=CompletionItemKind.Variable,
-                deprecated=False,
-                insert_text=insert_text,
-            )
-            for variable_name, insert_text in variable_names
-        ]
+        return items
 
     def _complete_step(
         self,

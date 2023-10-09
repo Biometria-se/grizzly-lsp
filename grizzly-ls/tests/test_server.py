@@ -1138,11 +1138,15 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(
+            assert sorted(text_edits) == sorted(
                 [' price }}"', ' foo }}"', ' test }}"', ' bar }}"']
             )
             assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
@@ -1190,11 +1194,15 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(
+            assert sorted(text_edits) == sorted(
                 [' price }}"', ' foo }}"', ' test }}"', ' bar }}"']
             )
             assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
@@ -1213,11 +1221,15 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(
+            assert sorted(text_edits) == sorted(
                 [' weight1 }}', ' hello1 }}', ' test1 }}', ' world1 }}']
             )
             assert sorted(labels) == sorted(['weight1', 'hello1', 'test1', 'world1'])
@@ -1235,11 +1247,15 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(['weight1 }}', 'world1 }}'])
+            assert sorted(text_edits) == sorted(['weight1 }}', 'world1 }}'])
             assert sorted(labels) == sorted(['weight1', 'world1'])
             # // -->
 
@@ -1256,11 +1272,15 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(
+            assert sorted(text_edits) == sorted(
                 [' weight2', ' hello2', ' test2', ' world2']
             )
             assert sorted(labels) == sorted(['weight2', 'hello2', 'test2', 'world2'])
@@ -1278,11 +1298,15 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(['weight2 ', 'world2 '])
+            assert sorted(text_edits) == sorted(['weight2 ', 'world2 '])
             assert sorted(labels) == sorted(['weight2', 'world2'])
             # // -->
 
@@ -1307,11 +1331,15 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(
+            assert sorted(text_edits) == sorted(
                 [' price }}', ' foo }}', ' test }}', ' bar }}']
             )
             assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
@@ -1338,11 +1366,15 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(
+            assert sorted(text_edits) == sorted(
                 [' price }}', ' foo }}', ' test }}', ' bar }}']
             )
             assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
@@ -1360,11 +1392,15 @@ class TestGrizzlyLanguageServer:
             labels = list(
                 map(lambda s: s.label, response.items),
             )
-            insert_texts = list(
-                [s.insert_text for s in response.items if s.insert_text is not None]
+            text_edits = list(
+                [
+                    s.text_edit.new_text
+                    for s in response.items
+                    if s.text_edit is not None
+                ]
             )
 
-            assert sorted(insert_texts) == sorted(
+            assert sorted(text_edits) == sorted(
                 [
                     ' price ',
                     ' foo ',
