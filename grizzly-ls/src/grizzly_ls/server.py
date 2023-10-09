@@ -520,19 +520,13 @@ class GrizzlyLanguageServer(LanguageServer):
             current_line = self._current_line(params.text_document.uri, params.position)
             definitions: List[LocationLink] = []
 
-            definitions.extend(self._get_file_url_definition(params, current_line))
+            file_url_definitions = self._get_file_url_definition(params, current_line)
+            step_definition = self._get_step_definition(params, current_line)
 
-            keyword, expression = get_step_parts(current_line)
-
-            if keyword is not None and expression is not None:
-                expression = re.sub(r'"[^"]*"', '""', expression)
-                try:
-                    key = self._get_language_key(keyword)
-                    self.logger.debug(f'{expression=}, {key=}')
-                    steps = self.behave_steps.get(key, [])
-                    self.logger.debug(f'{steps=}')
-                except ValueError:
-                    pass
+            if len(file_url_definitions) > 0:
+                definitions = file_url_definitions
+            elif step_definition is not None:
+                definitions = [step_definition]
 
             return definitions if len(definitions) > 0 else None
 
@@ -580,8 +574,56 @@ class GrizzlyLanguageServer(LanguageServer):
 
         return None
 
-    def _get_file_url_definition(
+    def _get_step_definition(
         self, params: DefinitionParams, current_line: str
+    ) -> Optional[LocationLink]:
+        step_definition: Optional[LocationLink] = None
+
+        keyword, expression = get_step_parts(current_line)
+
+        if keyword is None or expression is None:
+            return None
+
+        expression = re.sub(r'"[^"]*"', '""', expression)
+        for steps in self.steps.values():
+            for step in steps:
+                if step.expression != expression:
+                    continue
+
+                import inspect
+
+                file_location = inspect.getfile(step.func)
+                _, lineno = inspect.getsourcelines(step.func)
+                self.logger.debug(f'!! {step=}, {file_location=}, {lineno=}')
+                range = Range(
+                    start=Position(line=lineno, character=0),
+                    end=Position(line=lineno, character=0),
+                )
+                step_definition = LocationLink(
+                    target_uri=Path(file_location).as_uri(),
+                    target_range=range,
+                    target_selection_range=range,
+                    origin_selection_range=Range(
+                        start=Position(
+                            line=params.position.line,
+                            character=(len(current_line) - len(current_line.lstrip())),
+                        ),
+                        end=Position(
+                            line=params.position.line,
+                            character=len(current_line),
+                        ),
+                    ),
+                )
+
+                # we have found what we are looking for
+                break
+
+        return step_definition
+
+    def _get_file_url_definition(
+        self,
+        params: DefinitionParams,
+        current_line: str,
     ) -> List[LocationLink]:
         document = self.workspace.get_text_document(params.text_document.uri)
         document_directory = Path(document.path).parent
@@ -627,22 +669,24 @@ class GrizzlyLanguageServer(LanguageServer):
             start = variable_match.start(1) + start_offset
             end = variable_match.end(1) + end_offset
 
-            range = Range(
-                start=Position(line=0, character=0),
-                end=Position(line=0, character=0),
-            )
-
-            definitions.append(
-                LocationLink(
-                    target_uri=payload_file.as_uri(),
-                    target_range=range,
-                    target_selection_range=range,
-                    origin_selection_range=Range(
-                        start=Position(line=params.position.line, character=start),
-                        end=Position(line=params.position.line, character=end),
-                    ),
+            # don't add link definition if cursor is out side of range for that link
+            if params.position.character >= start and params.position.character <= end:
+                range = Range(
+                    start=Position(line=0, character=0),
+                    end=Position(line=0, character=0),
                 )
-            )
+
+                definitions.append(
+                    LocationLink(
+                        target_uri=payload_file.as_uri(),
+                        target_range=range,
+                        target_selection_range=range,
+                        origin_selection_range=Range(
+                            start=Position(line=params.position.line, character=start),
+                            end=Position(line=params.position.line, character=end),
+                        ),
+                    )
+                )
 
         return definitions
 
