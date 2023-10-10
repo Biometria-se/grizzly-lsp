@@ -10,7 +10,18 @@ import inspect
 
 from os import environ, linesep
 from os.path import pathsep, sep
-from typing import Any, Tuple, Dict, List, Union, Optional, Set, Callable, cast
+from typing import (
+    Any,
+    Tuple,
+    Dict,
+    List,
+    Union,
+    Optional,
+    Set,
+    Callable,
+    NamedTuple,
+    cast,
+)
 from types import FrameType
 from pathlib import Path
 from behave.matchers import ParseMatcher
@@ -33,6 +44,7 @@ from pygls.capabilities import get_capability
 from lsprotocol import types as lsp
 
 from behave.i18n import languages
+from behave.parser import parse_feature, ParserError
 
 from .text import Normalizer, get_step_parts, clean_help
 from .utils import (
@@ -42,6 +54,12 @@ from .utils import (
 )
 from .progress import Progress
 from . import __version__
+
+
+FeatureInstallParams = NamedTuple(
+    'Object',
+    [('fsPath', str), ('external', str), ('path', str), ('scheme', str)],
+)
 
 
 @dataclass
@@ -54,6 +72,8 @@ class Step:
 
 class GrizzlyLanguageServer(LanguageServer):
     FEATURE_INSTALL = 'grizzly-ls/install'
+
+    MARKER_LANGUAGE = '# language:'
 
     logger: logging.Logger = logging.getLogger(__name__)
 
@@ -113,7 +133,7 @@ class GrizzlyLanguageServer(LanguageServer):
         self.client_settings = {}
 
         @self.feature(self.FEATURE_INSTALL)
-        def install(params: Dict[str, Any]) -> None:
+        def install(params: FeatureInstallParams) -> None:
             """
             See https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize
 
@@ -124,7 +144,7 @@ class GrizzlyLanguageServer(LanguageServer):
             This custom feature handles being able to send progress report of the, slow, process of installing dependencies needed
             for it to function properly on the project it is being used.
             """
-            self.logger.debug(f'{self.FEATURE_INSTALL}: installing {params=}')
+            self.logger.debug(f'{self.FEATURE_INSTALL}: installing')
 
             with Progress(self.progress, 'grizzly-ls') as progress:
                 # <!-- should a virtual environment be used?
@@ -288,6 +308,11 @@ class GrizzlyLanguageServer(LanguageServer):
                         # always restore to original value
                         sys.path.pop()
 
+            self.logger.debug(f'!! {params=} {params.external=}')
+            document = self.workspace.get_text_document(params.external)
+            diagnostics = self._validate_gherkin(document)
+            self.publish_diagnostics(document.uri, diagnostics)  # type: ignore
+
         @self.feature(lsp.INITIALIZE)
         def initialize(params: lsp.InitializeParams) -> None:
             if params.root_path is None and params.root_uri is None:
@@ -390,7 +415,9 @@ class GrizzlyLanguageServer(LanguageServer):
             # // -->
 
         @self.feature(lsp.TEXT_DOCUMENT_COMPLETION)
-        def completion(params: lsp.CompletionParams) -> lsp.CompletionList:
+        def text_document_completion(
+            params: lsp.CompletionParams,
+        ) -> lsp.CompletionList:
             items: List[lsp.CompletionItem] = []
 
             if len(self.steps.values()) < 1:
@@ -401,8 +428,6 @@ class GrizzlyLanguageServer(LanguageServer):
                 line = self._current_line(params.text_document.uri, params.position)
 
                 document = self.workspace.get_text_document(params.text_document.uri)
-
-                self.language = self._find_language(document.source)
 
                 trigger = line[: params.position.character]
 
@@ -443,7 +468,7 @@ class GrizzlyLanguageServer(LanguageServer):
             self.logger.debug(f'{lsp.WORKSPACE_DID_CHANGE_CONFIGURATION}: {params=}')
 
         @self.feature(lsp.TEXT_DOCUMENT_HOVER)
-        def hover(params: lsp.HoverParams) -> Optional[lsp.Hover]:
+        def text_document_hover(params: lsp.HoverParams) -> Optional[lsp.Hover]:
             hover: Optional[lsp.Hover] = None
             help_text: Optional[str] = None
             current_line = self._current_line(params.text_document.uri, params.position)
@@ -496,8 +521,30 @@ class GrizzlyLanguageServer(LanguageServer):
 
             return hover
 
+        @self.feature(lsp.TEXT_DOCUMENT_DID_CHANGE)
+        def text_document_did_change(params: lsp.DidChangeTextDocumentParams) -> None:
+            document = self.workspace.get_text_document(params.text_document.uri)
+            self.language = self._find_language(document.source)
+
+        @self.feature(lsp.TEXT_DOCUMENT_DID_OPEN)
+        def text_document_did_open(params: lsp.DidOpenTextDocumentParams) -> None:
+            document = self.workspace.get_text_document(params.text_document.uri)
+            self.language = self._find_language(document.source)
+
+            if self.client_settings.get('diagnostics_on_save_only', True):
+                document = self.workspace.get_text_document(params.text_document.uri)
+                diagnostics = self._validate_gherkin(document)
+                self.publish_diagnostics(document.uri, diagnostics)  # type: ignore
+
+        @self.feature(lsp.TEXT_DOCUMENT_DID_SAVE)
+        def text_document_did_save(params: lsp.DidSaveTextDocumentParams) -> None:
+            if self.client_settings.get('diagnostics_on_save_only', True):
+                document = self.workspace.get_text_document(params.text_document.uri)
+                diagnostics = self._validate_gherkin(document)
+                self.publish_diagnostics(document.uri, diagnostics)  # type: ignore
+
         @self.feature(lsp.TEXT_DOCUMENT_DEFINITION)
-        def definition(
+        def text_document_definition(
             params: lsp.DefinitionParams,
         ) -> Optional[List[lsp.LocationLink]]:
             current_line = self._current_line(params.text_document.uri, params.position)
@@ -515,6 +562,48 @@ class GrizzlyLanguageServer(LanguageServer):
                     definitions = [step_definition]
 
             return definitions if len(definitions) > 0 else None
+
+        @self.feature(
+            lsp.TEXT_DOCUMENT_DIAGNOSTIC,
+            lsp.DiagnosticOptions(
+                identifier='behave',
+                inter_file_dependencies=False,
+                workspace_diagnostics=True,
+            ),
+        )
+        def text_document_diagnostic(
+            params: lsp.DocumentDiagnosticParams,
+        ) -> lsp.DocumentDiagnosticReport:
+            items: List[lsp.Diagnostic] = []
+            if not self.client_settings.get('diagnostics_on_save_only', True):
+                document = self.workspace.get_text_document(params.text_document.uri)
+                items = self._validate_gherkin(document)
+
+            return lsp.RelatedFullDocumentDiagnosticReport(
+                items=items,
+                kind=lsp.DocumentDiagnosticReportKind.Full,
+            )
+
+        @self.feature(lsp.WORKSPACE_DIAGNOSTIC)
+        def workspace_diagnostic(
+            params: lsp.WorkspaceDiagnosticParams,
+        ) -> lsp.WorkspaceDiagnosticReport:
+            items: List[lsp.Diagnostic] = []
+            first_text_document = list(self.workspace.text_documents.keys())[0]
+            document = self.workspace.get_text_document(first_text_document)
+
+            if not self.client_settings.get('diagnostics_on_save_only', True):
+                items = self._validate_gherkin(document)
+
+            return lsp.WorkspaceDiagnosticReport(
+                items=[
+                    lsp.WorkspaceFullDocumentDiagnosticReport(
+                        uri=document.uri,
+                        items=items,
+                        kind=lsp.DocumentDiagnosticReportKind.Full,
+                    )
+                ]
+            )
 
     @property
     def language(self) -> str:
@@ -604,6 +693,206 @@ class GrizzlyLanguageServer(LanguageServer):
                 break
 
         return step_definition
+
+    def _validate_gherkin(self, document: Document) -> List[lsp.Diagnostic]:
+        diagnostics: List[lsp.Diagnostic] = []
+        line_map: Dict[str, str] = {}
+
+        ignoring: bool = False
+        language: str = 'en'
+        zero_line_length = 0
+
+        for lineno, line in enumerate(document.source.splitlines()):
+            if lineno == 0:
+                zero_line_length = len(line)
+
+            stripped_line = line.strip()
+
+            # ignore any lines that comes between free text, or empty lines, or lines that could be a table
+            if stripped_line == '"""' or stripped_line.count('|') >= 2:
+                ignoring = not ignoring
+                self.logger.debug(f'{ignoring=}')
+                continue
+
+            if ignoring:
+                self.logger.debug(f'!! ignoring: {line}')
+                continue
+
+            position = len(line) - len(stripped_line)
+            line_map.update({stripped_line: line})
+
+            # validate language
+            if stripped_line.startswith(self.MARKER_LANGUAGE):
+                try:
+                    marker, language = line.split(': ', 1)
+                    ## does not exist
+                    if len(language.strip()) > 0 and language.strip() not in languages:
+                        marker_position = len(marker) + 2
+                        diagnostics.append(
+                            lsp.Diagnostic(
+                                range=lsp.Range(
+                                    start=lsp.Position(
+                                        line=lineno, character=marker_position
+                                    ),
+                                    end=lsp.Position(
+                                        line=lineno,
+                                        character=marker_position + len(language),
+                                    ),
+                                ),
+                                message=f'{language} is not a valid language',
+                                severity=lsp.DiagnosticSeverity.Error,
+                                source=self.__class__.__name__,
+                            )
+                        )
+                except ValueError:  # not finished typing
+                    pass
+
+                # wrong line
+                if lineno != 0:
+                    diagnostics.append(
+                        lsp.Diagnostic(
+                            range=lsp.Range(
+                                start=lsp.Position(line=lineno, character=position),
+                                end=lsp.Position(line=lineno, character=len(line)),
+                            ),
+                            message=f'{self.MARKER_LANGUAGE} should be on the first line',
+                            severity=lsp.DiagnosticSeverity.Warning,
+                            source=self.__class__.__name__,
+                        )
+                    )
+
+                # nothing more to check on this line...
+                continue
+
+            keyword, expression = get_step_parts(stripped_line)
+
+            # check if keywords are valid in the specified language
+            lang_key: Optional[str] = None
+            if keyword is not None:
+                if keyword.endswith(':'):
+                    keyword = keyword[:-1]
+
+                try:
+                    lang_key = self._get_language_key(keyword)
+                except ValueError:
+                    name = self.localizations.get('name', ['unknown'])[0]
+
+                    diagnostics.append(
+                        lsp.Diagnostic(
+                            range=lsp.Range(
+                                start=lsp.Position(line=lineno, character=position),
+                                end=lsp.Position(
+                                    line=lineno, character=position + len(keyword)
+                                ),
+                            ),
+                            message=f'"{keyword}" is not a valid keyword in {name}',
+                            severity=lsp.DiagnosticSeverity.Error,
+                            source=self.__class__.__name__,
+                        )
+                    )
+
+            # check if step expression exists
+            if (
+                lang_key is not None
+                and expression is not None
+                and keyword not in self.keywords_headers
+            ):
+                found_step = False
+                expression_shell = re.sub(r'"[^"]*"', '""', expression)
+
+                for step in self.steps.get(lang_key, []):
+                    self.logger.debug(
+                        f'{lang_key=}, {step.expression=} {(step.expression == expression_shell)}'
+                    )
+                    if step.expression == expression_shell:
+                        found_step = True
+                        break
+
+                if not found_step:
+                    diagnostics.append(
+                        lsp.Diagnostic(
+                            range=lsp.Range(
+                                start=lsp.Position(
+                                    line=lineno, character=len(line) - len(expression)
+                                ),
+                                end=lsp.Position(line=lineno, character=len(line)),
+                            ),
+                            message=f'No step implementation found for:\n{stripped_line}',
+                            severity=lsp.DiagnosticSeverity.Warning,
+                            source=self.__class__.__name__,
+                        )
+                    )
+
+        # make sure behave can parse it
+        try:
+            parse_feature(
+                document.source, language=language, filename=document.filename
+            )
+        except ParserError as pe:
+            character = (
+                len(pe.line_text) - len(pe.line_text.strip())
+                if pe.line_text is not None
+                else 0
+            )
+            message = str(pe)
+
+            # Remove static strings composed by ParserError.__str__
+            message = re.sub(
+                rf'Failed to parse ("[^"]*"|\<string\>):', '', message
+            ).strip()
+
+            # remove line_text from message
+            if pe.line_text is not None:
+                message = message.replace(f': "{pe.line_text}"', '').strip()
+
+            match = re.search(r'.*at line ([0-9]+).*', message, flags=re.MULTILINE)
+            if match:
+                lineno = int(match.group(1))
+                message = re.sub(
+                    rf',? at line {lineno}', '', message, flags=re.MULTILINE
+                ).strip()
+
+                if pe.line is None:
+                    pe.line = lineno - 1
+
+            if pe.line_text is None:
+                match = re.search(r': "([^"]*)"', message, flags=re.MULTILINE)
+                if match:
+                    pe.line_text = match.group(1)
+
+                    message = re.sub(
+                        rf': "{pe.line_text}"', '', message, flags=re.MULTILINE
+                    ).strip()
+
+            # map with un-stripped text, so we get correct ranges in the document
+            if pe.line_text is not None:
+                pe.line_text = line_map.get(pe.line_text, pe.line_text)
+
+            message = message.replace('REASON: ', '').strip()
+
+            diagnostics.append(
+                lsp.Diagnostic(
+                    range=lsp.Range(
+                        start=lsp.Position(line=pe.line or 0, character=character),
+                        end=lsp.Position(
+                            line=pe.line or 0,
+                            character=len(pe.line_text)
+                            if pe.line_text is not None
+                            else zero_line_length,
+                        ),
+                    ),
+                    message=message,
+                    severity=lsp.DiagnosticSeverity.Error,
+                    source=self.__class__.__name__,
+                )
+            )
+        except KeyError:
+            pass
+
+        # clean up
+        line_map = {}
+
+        return diagnostics
 
     def _get_file_url_definition(
         self,
@@ -706,7 +995,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
         for line in document.split(linesep):
             line = line.strip()
-            if line.startswith('# language: '):
+            if line.startswith(self.MARKER_LANGUAGE):
                 _, language = line.strip().split(': ', 1)
                 break
 
@@ -1010,6 +1299,9 @@ class GrizzlyLanguageServer(LanguageServer):
         return matched_steps
 
     def _get_language_key(self, keyword: str) -> str:
+        if keyword.endswith(':'):
+            keyword = keyword[:-1]
+
         if keyword in self.keywords_any:
             return 'step'
 

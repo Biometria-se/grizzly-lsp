@@ -369,10 +369,8 @@ def get_step_parts(line: str) -> Tuple[Optional[str], Optional[str]]:
 
         try:
             keyword, step = line.split(' ', 1)
-            step = step
         except ValueError:
-            keyword = line
-            step = None
+            keyword, step = line, None
         keyword = keyword.strip()
     else:
         keyword, step = None, None

@@ -44,6 +44,7 @@ interface Settings {
     variable_pattern: string[];
     pip_extra_index_url: string;
     use_virtual_environment: boolean;
+    diagnostics_on_save_only: boolean;
 }
 
 let _sortedWorkspaceFolders: string[] | undefined;
@@ -149,7 +150,6 @@ function createSocketLanguageServer(
 
 function createLanguageClient(outputChannel: OutputChannel): LanguageClient {
     const configuration = workspace.getConfiguration('grizzly');
-    outputChannel.appendLine(`configuration=${JSON.stringify(configuration)}`);
     const documentSelector = ['grizzly-gherkin'];
     let languageClient: LanguageClient;
 
@@ -216,7 +216,7 @@ export function activate(): ExtensionStatus {
             await client.start();
             clients.set(folderUri, client);
             outputChannel.appendLine(`started language client for ${folderUri}`);
-            await client.sendRequest('grizzly-ls/install', {});
+            await client.sendRequest('grizzly-ls/install', document.uri);
             outputChannel.appendLine('ensured dependencies');
             status.setActivated();
         }
