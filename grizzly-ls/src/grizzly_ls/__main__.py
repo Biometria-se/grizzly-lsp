@@ -35,6 +35,14 @@ def parse_arguments() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        '--no-verbose',
+        nargs='+',
+        type=str,
+        default=None,
+        help='name of loggers to disable',
+    )
+
+    parser.add_argument(
         '--version',
         action='store_true',
         required=False,
@@ -69,6 +77,14 @@ def setup_logging(args: argparse.Namespace) -> None:
         format='[%(asctime)s] %(levelname)s: %(message)s',
         handlers=handlers,
     )
+
+    if args.no_verbose is not None:
+        for logger_name in args.no_verbose:
+            if logger_name in logging.Logger.manager.loggerDict:
+                logger = logging.getLogger(logger_name)
+                logger.setLevel(logging.CRITICAL)
+            else:
+                print(f'!! logger "{logger_name}" does not exist', file=sys.stderr)
 
 
 def main() -> NoReturn:  # type: ignore

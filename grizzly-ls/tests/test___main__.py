@@ -22,13 +22,29 @@ def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
         socket_port=4444,
         verbose=False,
         version=False,
+        no_verbose=None,
     )
 
-    sys.argv = ['grizzly-ls', '--socket', '--socket-port', '5555', '--verbose']
+    sys.argv = [
+        'grizzly-ls',
+        '--socket',
+        '--socket-port',
+        '5555',
+        '--no-verbose',
+        'pygls',
+        'behave',
+        '--verbose',
+    ]
 
     args = parse_arguments()
 
-    assert args == Namespace(socket=True, socket_port=5555, verbose=True, version=False)
+    assert args == Namespace(
+        socket=True,
+        socket_port=5555,
+        verbose=True,
+        version=False,
+        no_verbose=['pygls', 'behave'],
+    )
 
     sys.argv = ['grizzly-ls', '--version']
 
@@ -42,7 +58,7 @@ def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
     assert not capture.err == ''
 
 
-def test_setup_logging(mocker: MockerFixture) -> None:
+def test_setup_logging(mocker: MockerFixture, capsys: CaptureFixture[str]) -> None:
     logging_basicConfig_mock = mocker.patch('grizzly_ls.__main__.logging.basicConfig')
     logging_FileHandler_mock = mocker.patch(
         'grizzly_ls.__main__.logging.FileHandler', spec_set=logging.FileHandler
@@ -52,7 +68,7 @@ def test_setup_logging(mocker: MockerFixture) -> None:
     )
 
     # <no args>
-    arguments = Namespace(socket=False, verbose=False)
+    arguments = Namespace(socket=False, verbose=False, no_verbose=None)
 
     setup_logging(arguments)
 
@@ -64,9 +80,12 @@ def test_setup_logging(mocker: MockerFixture) -> None:
     assert len(handlers) == 0
     assert logging_FileHandler_mock.call_count == 0
     assert logging_StreamHandler_mock.call_count == 0
+    capture = capsys.readouterr()
+    assert capture.err == ''
+    assert capture.out == ''
 
-    # --verbose
-    arguments = Namespace(socket=False, verbose=True)
+    # --verbose, --no-verbose pygls behave
+    arguments = Namespace(socket=False, verbose=True, no_verbose=['pygls', 'behave'])
 
     setup_logging(arguments)
 
@@ -80,9 +99,13 @@ def test_setup_logging(mocker: MockerFixture) -> None:
     assert logging_FileHandler_mock.call_count == 1
     args, _ = logging_FileHandler_mock.call_args_list[-1]
     assert args[0] == 'grizzly-ls.log'
+    assert logging.getLogger('pygls').getEffectiveLevel() == logging.CRITICAL
+    capture = capsys.readouterr()
+    assert capture.err == '!! logger "behave" does not exist\n'
+    assert capture.out == ''
 
     # --socket
-    arguments = Namespace(socket=True, verbose=False)
+    arguments = Namespace(socket=True, verbose=False, no_verbose=None)
 
     setup_logging(arguments)
 
@@ -96,6 +119,9 @@ def test_setup_logging(mocker: MockerFixture) -> None:
     args, _ = logging_StreamHandler_mock.call_args_list[-1]
     assert args[0] is sys.stderr
     assert logging_FileHandler_mock.call_count == 1
+    capture = capsys.readouterr()
+    assert capture.err == ''
+    assert capture.out == ''
 
 
 def test_main(mocker: MockerFixture) -> None:

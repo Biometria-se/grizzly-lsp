@@ -30,30 +30,7 @@ import gevent.monkey  # type: ignore
 from pygls.server import LanguageServer
 from pygls.workspace import Document
 from pygls.capabilities import get_capability
-from lsprotocol.types import (
-    INITIALIZE,
-    WORKSPACE_DID_CHANGE_CONFIGURATION,
-    TEXT_DOCUMENT_HOVER,
-    TEXT_DOCUMENT_DEFINITION,
-    TEXT_DOCUMENT_COMPLETION,
-    CompletionParams,
-    CompletionList,
-    CompletionItem,
-    CompletionItemKind,
-    InitializeParams,
-    DefinitionParams,
-    MessageType,
-    Hover,
-    HoverParams,
-    InsertTextFormat,
-    DidChangeConfigurationParams as WorkspaceDidChangeConfigurationParams,
-    Position,
-    MarkupContent,
-    MarkupKind,
-    Range,
-    LocationLink,
-    TextEdit,
-)
+from lsprotocol import types as lsp
 
 from behave.i18n import languages
 
@@ -99,16 +76,16 @@ class GrizzlyLanguageServer(LanguageServer):
 
     normalizer: Normalizer
 
-    markup_kind: MarkupKind
+    markup_kind: lsp.MarkupKind
 
     def show_message(
-        self, message: str, msg_type: Optional[MessageType] = MessageType.Info
+        self, message: str, msg_type: Optional[lsp.MessageType] = lsp.MessageType.Info
     ) -> None:
-        if msg_type == MessageType.Info:
+        if msg_type == lsp.MessageType.Info:
             log_method = self.logger.info
-        elif msg_type == MessageType.Error:
+        elif msg_type == lsp.MessageType.Error:
             log_method = self.logger.error
-        elif msg_type == MessageType.Warning:
+        elif msg_type == lsp.MessageType.Warning:
             log_method = self.logger.warning
         else:
             log_method = self.logger.debug
@@ -123,7 +100,7 @@ class GrizzlyLanguageServer(LanguageServer):
         self.behave_steps = {}
         self.steps = {}
         self.keywords = []
-        self.markup_kind = MarkupKind.Markdown  # assume, until initialized request
+        self.markup_kind = lsp.MarkupKind.Markdown  # assume, until initialized request
         self.language = 'en'  # assumed default
 
         # monkey patch functions to short-circuit them (causes problems in this context)
@@ -212,7 +189,7 @@ class GrizzlyLanguageServer(LanguageServer):
                         ):
                             self.show_message(
                                 'global.index-url does not contain username and/or password, check your configuration!',
-                                msg_type=MessageType.Error,
+                                msg_type=lsp.MessageType.Error,
                             )
                             return
 
@@ -226,7 +203,7 @@ class GrizzlyLanguageServer(LanguageServer):
                 if not requirements_file.exists():
                     self.show_message(
                         f'project "{project_name}" does not have a requirements.txt in {self.root_path}',
-                        msg_type=MessageType.Error,
+                        msg_type=lsp.MessageType.Error,
                     )
                     return
 
@@ -278,7 +255,7 @@ class GrizzlyLanguageServer(LanguageServer):
                     if rc != 0:
                         self.show_message(
                             f'failed to {action} from {requirements_file}',
-                            msg_type=MessageType.Error,
+                            msg_type=lsp.MessageType.Error,
                         )
                         return
 
@@ -302,7 +279,8 @@ class GrizzlyLanguageServer(LanguageServer):
                     # // ->
                 except ModuleNotFoundError:
                     self.show_message(
-                        'failed to create step inventory', msg_type=MessageType.Error
+                        'failed to create step inventory',
+                        msg_type=lsp.MessageType.Error,
                     )
                     return
                 finally:
@@ -310,12 +288,12 @@ class GrizzlyLanguageServer(LanguageServer):
                         # always restore to original value
                         sys.path.pop()
 
-        @self.feature(INITIALIZE)
-        def initialize(params: InitializeParams) -> None:
+        @self.feature(lsp.INITIALIZE)
+        def initialize(params: lsp.InitializeParams) -> None:
             if params.root_path is None and params.root_uri is None:
                 self.show_message(
                     'neither root_path or root uri was received from client',
-                    msg_type=MessageType.Error,
+                    msg_type=lsp.MessageType.Error,
                 )
                 return
 
@@ -339,13 +317,13 @@ class GrizzlyLanguageServer(LanguageServer):
             if client_settings is not None:
                 self.client_settings = cast(Dict[str, Any], client_settings)
 
-            markup_supported: List[MarkupKind] = get_capability(
+            markup_supported: List[lsp.MarkupKind] = get_capability(
                 self.client_capabilities,
                 'text_document.completion.completion_item.documentation_format',
-                [MarkupKind.Markdown],
+                [lsp.MarkupKind.Markdown],
             )
             if len(markup_supported) < 1:
-                self.markup_kind = MarkupKind.PlainText
+                self.markup_kind = lsp.MarkupKind.PlainText
             else:
                 self.markup_kind = markup_supported[0]
 
@@ -403,7 +381,7 @@ class GrizzlyLanguageServer(LanguageServer):
                     except:
                         self.show_message(
                             f'variable pattern "{variable_pattern}" is not valid, check grizzly.variable_pattern setting',
-                            msg_type=MessageType.Error,
+                            msg_type=lsp.MessageType.Error,
                         )
                         return
 
@@ -411,12 +389,14 @@ class GrizzlyLanguageServer(LanguageServer):
                 self.variable_pattern = re.compile(variable_pattern)
             # // -->
 
-        @self.feature(TEXT_DOCUMENT_COMPLETION)
-        def completion(params: CompletionParams) -> CompletionList:
-            items: List[CompletionItem] = []
+        @self.feature(lsp.TEXT_DOCUMENT_COMPLETION)
+        def completion(params: lsp.CompletionParams) -> lsp.CompletionList:
+            items: List[lsp.CompletionItem] = []
 
             if len(self.steps.values()) < 1:
-                self.show_message('no steps in inventory', msg_type=MessageType.Error)
+                self.show_message(
+                    'no steps in inventory', msg_type=lsp.MessageType.Error
+                )
             else:
                 line = self._current_line(params.text_document.uri, params.position)
 
@@ -451,20 +431,20 @@ class GrizzlyLanguageServer(LanguageServer):
                             keyword, params.position, document
                         )
 
-            return CompletionList(
+            return lsp.CompletionList(
                 is_incomplete=False,
                 items=items,
             )
 
-        @self.feature(WORKSPACE_DID_CHANGE_CONFIGURATION)
+        @self.feature(lsp.WORKSPACE_DID_CHANGE_CONFIGURATION)
         def workspace_did_change_configuration(
-            params: WorkspaceDidChangeConfigurationParams,
+            params: lsp.DidChangeConfigurationParams,
         ) -> None:
-            self.logger.debug(f'{WORKSPACE_DID_CHANGE_CONFIGURATION}: {params=}')
+            self.logger.debug(f'{lsp.WORKSPACE_DID_CHANGE_CONFIGURATION}: {params=}')
 
-        @self.feature(TEXT_DOCUMENT_HOVER)
-        def hover(params: HoverParams) -> Optional[Hover]:
-            hover: Optional[Hover] = None
+        @self.feature(lsp.TEXT_DOCUMENT_HOVER)
+        def hover(params: lsp.HoverParams) -> Optional[lsp.Hover]:
+            hover: Optional[lsp.Hover] = None
             help_text: Optional[str] = None
             current_line = self._current_line(params.text_document.uri, params.position)
             keyword, step = get_step_parts(current_line)
@@ -507,21 +487,23 @@ class GrizzlyLanguageServer(LanguageServer):
 
                 help_text = f'{pre}Args:\n\n{text}\n'
 
-            contents = MarkupContent(kind=self.markup_kind, value=help_text)
-            range = Range(
-                start=Position(line=params.position.line, character=start),
-                end=Position(line=params.position.line, character=end),
+            contents = lsp.MarkupContent(kind=self.markup_kind, value=help_text)
+            range = lsp.Range(
+                start=lsp.Position(line=params.position.line, character=start),
+                end=lsp.Position(line=params.position.line, character=end),
             )
-            hover = Hover(contents=contents, range=range)
+            hover = lsp.Hover(contents=contents, range=range)
 
             return hover
 
-        @self.feature(TEXT_DOCUMENT_DEFINITION)
-        def definition(params: DefinitionParams) -> Optional[List[LocationLink]]:
+        @self.feature(lsp.TEXT_DOCUMENT_DEFINITION)
+        def definition(
+            params: lsp.DefinitionParams,
+        ) -> Optional[List[lsp.LocationLink]]:
             current_line = self._current_line(params.text_document.uri, params.position)
-            definitions: List[LocationLink] = []
+            definitions: List[lsp.LocationLink] = []
 
-            self.logger.debug(f'{TEXT_DOCUMENT_DEFINITION}: {params=}')
+            self.logger.debug(f'{lsp.TEXT_DOCUMENT_DEFINITION}: {params=}')
 
             file_url_definitions = self._get_file_url_definition(params, current_line)
 
@@ -541,9 +523,10 @@ class GrizzlyLanguageServer(LanguageServer):
     @language.setter
     def language(self, value: str) -> None:
         if not hasattr(self, '_language') or self._language != value:
-            self.logger.info(f'language detected: "{value}"')
             self._language = value
             self._compile_keyword_inventory()
+            name = self.localizations.get('name', ['unknown'])[0]
+            self.logger.info(f'language detected: {name} ({value})')
 
     def get_variable_name_trigger(
         self, trigger: str
@@ -579,9 +562,9 @@ class GrizzlyLanguageServer(LanguageServer):
         return None
 
     def _get_step_definition(
-        self, params: DefinitionParams, current_line: str
-    ) -> Optional[LocationLink]:
-        step_definition: Optional[LocationLink] = None
+        self, params: lsp.DefinitionParams, current_line: str
+    ) -> Optional[lsp.LocationLink]:
+        step_definition: Optional[lsp.LocationLink] = None
 
         keyword, expression = get_step_parts(current_line)
 
@@ -596,21 +579,21 @@ class GrizzlyLanguageServer(LanguageServer):
 
                 file_location = inspect.getfile(step.func)
                 _, lineno = inspect.getsourcelines(step.func)
-                self.logger.debug(f'!! {step=}, {file_location=}, {lineno=}')
-                range = Range(
-                    start=Position(line=lineno, character=0),
-                    end=Position(line=lineno, character=0),
+
+                range = lsp.Range(
+                    start=lsp.Position(line=lineno, character=0),
+                    end=lsp.Position(line=lineno, character=0),
                 )
-                step_definition = LocationLink(
+                step_definition = lsp.LocationLink(
                     target_uri=Path(file_location).as_uri(),
                     target_range=range,
                     target_selection_range=range,
-                    origin_selection_range=Range(
-                        start=Position(
+                    origin_selection_range=lsp.Range(
+                        start=lsp.Position(
                             line=params.position.line,
                             character=(len(current_line) - len(current_line.lstrip())),
                         ),
-                        end=Position(
+                        end=lsp.Position(
                             line=params.position.line,
                             character=len(current_line),
                         ),
@@ -624,12 +607,12 @@ class GrizzlyLanguageServer(LanguageServer):
 
     def _get_file_url_definition(
         self,
-        params: DefinitionParams,
+        params: lsp.DefinitionParams,
         current_line: str,
-    ) -> List[LocationLink]:
+    ) -> List[lsp.LocationLink]:
         document = self.workspace.get_text_document(params.text_document.uri)
         document_directory = Path(document.path).parent
-        definitions: List[LocationLink] = []
+        definitions: List[lsp.LocationLink] = []
         matches = re.finditer(r'"([^"]*)"', current_line, re.MULTILINE)
 
         for variable_match in matches:
@@ -674,19 +657,21 @@ class GrizzlyLanguageServer(LanguageServer):
 
             # don't add link definition if cursor is out side of range for that link
             if params.position.character >= start and params.position.character <= end:
-                range = Range(
-                    start=Position(line=0, character=0),
-                    end=Position(line=0, character=0),
+                range = lsp.Range(
+                    start=lsp.Position(line=0, character=0),
+                    end=lsp.Position(line=0, character=0),
                 )
 
                 definitions.append(
-                    LocationLink(
+                    lsp.LocationLink(
                         target_uri=payload_file.as_uri(),
                         target_range=range,
                         target_selection_range=range,
-                        origin_selection_range=Range(
-                            start=Position(line=params.position.line, character=start),
-                            end=Position(line=params.position.line, character=end),
+                        origin_selection_range=lsp.Range(
+                            start=lsp.Position(
+                                line=params.position.line, character=start
+                            ),
+                            end=lsp.Position(line=params.position.line, character=end),
                         ),
                     )
                 )
@@ -728,9 +713,9 @@ class GrizzlyLanguageServer(LanguageServer):
         return language.strip()
 
     def _complete_keyword(
-        self, keyword: Optional[str], position: Position, document: Document
-    ) -> List[CompletionItem]:
-        items: List[CompletionItem] = []
+        self, keyword: Optional[str], position: lsp.Position, document: Document
+    ) -> List[lsp.CompletionItem]:
+        items: List[lsp.CompletionItem] = []
         if len(document.source.strip()) < 1:
             keywords = [*self.localizations.get('feature', [])]
         else:
@@ -758,7 +743,7 @@ class GrizzlyLanguageServer(LanguageServer):
                 keywords = [k for k in keywords if keyword.strip().lower() in k.lower()]
 
         for suggested_keyword in sorted(keywords):
-            start = Position(
+            start = lsp.Position(
                 line=position.line, character=position.character - len(keyword or '')
             )
             if suggested_keyword in self.keywords_headers:
@@ -766,17 +751,17 @@ class GrizzlyLanguageServer(LanguageServer):
             else:
                 suffix = ' '
 
-            text_edit = TextEdit(
-                range=Range(
+            text_edit = lsp.TextEdit(
+                range=lsp.Range(
                     start=start,
                     end=position,
                 ),
                 new_text=f'{suggested_keyword}{suffix}',
             )
             items.append(
-                CompletionItem(
+                lsp.CompletionItem(
                     label=suggested_keyword,
-                    kind=CompletionItemKind.Keyword,
+                    kind=lsp.CompletionItemKind.Keyword,
                     deprecated=False,
                     text_edit=text_edit,
                 )
@@ -788,11 +773,11 @@ class GrizzlyLanguageServer(LanguageServer):
         self,
         line: str,
         document: Document,
-        position: Position,
+        position: lsp.Position,
         *,
         partial: Optional[str] = None,
-    ) -> List[CompletionItem]:
-        items: List[CompletionItem] = []
+    ) -> List[lsp.CompletionItem]:
+        items: List[lsp.CompletionItem] = []
 
         # find `Scenario:` before current position
         lines = document.source.splitlines()
@@ -810,7 +795,7 @@ class GrizzlyLanguageServer(LanguageServer):
                 if partial is not None and not variable_name.startswith(partial):
                     continue
 
-                text_edit: Optional[TextEdit] = None
+                text_edit: Optional[lsp.TextEdit] = None
 
                 if partial is not None:
                     prefix = ''
@@ -832,14 +817,14 @@ class GrizzlyLanguageServer(LanguageServer):
                 )
                 new_text = f'{prefix}{variable_name}{affix_suffix}{affix}{suffix}'
 
-                start = Position(
+                start = lsp.Position(
                     line=position.line,
                     character=position.character - len(partial or ''),
                 )
-                text_edit = TextEdit(
-                    range=Range(
+                text_edit = lsp.TextEdit(
+                    range=lsp.Range(
                         start=start,
-                        end=Position(
+                        end=lsp.Position(
                             line=position.line,
                             character=start.character + len(partial or ''),
                         ),
@@ -852,9 +837,9 @@ class GrizzlyLanguageServer(LanguageServer):
                 )
 
                 items.append(
-                    CompletionItem(
+                    lsp.CompletionItem(
                         label=variable_name,
-                        kind=CompletionItemKind.Variable,
+                        kind=lsp.CompletionItemKind.Variable,
                         deprecated=False,
                         text_edit=text_edit,
                     )
@@ -872,9 +857,9 @@ class GrizzlyLanguageServer(LanguageServer):
     def _complete_step(
         self,
         keyword: str,
-        position: Position,
+        position: lsp.Position,
         expression: Optional[str],
-    ) -> List[CompletionItem]:
+    ) -> List[lsp.CompletionItem]:
         if keyword in self.keywords_any:
             steps = list(
                 set(
@@ -892,7 +877,7 @@ class GrizzlyLanguageServer(LanguageServer):
                 for step in self.steps.get(key, []) + self.steps.get('step', [])
             ]
 
-        matched_steps: List[CompletionItem] = []
+        matched_steps: List[lsp.CompletionItem] = []
         matched_steps_1: Set[str]
         matched_steps_2: Set[str] = set()
         matched_steps_3: Set[str] = set()
@@ -916,7 +901,7 @@ class GrizzlyLanguageServer(LanguageServer):
                 )
 
         # keep order so that 1. matches comes before 2. matches etc.
-        matched_steps_container: Dict[str, CompletionItem] = {}
+        matched_steps_container: Dict[str, lsp.CompletionItem] = {}
 
         input_matches = list(
             re.finditer(r'"([^"]*)"', expression or '', flags=re.MULTILINE)
@@ -936,6 +921,7 @@ class GrizzlyLanguageServer(LanguageServer):
                     matched_step = f'{matched_step[0:output_match.start()+offset]}"{input_match.group(1)}"{matched_step[output_match.end()+offset:]}'
                     offset += len(input_match.group(1))
 
+            start = lsp.Position(line=position.line, character=position.character)
             preselect: bool = False
             if (
                 expression is not None
@@ -952,6 +938,18 @@ class GrizzlyLanguageServer(LanguageServer):
                         pass
             else:
                 new_text = matched_step
+
+            # if matched step doesn't start what the user already had typed or we haven't removed
+            # expression from matched step, we need to replace what already had been typed
+            if (
+                expression is not None
+                and not new_text.startswith(expression)
+                or new_text == matched_step
+            ):
+                character = start.character - len(str(expression))
+                character = 0 if character < 0 else character
+                start.character = character
+                self.logger.debug(f'!! {character=}, {expression=}, {new_text=}')
 
             # do not suggest the step that is already written
             if matched_step == expression:
@@ -984,20 +982,20 @@ class GrizzlyLanguageServer(LanguageServer):
                     new_text = f'{new_text[0:snippet_match.start()+offset]}"{snippet_placeholder}"{new_text[snippet_match.end()+offset:]}'
                     offset += len(snippet_placeholder)
 
-                insert_text_format = InsertTextFormat.Snippet
+                insert_text_format = lsp.InsertTextFormat.Snippet
             else:
-                insert_text_format = InsertTextFormat.PlainText
+                insert_text_format = lsp.InsertTextFormat.PlainText
 
-            text_edit = TextEdit(
-                range=Range(start=position, end=position),
+            text_edit = lsp.TextEdit(
+                range=lsp.Range(start=start, end=position),
                 new_text=new_text,
             )
 
             matched_steps_container.update(
                 {
-                    matched_step: CompletionItem(
+                    matched_step: lsp.CompletionItem(
                         label=matched_step,
-                        kind=CompletionItemKind.Function,
+                        kind=lsp.CompletionItemKind.Function,
                         documentation=self._find_help(f'{keyword} {matched_step}'),
                         deprecated=False,
                         preselect=preselect,
@@ -1031,7 +1029,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
         if len(errors) > 0:
             for message in errors:
-                self.show_message(message, msg_type=MessageType.Error)
+                self.show_message(message, msg_type=lsp.MessageType.Error)
 
         return patterns
 
@@ -1044,14 +1042,14 @@ class GrizzlyLanguageServer(LanguageServer):
             )
         except ModuleNotFoundError:
             self.show_message(
-                'unable to load behave step expressions', msg_type=MessageType.Error
+                'unable to load behave step expressions', msg_type=lsp.MessageType.Error
             )
             return
 
         try:
             self.normalizer = create_step_normalizer()
         except ValueError as e:
-            self.show_message(str(e), msg_type=MessageType.Error)
+            self.show_message(str(e), msg_type=lsp.MessageType.Error)
             return
 
         self._compile_step_inventory()
@@ -1142,7 +1140,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
                 self.keywords.append(value.strip())
 
-    def _current_line(self, uri: str, position: Position) -> str:
+    def _current_line(self, uri: str, position: lsp.Position) -> str:
         document = self.workspace.get_text_document(uri)
         content = document.source
         line = content.split('\n')[position.line]
