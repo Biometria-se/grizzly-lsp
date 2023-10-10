@@ -1,5 +1,6 @@
 import logging
 import re
+import inspect
 
 from typing import Optional, Dict, Any, List, cast
 from pathlib import Path
@@ -37,6 +38,7 @@ from lsprotocol.types import (
     InitializeParams,
     LocationLink,
     Position,
+    Range,
     HoverParams,
     TextDocumentItem,
     TextDocumentIdentifier,
@@ -49,7 +51,8 @@ from behave.matchers import ParseMatcher
 from .fixtures import LspFixture
 from .helpers import normalize_completion_item, normalize_completion_text_edit
 from grizzly_ls import __version__
-from grizzly_ls.server import GrizzlyLanguageServer, Progress
+from grizzly_ls.server import GrizzlyLanguageServer, Step
+from grizzly_ls.progress import Progress
 
 
 def test_progress(lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
@@ -758,8 +761,6 @@ class TestGrizzlyLanguageServer:
         for keyword in ['given', 'then', 'when']:
             assert keyword in keywords
 
-        assert len(server.help.keys()) >= 0
-
     def test__compile_keyword_inventory(self, lsp_fixture: LspFixture) -> None:
         server = lsp_fixture.server
 
@@ -832,16 +833,31 @@ class TestGrizzlyLanguageServer:
     def test__find_help(self, lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
         server = lsp_fixture.server
 
-        server.help = {
-            'hello world': 'this is the help for hello world',
-            'hello ""': 'this is the help for hello world parameterized',
-            'foo bar': 'this is the help for foo bar',
-            '"" bar': 'this is the help for foo bar parameterized',
+        def noop() -> None:
+            pass
+
+        server.steps = {
+            'then': [
+                Step('Then', 'hello world', noop, 'this is the help for hello world'),
+            ],
+            'step': [
+                Step(
+                    'And',
+                    'hello ""',
+                    noop,
+                    'this is the help for hello world parameterized',
+                ),
+                Step('But', 'foo bar', noop, 'this is the help for foo bar'),
+                Step(
+                    'But', '"" bar', noop, 'this is the help for foo bar parameterized'
+                ),
+            ],
         }
 
         assert (
             server._find_help('Then hello world') == 'this is the help for hello world'
         )
+        assert server._find_help('Then hello') == 'this is the help for hello world'
         assert server._find_help('asdfasdf') is None
         assert server._find_help('And hello') == 'this is the help for hello world'
         assert (
@@ -1614,46 +1630,91 @@ Args:
 
             assert response is None
 
-        def test_definition(self, lsp_fixture: LspFixture) -> None:
+        def test_definition(
+            self, lsp_fixture: LspFixture, caplog: LogCaptureFixture
+        ) -> None:
             client = lsp_fixture.client
 
+            content = '''Feature:
+    Scenario: test
+        Given a user of type "RestApi" load testing "http://localhost"
+        Then post request "test/test.txt" with name "test request" to endpoint "/api/test"
+    '''
+            # <!-- hover "Scenario", no definition
             response = self._definition(
-                client, lsp_fixture.datadir, Position(line=2, character=30)
+                client,
+                lsp_fixture.datadir,
+                Position(line=1, character=9),
+                content,
             )
 
             assert response is None
+            # // -->
 
+            # <!-- hover the first variable in "Given a user of type..."
+            response = self._definition(
+                client,
+                lsp_fixture.datadir,
+                Position(line=2, character=30),
+                content,
+            )
+
+            assert response is not None
+            assert len(response) == 1
+            actual_definition = response[0]
+
+            from grizzly.steps.scenario.user import step_user_type
+
+            file_location = Path(inspect.getfile(step_user_type))
+            _, lineno = inspect.getsourcelines(step_user_type)
+
+            print(f'{actual_definition=}')
+            assert actual_definition.target_uri == file_location.as_uri()
+            assert actual_definition.target_range == Range(
+                start=Position(line=lineno, character=0),
+                end=Position(line=lineno, character=0),
+            )
+            assert (
+                actual_definition.target_range
+                == actual_definition.target_selection_range
+            )
+            assert actual_definition.origin_selection_range == Range(
+                start=Position(line=2, character=8), end=Position(line=2, character=70)
+            )
+            # // -->
+
+            # <!-- hover "test/test.txt" in "Then post a request..."
             request_payload_dir = lsp_fixture.datadir / 'features' / 'requests' / 'test'
             request_payload_dir.mkdir(exist_ok=True, parents=True)
             try:
                 test_txt_file = request_payload_dir / 'test.txt'
                 test_txt_file.write_text('hello world!')
-                response = self._definition(
-                    client,
-                    lsp_fixture.datadir,
-                    Position(line=3, character=20),
-                    content='''Feature:
-  Scenario: test
-    Given a user of type "RestApi" load testing "http://localhost"
-    Then post request "test/test.txt" with name "test request" to endpoint "/api/test"
-''',
-                )
+                with caplog.at_level(logging.DEBUG):
+                    lsp_logger = logging.getLogger('pygls')
+                    lsp_logger.setLevel(logging.CRITICAL)
+                    response = self._definition(
+                        client,
+                        lsp_fixture.datadir,
+                        Position(line=3, character=27),
+                        content,
+                    )
                 assert response is not None
                 assert len(response) == 1
                 actual_definition = response[0]
                 assert actual_definition.target_uri == test_txt_file.as_uri()
-                assert actual_definition.target_range.start.line == 0
-                assert actual_definition.target_range.start.character == 0
-                assert actual_definition.target_range.end.line == 0
-                assert actual_definition.target_range.end.character == 0
-                assert actual_definition.target_selection_range.start.line == 0
-                assert actual_definition.target_selection_range.start.character == 0
-                assert actual_definition.target_selection_range.end.line == 0
-                assert actual_definition.target_selection_range.end.character == 0
+                assert actual_definition.target_range == Range(
+                    start=Position(line=0, character=0),
+                    end=Position(line=0, character=0),
+                )
+                assert (
+                    actual_definition.target_selection_range
+                    == actual_definition.target_range
+                )
                 assert actual_definition.origin_selection_range is not None
-                assert actual_definition.origin_selection_range.start.line == 3
-                assert actual_definition.origin_selection_range.start.character == 23
-                assert actual_definition.origin_selection_range.end.line == 3
-                assert actual_definition.origin_selection_range.end.character == 36
+                assert actual_definition.origin_selection_range == Range(
+                    start=Position(line=3, character=27),
+                    end=Position(line=3, character=40),
+                )
+            # // -->
             finally:
                 rmtree(request_payload_dir)
