@@ -1,5 +1,6 @@
 import logging
 import re
+import inspect
 
 from typing import Optional, Dict, Any, List, cast
 from pathlib import Path
@@ -37,6 +38,7 @@ from lsprotocol.types import (
     InitializeParams,
     LocationLink,
     Position,
+    Range,
     HoverParams,
     TextDocumentItem,
     TextDocumentIdentifier,
@@ -1628,46 +1630,91 @@ Args:
 
             assert response is None
 
-        def test_definition(self, lsp_fixture: LspFixture) -> None:
+        def test_definition(
+            self, lsp_fixture: LspFixture, caplog: LogCaptureFixture
+        ) -> None:
             client = lsp_fixture.client
 
+            content = '''Feature:
+    Scenario: test
+        Given a user of type "RestApi" load testing "http://localhost"
+        Then post request "test/test.txt" with name "test request" to endpoint "/api/test"
+    '''
+            # <!-- hover "Scenario", no definition
             response = self._definition(
-                client, lsp_fixture.datadir, Position(line=2, character=30)
+                client,
+                lsp_fixture.datadir,
+                Position(line=1, character=9),
+                content,
             )
 
             assert response is None
+            # // -->
 
+            # <!-- hover the first variable in "Given a user of type..."
+            response = self._definition(
+                client,
+                lsp_fixture.datadir,
+                Position(line=2, character=30),
+                content,
+            )
+
+            assert response is not None
+            assert len(response) == 1
+            actual_definition = response[0]
+
+            from grizzly.steps.scenario.user import step_user_type
+
+            file_location = Path(inspect.getfile(step_user_type))
+            _, lineno = inspect.getsourcelines(step_user_type)
+
+            print(f'{actual_definition=}')
+            assert actual_definition.target_uri == file_location.as_uri()
+            assert actual_definition.target_range == Range(
+                start=Position(line=lineno, character=0),
+                end=Position(line=lineno, character=0),
+            )
+            assert (
+                actual_definition.target_range
+                == actual_definition.target_selection_range
+            )
+            assert actual_definition.origin_selection_range == Range(
+                start=Position(line=2, character=8), end=Position(line=2, character=70)
+            )
+            # // -->
+
+            # <!-- hover "test/test.txt" in "Then post a request..."
             request_payload_dir = lsp_fixture.datadir / 'features' / 'requests' / 'test'
             request_payload_dir.mkdir(exist_ok=True, parents=True)
             try:
                 test_txt_file = request_payload_dir / 'test.txt'
                 test_txt_file.write_text('hello world!')
-                response = self._definition(
-                    client,
-                    lsp_fixture.datadir,
-                    Position(line=3, character=20),
-                    content='''Feature:
-  Scenario: test
-    Given a user of type "RestApi" load testing "http://localhost"
-    Then post request "test/test.txt" with name "test request" to endpoint "/api/test"
-''',
-                )
+                with caplog.at_level(logging.DEBUG):
+                    lsp_logger = logging.getLogger('pygls')
+                    lsp_logger.setLevel(logging.CRITICAL)
+                    response = self._definition(
+                        client,
+                        lsp_fixture.datadir,
+                        Position(line=3, character=27),
+                        content,
+                    )
                 assert response is not None
                 assert len(response) == 1
                 actual_definition = response[0]
                 assert actual_definition.target_uri == test_txt_file.as_uri()
-                assert actual_definition.target_range.start.line == 0
-                assert actual_definition.target_range.start.character == 0
-                assert actual_definition.target_range.end.line == 0
-                assert actual_definition.target_range.end.character == 0
-                assert actual_definition.target_selection_range.start.line == 0
-                assert actual_definition.target_selection_range.start.character == 0
-                assert actual_definition.target_selection_range.end.line == 0
-                assert actual_definition.target_selection_range.end.character == 0
+                assert actual_definition.target_range == Range(
+                    start=Position(line=0, character=0),
+                    end=Position(line=0, character=0),
+                )
+                assert (
+                    actual_definition.target_selection_range
+                    == actual_definition.target_range
+                )
                 assert actual_definition.origin_selection_range is not None
-                assert actual_definition.origin_selection_range.start.line == 3
-                assert actual_definition.origin_selection_range.start.character == 23
-                assert actual_definition.origin_selection_range.end.line == 3
-                assert actual_definition.origin_selection_range.end.character == 36
+                assert actual_definition.origin_selection_range == Range(
+                    start=Position(line=3, character=27),
+                    end=Position(line=3, character=40),
+                )
+            # // -->
             finally:
                 rmtree(request_payload_dir)

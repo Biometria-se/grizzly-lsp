@@ -6,6 +6,7 @@ import platform
 import signal
 import re
 import sys
+import inspect
 
 from os import environ, linesep
 from os.path import pathsep, sep
@@ -520,13 +521,16 @@ class GrizzlyLanguageServer(LanguageServer):
             current_line = self._current_line(params.text_document.uri, params.position)
             definitions: List[LocationLink] = []
 
+            self.logger.debug(f'{TEXT_DOCUMENT_DEFINITION}: {params=}')
+
             file_url_definitions = self._get_file_url_definition(params, current_line)
-            step_definition = self._get_step_definition(params, current_line)
 
             if len(file_url_definitions) > 0:
                 definitions = file_url_definitions
-            elif step_definition is not None:
-                definitions = [step_definition]
+            else:
+                step_definition = self._get_step_definition(params, current_line)
+                if step_definition is not None:
+                    definitions = [step_definition]
 
             return definitions if len(definitions) > 0 else None
 
@@ -590,8 +594,6 @@ class GrizzlyLanguageServer(LanguageServer):
                 if step.expression != expression:
                     continue
 
-                import inspect
-
                 file_location = inspect.getfile(step.func)
                 _, lineno = inspect.getsourcelines(step.func)
                 self.logger.debug(f'!! {step=}, {file_location=}, {lineno=}')
@@ -637,6 +639,7 @@ class GrizzlyLanguageServer(LanguageServer):
                 file_match = re.search(r'.*(file:\/\/)([^\$]*)', variable_value)
                 if not file_match:
                     continue
+
                 file_url = f'{file_match.group(1)}{file_match.group(2)}'
 
                 if sys.platform == 'win32':
