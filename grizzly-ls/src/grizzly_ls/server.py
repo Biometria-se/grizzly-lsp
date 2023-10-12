@@ -74,6 +74,7 @@ class GrizzlyLanguageServer(LanguageServer):
     FEATURE_INSTALL = 'grizzly-ls/install'
 
     MARKER_LANGUAGE = '# language:'
+    MARKER_NO_STEP_IMPL = 'No step implementation found for:'
 
     logger: logging.Logger = logging.getLogger(__name__)
 
@@ -308,7 +309,6 @@ class GrizzlyLanguageServer(LanguageServer):
                         # always restore to original value
                         sys.path.pop()
 
-            self.logger.debug(f'!! {params=} {params.external=}')
             document = self.workspace.get_text_document(params.external)
             diagnostics = self._validate_gherkin(document)
             self.publish_diagnostics(document.uri, diagnostics)  # type: ignore
@@ -413,6 +413,23 @@ class GrizzlyLanguageServer(LanguageServer):
                 variable_pattern = f'({"|".join(normalized_variable_patterns)})'
                 self.variable_pattern = re.compile(variable_pattern)
             # // -->
+
+            # <!-- quick fix structure
+            quick_fix = self.client_settings.get('quick_fix', None)
+            if quick_fix is None:
+                self.client_settings.update({'quick_fix': {}})
+            # // -->
+
+            # <!-- missing step impl template
+            step_impl_template = self.client_settings['quick_fix'].get(
+                'step_impl_template', None
+            )
+            if step_impl_template is None or len(step_impl_template.strip()) == 0:
+                step_impl_template = "@{keyword}(u'{expression}')"
+                self.client_settings['quick_fix'].update(
+                    {'step_impl_template': step_impl_template}
+                )
+            # // ->
 
         @self.feature(lsp.TEXT_DOCUMENT_COMPLETION)
         def text_document_completion(
@@ -605,6 +622,18 @@ class GrizzlyLanguageServer(LanguageServer):
                 ]
             )
 
+        @self.feature(lsp.TEXT_DOCUMENT_CODE_ACTION)
+        def text_document_code_action(
+            params: lsp.CodeActionParams,
+        ) -> Optional[List[Union[lsp.Command, lsp.CodeAction]]]:
+            diagnostics = params.context.diagnostics
+            document = self.workspace.get_text_document(params.text_document.uri)
+
+            if len(diagnostics) == 0:
+                return None
+            else:
+                return self._generate_quick_fixes(diagnostics, document)
+
     @property
     def language(self) -> str:
         return self._language
@@ -711,11 +740,9 @@ class GrizzlyLanguageServer(LanguageServer):
             # ignore any lines that comes between free text, or empty lines, or lines that could be a table
             if stripped_line == '"""' or stripped_line.count('|') >= 2:
                 ignoring = not ignoring
-                self.logger.debug(f'{ignoring=}')
                 continue
 
             if ignoring:
-                self.logger.debug(f'!! ignoring: {line}')
                 continue
 
             position = len(line) - len(stripped_line)
@@ -801,9 +828,6 @@ class GrizzlyLanguageServer(LanguageServer):
                 expression_shell = re.sub(r'"[^"]*"', '""', expression)
 
                 for step in self.steps.get(lang_key, []):
-                    self.logger.debug(
-                        f'{lang_key=}, {step.expression=} {(step.expression == expression_shell)}'
-                    )
                     if step.expression == expression_shell:
                         found_step = True
                         break
@@ -817,7 +841,7 @@ class GrizzlyLanguageServer(LanguageServer):
                                 ),
                                 end=lsp.Position(line=lineno, character=len(line)),
                             ),
-                            message=f'No step implementation found for:\n{stripped_line}',
+                            message=f'{self.MARKER_NO_STEP_IMPL}\n{stripped_line}',
                             severity=lsp.DiagnosticSeverity.Warning,
                             source=self.__class__.__name__,
                         )
@@ -893,6 +917,88 @@ class GrizzlyLanguageServer(LanguageServer):
         line_map = {}
 
         return diagnostics
+
+    def _generate_quick_fixes(
+        self, diagnostics: List[lsp.Diagnostic], document: Document
+    ) -> Optional[List[Union[lsp.Command, lsp.CodeAction]]]:
+        quick_fixes: Optional[List[Union[lsp.Command, lsp.CodeAction]]] = []
+
+        files = sorted(
+            [
+                file
+                for file in self.root_path.rglob('*.py')
+                if file.name in ['environment.py', 'steps.py']
+            ],
+            reverse=True,
+        )
+
+        quick_fix_file: Optional[Path] = files[0] if len(files) > 0 else None
+
+        step_impl_template = self.client_settings.get('quick_fix', {}).get(
+            'step_impl_template', None
+        )
+
+        for diagnostic in diagnostics:
+            if (
+                diagnostic.message.startswith(self.MARKER_NO_STEP_IMPL)
+                and quick_fix_file is not None
+                and step_impl_template is not None
+            ):
+                _, expression = diagnostic.message.split('\n', 1)
+                keyword, expression = get_step_parts(expression)
+                if keyword is None or expression is None:
+                    continue
+
+                try:
+                    keyword_key = self._get_language_key(keyword)
+
+                    variable_matches = list(
+                        re.finditer(r'"([^"]*)"', expression or '', flags=re.MULTILINE)
+                    )
+
+                    if variable_matches:
+                        pass
+
+                    new_text = '''
+{step_impl_template}
+def step_impl(context: Context) -> None:
+    raise NotImplementedError('no step implementation, yet')
+'''.format(
+                        step_impl_template=step_impl_template.format(
+                            keyword=keyword_key, expression=expression
+                        )
+                    )
+
+                    self.logger.debug(f'{step_impl_template=}, new_text=\n{new_text}')
+
+                    target_source = quick_fix_file.read_text().splitlines()
+                    position = lsp.Position(line=len(target_source), character=0)
+
+                    quick_fixes.append(
+                        lsp.CodeAction(
+                            title='Create step implementation',
+                            kind=lsp.CodeActionKind.QuickFix,
+                            edit=lsp.WorkspaceEdit(
+                                changes={
+                                    str(quick_fix_file): [
+                                        lsp.TextEdit(
+                                            range=lsp.Range(
+                                                start=position,
+                                                end=position,
+                                            ),
+                                            new_text=new_text,
+                                        )
+                                    ]
+                                }
+                            ),
+                            diagnostics=[diagnostic],
+                            disabled=True,
+                        )
+                    )
+                except ValueError:
+                    pass
+
+        return quick_fixes if len(quick_fixes) > 0 else None
 
     def _get_file_url_definition(
         self,

@@ -2,7 +2,7 @@ import sys
 import argparse
 import logging
 
-from typing import NoReturn, List
+from typing import List, Optional
 
 from .server import GrizzlyLanguageServer
 
@@ -78,16 +78,23 @@ def setup_logging(args: argparse.Namespace) -> None:
         handlers=handlers,
     )
 
-    if args.no_verbose is not None:
-        for logger_name in args.no_verbose:
-            if logger_name in logging.Logger.manager.loggerDict:
-                logger = logging.getLogger(logger_name)
-                logger.setLevel(logging.CRITICAL)
-            else:
-                print(f'!! logger "{logger_name}" does not exist', file=sys.stderr)
+    no_verbose: Optional[List[str]] = args.no_verbose
+
+    if no_verbose is None:
+        no_verbose = []
+
+    # always supress parse logger
+    no_verbose.append('parse')
+
+    for logger_name in no_verbose:
+        if logger_name in logging.Logger.manager.loggerDict:
+            logger = logging.getLogger(logger_name)
+            logger.setLevel(logging.CRITICAL)
+        else:
+            print(f'!! logger "{logger_name}" does not exist', file=sys.stderr)
 
 
-def main() -> NoReturn:  # type: ignore
+def main() -> None:
     args = parse_arguments()
 
     setup_logging(args)
@@ -101,4 +108,4 @@ def main() -> NoReturn:  # type: ignore
 
 
 if __name__ == '__main__':  # pragma: no cover
-    sys.exit(main())
+    main()
