@@ -39,7 +39,7 @@ from dataclasses import dataclass, field
 import gevent.monkey  # type: ignore
 
 from pygls.server import LanguageServer
-from pygls.workspace import Document
+from pygls.workspace import TextDocument
 from pygls.capabilities import get_capability
 from lsprotocol import types as lsp
 
@@ -57,7 +57,7 @@ from . import __version__
 
 
 FeatureInstallParams = NamedTuple(
-    'Object',
+    'FeatureInstallParams',
     [('fsPath', str), ('external', str), ('path', str), ('scheme', str)],
 )
 
@@ -482,7 +482,9 @@ class GrizzlyLanguageServer(LanguageServer):
         def workspace_did_change_configuration(
             params: lsp.DidChangeConfigurationParams,
         ) -> None:
-            self.logger.debug(f'{lsp.WORKSPACE_DID_CHANGE_CONFIGURATION}: {params=}')
+            self.logger.debug(
+                f'{lsp.WORKSPACE_DID_CHANGE_CONFIGURATION}: {params=}'
+            )  # pragma: no cover
 
         @self.feature(lsp.TEXT_DOCUMENT_HOVER)
         def text_document_hover(params: lsp.HoverParams) -> Optional[lsp.Hover]:
@@ -541,7 +543,10 @@ class GrizzlyLanguageServer(LanguageServer):
         @self.feature(lsp.TEXT_DOCUMENT_DID_CHANGE)
         def text_document_did_change(params: lsp.DidChangeTextDocumentParams) -> None:
             document = self.workspace.get_text_document(params.text_document.uri)
-            self.language = self._find_language(document.source)
+            try:
+                self.language = self._find_language(document.source)
+            except ValueError:
+                pass
 
         @self.feature(lsp.TEXT_DOCUMENT_DID_OPEN)
         def text_document_did_open(params: lsp.DidOpenTextDocumentParams) -> None:
@@ -574,7 +579,9 @@ class GrizzlyLanguageServer(LanguageServer):
             if len(file_url_definitions) > 0:
                 definitions = file_url_definitions
             else:
-                step_definition = self._get_step_definition(params, current_line)
+                step_definition = self._get_step_definition(
+                    params.position, current_line
+                )
                 if step_definition is not None:
                     definitions = [step_definition]
 
@@ -680,7 +687,7 @@ class GrizzlyLanguageServer(LanguageServer):
         return None
 
     def _get_step_definition(
-        self, params: lsp.DefinitionParams, current_line: str
+        self, position: lsp.Position, current_line: str
     ) -> Optional[lsp.LocationLink]:
         step_definition: Optional[lsp.LocationLink] = None
 
@@ -708,11 +715,11 @@ class GrizzlyLanguageServer(LanguageServer):
                     target_selection_range=range,
                     origin_selection_range=lsp.Range(
                         start=lsp.Position(
-                            line=params.position.line,
+                            line=position.line,
                             character=(len(current_line) - len(current_line.lstrip())),
                         ),
                         end=lsp.Position(
-                            line=params.position.line,
+                            line=position.line,
                             character=len(current_line),
                         ),
                     ),
@@ -723,7 +730,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
         return step_definition
 
-    def _validate_gherkin(self, document: Document) -> List[lsp.Diagnostic]:
+    def _validate_gherkin(self, text_document: TextDocument) -> List[lsp.Diagnostic]:
         diagnostics: List[lsp.Diagnostic] = []
         line_map: Dict[str, str] = {}
 
@@ -731,7 +738,7 @@ class GrizzlyLanguageServer(LanguageServer):
         language: str = 'en'
         zero_line_length = 0
 
-        for lineno, line in enumerate(document.source.splitlines()):
+        for lineno, line in enumerate(text_document.source.splitlines()):
             if lineno == 0:
                 zero_line_length = len(line)
 
@@ -752,7 +759,7 @@ class GrizzlyLanguageServer(LanguageServer):
             if stripped_line.startswith(self.MARKER_LANGUAGE):
                 try:
                     marker, language = line.split(': ', 1)
-                    ## does not exist
+                    # does not exist
                     if len(language.strip()) > 0 and language.strip() not in languages:
                         marker_position = len(marker) + 2
                         diagnostics.append(
@@ -839,7 +846,7 @@ class GrizzlyLanguageServer(LanguageServer):
                                 start=lsp.Position(
                                     line=lineno, character=len(line) - len(expression)
                                 ),
-                                end=lsp.Position(line=lineno, character=len(line)),
+                                end=lsp.Position(line=lineno, character=len(line) - 1),
                             ),
                             message=f'{self.MARKER_NO_STEP_IMPL}\n{stripped_line}',
                             severity=lsp.DiagnosticSeverity.Warning,
@@ -850,7 +857,7 @@ class GrizzlyLanguageServer(LanguageServer):
         # make sure behave can parse it
         try:
             parse_feature(
-                document.source, language=language, filename=document.filename
+                text_document.source, language=language, filename=text_document.filename
             )
         except ParserError as pe:
             character = (
@@ -862,7 +869,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
             # Remove static strings composed by ParserError.__str__
             message = re.sub(
-                rf'Failed to parse ("[^"]*"|\<string\>):', '', message
+                r'Failed to parse ("[^"]*"|\<string\>):', '', message
             ).strip()
 
             # remove line_text from message
@@ -900,7 +907,7 @@ class GrizzlyLanguageServer(LanguageServer):
                         start=lsp.Position(line=pe.line or 0, character=character),
                         end=lsp.Position(
                             line=pe.line or 0,
-                            character=len(pe.line_text)
+                            character=len(pe.line_text) - 1
                             if pe.line_text is not None
                             else zero_line_length,
                         ),
@@ -919,9 +926,9 @@ class GrizzlyLanguageServer(LanguageServer):
         return diagnostics
 
     def _generate_quick_fixes(
-        self, diagnostics: List[lsp.Diagnostic], document: Document
+        self, diagnostics: List[lsp.Diagnostic], text_document: TextDocument
     ) -> Optional[List[Union[lsp.Command, lsp.CodeAction]]]:
-        quick_fixes: Optional[List[Union[lsp.Command, lsp.CodeAction]]] = []
+        quick_fixes: List[Union[lsp.Command, lsp.CodeAction]] = []
 
         files = sorted(
             [
@@ -944,8 +951,8 @@ class GrizzlyLanguageServer(LanguageServer):
                 and quick_fix_file is not None
                 and step_impl_template is not None
             ):
-                _, expression = diagnostic.message.split('\n', 1)
-                keyword, expression = get_step_parts(expression)
+                _, message_expression = diagnostic.message.split('\n', 1)
+                keyword, expression = get_step_parts(message_expression)
                 if keyword is None or expression is None:
                     continue
 
@@ -969,8 +976,6 @@ def step_impl(context: Context) -> None:
                         )
                     )
 
-                    self.logger.debug(f'{step_impl_template=}, new_text=\n{new_text}')
-
                     target_source = quick_fix_file.read_text().splitlines()
                     position = lsp.Position(line=len(target_source), character=0)
 
@@ -992,7 +997,9 @@ def step_impl(context: Context) -> None:
                                 }
                             ),
                             diagnostics=[diagnostic],
-                            disabled=True,
+                            disabled=lsp.CodeActionDisabledType(
+                                reason='not applicable'
+                            ),
                         )
                     )
                 except ValueError:
@@ -1108,10 +1115,13 @@ def step_impl(context: Context) -> None:
         return language.strip()
 
     def _complete_keyword(
-        self, keyword: Optional[str], position: lsp.Position, document: Document
+        self,
+        keyword: Optional[str],
+        position: lsp.Position,
+        text_document: TextDocument,
     ) -> List[lsp.CompletionItem]:
         items: List[lsp.CompletionItem] = []
-        if len(document.source.strip()) < 1:
+        if len(text_document.source.strip()) < 1:
             keywords = [*self.localizations.get('feature', [])]
         else:
             scenario_keywords = [
@@ -1121,7 +1131,7 @@ def step_impl(context: Context) -> None:
 
             if not any(
                 [
-                    scenario_keyword in document.source
+                    scenario_keyword in text_document.source
                     for scenario_keyword in scenario_keywords
                 ]
             ):
@@ -1130,7 +1140,7 @@ def step_impl(context: Context) -> None:
                 keywords = self.keywords.copy()
 
             for keyword_once in self.keywords_once:
-                if f'{keyword_once}:' not in document.source:
+                if f'{keyword_once}:' not in text_document.source:
                     keywords.append(keyword_once)
 
             # check for partial matches
@@ -1167,7 +1177,7 @@ def step_impl(context: Context) -> None:
     def _complete_variable_name(
         self,
         line: str,
-        document: Document,
+        text_document: TextDocument,
         position: lsp.Position,
         *,
         partial: Optional[str] = None,
@@ -1175,7 +1185,7 @@ def step_impl(context: Context) -> None:
         items: List[lsp.CompletionItem] = []
 
         # find `Scenario:` before current position
-        lines = document.source.splitlines()
+        lines = text_document.source.splitlines()
         before_lines = reversed(lines[0 : position.line])
 
         for before_line in before_lines:

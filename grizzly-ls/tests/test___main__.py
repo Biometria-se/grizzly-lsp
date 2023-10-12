@@ -1,7 +1,6 @@
 import sys
 import logging
 
-from typing import Callable, cast
 from argparse import Namespace
 
 import pytest
@@ -9,7 +8,7 @@ import pytest
 from _pytest.capture import CaptureFixture
 from pytest_mock import MockerFixture
 
-from grizzly_ls.__main__ import parse_arguments, setup_logging, main as _main
+from grizzly_ls.__main__ import parse_arguments, setup_logging, main
 
 
 def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
@@ -99,7 +98,8 @@ def test_setup_logging(mocker: MockerFixture, capsys: CaptureFixture[str]) -> No
     assert logging_FileHandler_mock.call_count == 1
     args, _ = logging_FileHandler_mock.call_args_list[-1]
     assert args[0] == 'grizzly-ls.log'
-    assert logging.getLogger('pygls').getEffectiveLevel() == logging.CRITICAL
+    assert logging.getLogger('pygls').getEffectiveLevel() == logging.ERROR
+    assert logging.getLogger('parse').getEffectiveLevel() == logging.ERROR
     capture = capsys.readouterr()
     assert capture.err == '!! logger "behave" does not exist\n'
     assert capture.out == ''
@@ -125,7 +125,6 @@ def test_setup_logging(mocker: MockerFixture, capsys: CaptureFixture[str]) -> No
 
 
 def test_main(mocker: MockerFixture) -> None:
-    main = cast(Callable[[], None], _main)
     mocker.patch(
         'grizzly_ls.__main__.setup_logging', return_value=None
     )  # no logging in test

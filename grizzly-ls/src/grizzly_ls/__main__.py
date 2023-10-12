@@ -83,13 +83,14 @@ def setup_logging(args: argparse.Namespace) -> None:
     if no_verbose is None:
         no_verbose = []
 
-    # always supress parse logger
+    # always supress these loggers
     no_verbose.append('parse')
+    no_verbose.append('pip')
 
     for logger_name in no_verbose:
         if logger_name in logging.Logger.manager.loggerDict:
             logger = logging.getLogger(logger_name)
-            logger.setLevel(logging.CRITICAL)
+            logger.setLevel(logging.ERROR)
         else:
             print(f'!! logger "{logger_name}" does not exist', file=sys.stderr)
 

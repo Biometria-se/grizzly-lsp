@@ -20,6 +20,10 @@ async function main() {
 
         const testWorkspace: string = path.resolve(__dirname, '../../../../tests/project');
 
+        const args = process.argv.slice(2);
+
+        process.env['TESTS'] = `${args}`;
+
         // Download VS Code, unzip it and run the integration test
         await runTests({
             extensionDevelopmentPath,
