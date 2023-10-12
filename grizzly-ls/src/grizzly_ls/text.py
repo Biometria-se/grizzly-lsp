@@ -29,7 +29,7 @@ try:
         MAX_REPEAT,
         SUBPATTERN,
     )
-except ImportError:
+except ImportError:  # pragma: no cover
     from sre_constants import (
         _NamedIntConstant as SreNamedIntConstant,
         ANY,
@@ -41,7 +41,7 @@ except ImportError:
 
 try:
     from re._parser import parse as sre_parse, SubPattern  # type: ignore
-except ImportError:
+except ImportError:  # pragma: no cover
     from sre_parse import SubPattern, parse as sre_parse  # type: ignore
 
 
@@ -364,15 +364,13 @@ def get_step_parts(line: str) -> Tuple[Optional[str], Optional[str]]:
         # remove multiple white spaces
         line = re.sub(r'^\s+', '', line)
         line = re.sub(r'\s{2,}', ' ', line)
-        if sys.platform == 'win32':
+        if sys.platform == 'win32':  # pragma: no cover
             line = line.replace('\r', '')
 
         try:
             keyword, step = line.split(' ', 1)
-            step = step
         except ValueError:
-            keyword = line
-            step = None
+            keyword, step = line, None
         keyword = keyword.strip()
     else:
         keyword, step = None, None

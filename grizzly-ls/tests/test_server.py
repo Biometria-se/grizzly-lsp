@@ -18,34 +18,9 @@ gevent.monkey.patch_all = lambda: None
 from _pytest.logging import LogCaptureFixture
 from pytest_mock import MockerFixture
 
-from pygls.workspace import Workspace, Document
+from pygls.workspace import Workspace, TextDocument
 from pygls.server import LanguageServer
-from lsprotocol.types import (
-    TEXT_DOCUMENT_COMPLETION,
-    INITIALIZE,
-    TEXT_DOCUMENT_DID_OPEN,
-    TEXT_DOCUMENT_HOVER,
-    TEXT_DOCUMENT_DEFINITION,
-    Hover,
-    ClientCapabilities,
-    CompletionContext,
-    CompletionParams,
-    CompletionItemKind,
-    CompletionList,
-    CompletionItem,
-    DidOpenTextDocumentParams,
-    DefinitionParams,
-    InitializeParams,
-    LocationLink,
-    Position,
-    Range,
-    HoverParams,
-    TextDocumentItem,
-    TextDocumentIdentifier,
-    MarkupKind,
-    MarkupContent,
-    MessageType,
-)
+from lsprotocol import types as lsp
 from behave.matchers import ParseMatcher
 
 from .fixtures import LspFixture
@@ -176,47 +151,59 @@ class TestGrizzlyLanguageServer:
         with caplog.at_level(logging.INFO):
             server.show_message(message)
         assert caplog.messages == [message]
-        show_message_mock.assert_called_once_with(message, msg_type=MessageType.Info)
+        show_message_mock.assert_called_once_with(
+            message, msg_type=lsp.MessageType.Info
+        )
         show_message_mock.reset_mock()
         caplog.clear()
 
         message = 'explicit INFO level'
         with caplog.at_level(logging.INFO):
-            server.show_message(message, MessageType.Info)
+            server.show_message(message, lsp.MessageType.Info)
         assert caplog.messages == [message]
-        show_message_mock.assert_called_once_with(message, msg_type=MessageType.Info)
+        show_message_mock.assert_called_once_with(
+            message, msg_type=lsp.MessageType.Info
+        )
         show_message_mock.reset_mock()
         caplog.clear()
 
         message = 'ERROR level'
         with caplog.at_level(logging.ERROR):
-            server.show_message(message, MessageType.Error)
+            server.show_message(message, lsp.MessageType.Error)
         assert caplog.messages == [message]
-        show_message_mock.assert_called_once_with(message, msg_type=MessageType.Error)
+        show_message_mock.assert_called_once_with(
+            message, msg_type=lsp.MessageType.Error
+        )
         show_message_mock.reset_mock()
         caplog.clear()
 
         message = 'WARNING level'
         with caplog.at_level(logging.WARNING):
-            server.show_message(message, MessageType.Warning)
+            server.show_message(message, lsp.MessageType.Warning)
         assert caplog.messages == [message]
-        show_message_mock.assert_called_once_with(message, msg_type=MessageType.Warning)
+        show_message_mock.assert_called_once_with(
+            message, msg_type=lsp.MessageType.Warning
+        )
         show_message_mock.reset_mock()
         caplog.clear()
 
         message = 'DEBUG level'
         with caplog.at_level(logging.DEBUG):
-            server.show_message(message, MessageType.Debug)
+            server.show_message(message, lsp.MessageType.Debug)
         assert caplog.messages == [message]
-        show_message_mock.assert_called_once_with(message, msg_type=MessageType.Debug)
+        show_message_mock.assert_called_once_with(
+            message, msg_type=lsp.MessageType.Debug
+        )
         show_message_mock.reset_mock()
         caplog.clear()
 
         message = 'CRITICAL level'
         with caplog.at_level(logging.CRITICAL):
-            server.show_message(message, MessageType.Debug)
+            server.show_message(message, lsp.MessageType.Debug)
         assert caplog.messages == []
-        show_message_mock.assert_called_once_with(message, msg_type=MessageType.Debug)
+        show_message_mock.assert_called_once_with(
+            message, msg_type=lsp.MessageType.Debug
+        )
         show_message_mock.reset_mock()
         caplog.clear()
 
@@ -239,29 +226,29 @@ class TestGrizzlyLanguageServer:
         server = lsp_fixture.server
         server._compile_inventory(grizzly_project.resolve(), 'project')
 
-        document = Document(
+        text_document = TextDocument(
             uri='dummy.feature',
             source='',
         )
 
-        null_position = Position(line=0, character=0)
+        null_position = lsp.Position(line=0, character=0)
 
         assert normalize_completion_item(
-            server._complete_keyword(None, null_position, document),
-            CompletionItemKind.Keyword,
+            server._complete_keyword(None, null_position, text_document),
+            lsp.CompletionItemKind.Keyword,
         ) == [
             'Feature',
         ]
 
-        document = Document(
+        text_document = TextDocument(
             uri='dummy.feature',
             source='Feature:',
         )
 
         assert sorted(
             normalize_completion_item(
-                server._complete_keyword(None, null_position, document),
-                CompletionItemKind.Keyword,
+                server._complete_keyword(None, null_position, text_document),
+                lsp.CompletionItemKind.Keyword,
             )
         ) == sorted(
             [
@@ -272,7 +259,7 @@ class TestGrizzlyLanguageServer:
             ]
         )
 
-        document = Document(
+        text_document = TextDocument(
             uri='dummy.feature',
             source='''Feature:
     Scenario:
@@ -281,8 +268,8 @@ class TestGrizzlyLanguageServer:
 
         assert sorted(
             normalize_completion_item(
-                server._complete_keyword(None, null_position, document),
-                CompletionItemKind.Keyword,
+                server._complete_keyword(None, null_position, text_document),
+                lsp.CompletionItemKind.Keyword,
             )
         ) == sorted(
             [
@@ -300,7 +287,7 @@ class TestGrizzlyLanguageServer:
             ]
         )
 
-        document = Document(
+        text_document = TextDocument(
             uri='dummy.feature',
             source='''Feature:
     Background:
@@ -311,8 +298,8 @@ class TestGrizzlyLanguageServer:
 
         assert sorted(
             normalize_completion_item(
-                server._complete_keyword(None, null_position, document),
-                CompletionItemKind.Keyword,
+                server._complete_keyword(None, null_position, text_document),
+                lsp.CompletionItemKind.Keyword,
             )
         ) == sorted(
             [
@@ -331,8 +318,10 @@ class TestGrizzlyLanguageServer:
 
         assert sorted(
             normalize_completion_item(
-                server._complete_keyword('EN', Position(line=0, character=2), document),
-                CompletionItemKind.Keyword,
+                server._complete_keyword(
+                    'EN', lsp.Position(line=0, character=2), text_document
+                ),
+                lsp.CompletionItemKind.Keyword,
             )
         ) == sorted(
             [
@@ -347,8 +336,10 @@ class TestGrizzlyLanguageServer:
         )
 
         assert normalize_completion_item(
-            server._complete_keyword('Giv', Position(line=0, character=4), document),
-            CompletionItemKind.Keyword,
+            server._complete_keyword(
+                'Giv', lsp.Position(line=0, character=4), text_document
+            ),
+            lsp.CompletionItemKind.Keyword,
         ) == [
             'Given',
         ]
@@ -363,9 +354,9 @@ class TestGrizzlyLanguageServer:
         with caplog.at_level(logging.DEBUG):
             matched_steps = normalize_completion_item(
                 server._complete_step(
-                    'Given', Position(line=0, character=6), 'variable'
+                    'Given', lsp.Position(line=0, character=6), 'variable'
                 ),
-                CompletionItemKind.Function,
+                lsp.CompletionItemKind.Function,
             )
 
             for expected_step in [
@@ -378,8 +369,10 @@ class TestGrizzlyLanguageServer:
                 assert expected_step in matched_steps
 
             matched_steps = normalize_completion_item(
-                server._complete_step('Then', Position(line=0, character=5), 'save'),
-                CompletionItemKind.Function,
+                server._complete_step(
+                    'Then', lsp.Position(line=0, character=5), 'save'
+                ),
+                lsp.CompletionItemKind.Function,
             )
             for expected_step in [
                 'save response metadata "" in variable ""',
@@ -396,10 +389,12 @@ class TestGrizzlyLanguageServer:
                 assert expected_step in matched_steps
 
             suggested_steps = server._complete_step(
-                'Then', Position(line=0, character=35), 'save response metadata "hello"'
+                'Then',
+                lsp.Position(line=0, character=35),
+                'save response metadata "hello"',
             )
             matched_steps = normalize_completion_item(
-                suggested_steps, CompletionItemKind.Function
+                suggested_steps, lsp.CompletionItemKind.Function
             )
 
             for expected_step in [
@@ -432,8 +427,8 @@ class TestGrizzlyLanguageServer:
                     )
 
             matched_steps = normalize_completion_item(
-                server._complete_step('When', Position(line=0, character=4), None),
-                CompletionItemKind.Function,
+                server._complete_step('When', lsp.Position(line=0, character=4), None),
+                lsp.CompletionItemKind.Function,
             )
 
             for expected_step in [
@@ -450,9 +445,9 @@ class TestGrizzlyLanguageServer:
 
             matched_steps = normalize_completion_item(
                 server._complete_step(
-                    'When', Position(line=0, character=13), 'response '
+                    'When', lsp.Position(line=0, character=13), 'response '
                 ),
-                CompletionItemKind.Function,
+                lsp.CompletionItemKind.Function,
             )
 
             for expected_step in [
@@ -466,9 +461,9 @@ class TestGrizzlyLanguageServer:
 
             matched_steps = normalize_completion_item(
                 server._complete_step(
-                    'When', Position(line=0, character=25), 'response fail request'
+                    'When', lsp.Position(line=0, character=25), 'response fail request'
                 ),
-                CompletionItemKind.Function,
+                lsp.CompletionItemKind.Function,
             )
 
             for expected_step in [
@@ -482,10 +477,10 @@ class TestGrizzlyLanguageServer:
             matched_steps = normalize_completion_item(
                 server._complete_step(
                     'When',
-                    Position(line=0, character=39),
+                    lsp.Position(line=0, character=39),
                     'response payload "" is fail request',
                 ),
-                CompletionItemKind.Function,
+                lsp.CompletionItemKind.Function,
             )
 
             for expected_step in [
@@ -497,10 +492,10 @@ class TestGrizzlyLanguageServer:
             matched_steps = normalize_completion_item(
                 server._complete_step(
                     'Given',
-                    Position(line=0, character=50),
+                    lsp.Position(line=0, character=50),
                     'a user of type "RestApi" with weight "1" load',
                 ),
-                CompletionItemKind.Function,
+                lsp.CompletionItemKind.Function,
             )
 
             assert len(matched_steps) == 1
@@ -510,12 +505,12 @@ class TestGrizzlyLanguageServer:
             )
 
             actual_completed_steps = server._complete_step(
-                'And', Position(line=0, character=20), 'repeat for "1" it'
+                'And', lsp.Position(line=0, character=20), 'repeat for "1" it'
             )
 
             matched_steps = normalize_completion_item(
                 actual_completed_steps,
-                CompletionItemKind.Function,
+                lsp.CompletionItemKind.Function,
             )
 
             assert sorted(matched_steps) == sorted(
@@ -523,18 +518,18 @@ class TestGrizzlyLanguageServer:
             )
 
             matched_text_edit = normalize_completion_text_edit(
-                actual_completed_steps, CompletionItemKind.Function
+                actual_completed_steps, lsp.CompletionItemKind.Function
             )
 
             assert sorted(matched_text_edit) == sorted(['iteration', 'iterations'])
 
             actual_completed_steps = server._complete_step(
-                'And', Position(line=0, character=16), 'repeat for "1"'
+                'And', lsp.Position(line=0, character=16), 'repeat for "1"'
             )
 
             matched_steps = normalize_completion_item(
                 actual_completed_steps,
-                CompletionItemKind.Function,
+                lsp.CompletionItemKind.Function,
             )
 
             assert sorted(matched_steps) == sorted(
@@ -542,18 +537,18 @@ class TestGrizzlyLanguageServer:
             )
 
             matched_text_edit = normalize_completion_text_edit(
-                actual_completed_steps, CompletionItemKind.Function
+                actual_completed_steps, lsp.CompletionItemKind.Function
             )
 
             assert sorted(matched_text_edit) == sorted([' iteration', ' iterations'])
 
             actual_completed_steps = server._complete_step(
-                'And', Position(line=0, character=17), 'repeat for "1" '
+                'And', lsp.Position(line=0, character=17), 'repeat for "1" '
             )
 
             matched_steps = normalize_completion_item(
                 actual_completed_steps,
-                CompletionItemKind.Function,
+                lsp.CompletionItemKind.Function,
             )
 
             assert sorted(matched_steps) == sorted(
@@ -561,14 +556,14 @@ class TestGrizzlyLanguageServer:
             )
 
             matched_text_edit = normalize_completion_text_edit(
-                actual_completed_steps, CompletionItemKind.Function
+                actual_completed_steps, lsp.CompletionItemKind.Function
             )
 
             assert sorted(matched_text_edit) == sorted(['iteration', 'iterations'])
 
             actual_completed_steps = server._complete_step(
                 'Then',
-                Position(line=0, character=38),
+                lsp.Position(line=0, character=38),
                 'parse date "{{ datetime.now() }}" ',
             )
             assert len(actual_completed_steps) == 1
@@ -581,7 +576,7 @@ class TestGrizzlyLanguageServer:
 
             actual_completed_steps = server._complete_step(
                 'Then',
-                Position(line=0, character=37),
+                lsp.Position(line=0, character=37),
                 'parse date "{{ datetime.now() }}"',
             )
             assert len(actual_completed_steps) == 1
@@ -786,7 +781,7 @@ class TestGrizzlyLanguageServer:
         mocker.patch.object(server.lsp, '_workspace', Workspace(''))
         mocker.patch(
             'tests.test_server.Workspace.get_text_document',
-            return_value=Document(
+            return_value=TextDocument(
                 'file://test.feature',
                 '''Feature:
     Scenario: test
@@ -798,25 +793,25 @@ class TestGrizzlyLanguageServer:
 
         assert (
             server._current_line(
-                'file://test.feature', Position(line=0, character=0)
+                'file://test.feature', lsp.Position(line=0, character=0)
             ).strip()
             == 'Feature:'
         )
         assert (
             server._current_line(
-                'file://test.feature', Position(line=1, character=543)
+                'file://test.feature', lsp.Position(line=1, character=543)
             ).strip()
             == 'Scenario: test'
         )
         assert (
             server._current_line(
-                'file://test.feature', Position(line=2, character=435)
+                'file://test.feature', lsp.Position(line=2, character=435)
             ).strip()
             == 'Then hello world!'
         )
         assert (
             server._current_line(
-                'file://test.feature', Position(line=3, character=534)
+                'file://test.feature', lsp.Position(line=3, character=534)
             ).strip()
             == 'But foo bar'
         )
@@ -824,7 +819,7 @@ class TestGrizzlyLanguageServer:
         with pytest.raises(IndexError) as ie:
             assert (
                 server._current_line(
-                    'file://test.feature', Position(line=10, character=10)
+                    'file://test.feature', lsp.Position(line=10, character=10)
                 ).strip()
                 == 'Then hello world!'
             )
@@ -870,6 +865,190 @@ class TestGrizzlyLanguageServer:
             == 'this is the help for foo bar parameterized'
         )
 
+    def test__validate_gherkin(
+        self, lsp_fixture: LspFixture, mocker: MockerFixture
+    ) -> None:
+        server = lsp_fixture.server
+
+        server.language = 'en'
+
+        # <!-- no language yet
+        text_document = TextDocument(
+            'file://test.feature',
+            '''# language:
+Feature:
+    Scenario: test
+''',
+        )
+        diagnostics = server._validate_gherkin(text_document)
+
+        assert diagnostics == []
+        # // -->
+
+        # <!-- language invalid + wrong line
+        text_document = TextDocument(
+            'file://test.feature',
+            '''
+# language: asdf
+Feature:
+    """
+    this is just a comment
+    """
+    Scenario: test
+''',
+        )
+        diagnostics = server._validate_gherkin(text_document)
+
+        assert len(diagnostics) == 2
+
+        # invalid language
+        diagnostic = diagnostics[0]
+        assert diagnostic.range == lsp.Range(
+            start=lsp.Position(line=1, character=12),
+            end=lsp.Position(line=1, character=16),
+        )
+        assert diagnostic.message == 'asdf is not a valid language'
+        assert diagnostic.severity == lsp.DiagnosticSeverity.Error
+        assert diagnostic.code is None
+        assert diagnostic.code_description is None
+        assert diagnostic.source == server.__class__.__name__
+        assert diagnostic.tags is None
+        assert diagnostic.related_information is None
+        assert diagnostic.data is None
+
+        # wrong line
+        diagnostic = diagnostics[1]
+        assert diagnostic.range == lsp.Range(
+            start=lsp.Position(line=1, character=0),
+            end=lsp.Position(line=1, character=16),
+        )
+        assert diagnostic.message == '# language: should be on the first line'
+        assert diagnostic.severity == lsp.DiagnosticSeverity.Warning
+        assert diagnostic.code is None
+        assert diagnostic.code_description is None
+        assert diagnostic.source == server.__class__.__name__
+        assert diagnostic.tags is None
+        assert diagnostic.related_information is None
+        assert diagnostic.data is None
+        # // -->
+
+        # <!-- keyword language != specified language
+        server.language = 'sv'
+        text_document = TextDocument(
+            'file://test.feature',
+            '''# language: sv
+Feature:
+    """
+    this is just a comment
+    """
+    Scenario: test
+''',
+        )
+        diagnostics = server._validate_gherkin(text_document)
+
+        assert len(diagnostics) == 2
+
+        diagnostic = diagnostics[0]
+        assert diagnostic.range == lsp.Range(
+            start=lsp.Position(line=1, character=0),
+            end=lsp.Position(line=1, character=7),
+        )
+        assert diagnostic.message == '"Feature" is not a valid keyword in Swedish'
+        assert diagnostic.severity == lsp.DiagnosticSeverity.Error
+        assert diagnostic.code is None
+        assert diagnostic.code_description is None
+        assert diagnostic.source == server.__class__.__name__
+        assert diagnostic.tags is None
+        assert diagnostic.related_information is None
+        assert diagnostic.data is None
+
+        diagnostic = diagnostics[1]
+        assert diagnostic.range == lsp.Range(
+            start=lsp.Position(line=1, character=0),
+            end=lsp.Position(line=1, character=7),
+        )
+        assert diagnostic.message == 'Parser failure in state init\nNo feature found.'
+        assert diagnostic.severity == lsp.DiagnosticSeverity.Error
+        assert diagnostic.code is None
+        assert diagnostic.code_description is None
+        assert diagnostic.source == server.__class__.__name__
+        assert diagnostic.tags is None
+        assert diagnostic.related_information is None
+        assert diagnostic.data is None
+        # // -->
+
+        # <!-- step implementation not found
+        server.language = 'en'
+        text_document = TextDocument(
+            'file://test.feature',
+            '''# language: en
+Feature:
+    """
+    this is just a comment
+    """
+    Scenario: test
+        Given a step in the scenario
+        And another expression with a "variable"
+
+        Then this step actually exists!
+''',
+        )
+
+        def noop(*args: Any, **kwargs: Any) -> None:
+            return None
+
+        server.steps.update(
+            {'then': [Step('then', 'this step actually exists!', func=noop)]}
+        )
+        diagnostics = server._validate_gherkin(text_document)
+
+        assert len(diagnostics) == 2
+
+        diagnostic = diagnostics[0]
+
+        assert diagnostic.range == lsp.Range(
+            start=lsp.Position(line=6, character=14),
+            end=lsp.Position(line=6, character=35),
+        )
+        assert (
+            diagnostic.message
+            == 'No step implementation found for:\nGiven a step in the scenario'
+        )
+        assert diagnostic.severity == lsp.DiagnosticSeverity.Warning
+        assert diagnostic.code is None
+        assert diagnostic.code_description is None
+        assert diagnostic.source == server.__class__.__name__
+        assert diagnostic.tags is None
+        assert diagnostic.related_information is None
+        assert diagnostic.data is None
+
+        diagnostic = diagnostics[1]
+
+        assert diagnostic.range == lsp.Range(
+            start=lsp.Position(line=7, character=12),
+            end=lsp.Position(line=7, character=47),
+        )
+        assert (
+            diagnostic.message
+            == 'No step implementation found for:\nAnd another expression with a "variable"'
+        )
+        assert diagnostic.severity == lsp.DiagnosticSeverity.Warning
+        assert diagnostic.code is None
+        assert diagnostic.code_description is None
+        assert diagnostic.source == server.__class__.__name__
+        assert diagnostic.tags is None
+        assert diagnostic.related_information is None
+        assert diagnostic.data is None
+        # // -->
+
+    def test__get_step_definition(self, lsp_fixture: LspFixture) -> None:
+        server = lsp_fixture.server
+
+        position = lsp.Position(line=0, character=0)
+
+        assert server._get_step_definition(position, '') is None
+        assert server._get_step_definition(position, 'Then ') is None
+
     class TestGrizzlyLangageServerFeatures:
         def _initialize(
             self,
@@ -877,11 +1056,15 @@ class TestGrizzlyLanguageServer:
             root: Path,
             options: Optional[Dict[str, Any]] = None,
         ) -> None:
+            assert root.is_file()
+
+            file = root
+            root = root.parent.parent
             retry = 3
-            params = InitializeParams(
+            params = lsp.InitializeParams(
                 process_id=1337,
                 root_uri=root.as_uri(),
-                capabilities=ClientCapabilities(
+                capabilities=lsp.ClientCapabilities(
                     workspace=None,
                     text_document=None,
                     window=None,
@@ -897,21 +1080,25 @@ class TestGrizzlyLanguageServer:
                 work_done_token=None,
             )
 
+            for logger_name in ['pygls', 'parse', 'pip']:
+                logger = logging.getLogger(logger_name)
+                logger.setLevel(logging.ERROR)
+
             logger = logging.getLogger()
             level = logger.getEffectiveLevel()
             try:
-                logger.setLevel(logging.ERROR)
+                logger.setLevel(logging.DEBUG)
 
                 while retry > 0:
                     try:
                         client.lsp.send_request(  # type: ignore
-                            INITIALIZE,
+                            lsp.INITIALIZE,
                             params,
                         ).result(timeout=89)
 
                         client.lsp.send_request(  # type: ignore
                             GrizzlyLanguageServer.FEATURE_INSTALL,
-                            {},
+                            {'external': file.as_uri(), 'fsPath': str(file)},
                         ).result(timeout=89)
                     except futures.TimeoutError:
                         retry -= 1
@@ -927,9 +1114,9 @@ class TestGrizzlyLanguageServer:
                 text = path.read_text()
 
             client.lsp.notify(  # type: ignore
-                TEXT_DOCUMENT_DID_OPEN,
-                DidOpenTextDocumentParams(
-                    text_document=TextDocumentItem(
+                lsp.TEXT_DOCUMENT_DID_OPEN,
+                lsp.DidOpenTextDocumentParams(
+                    text_document=lsp.TextDocumentItem(
                         uri=path.as_uri(),
                         language_id='grizzly-gherkin',
                         version=1,
@@ -944,12 +1131,12 @@ class TestGrizzlyLanguageServer:
             path: Path,
             content: str,
             options: Optional[Dict[str, str]] = None,
-            context: Optional[CompletionContext] = None,
-            position: Optional[Position] = None,
-        ) -> Optional[CompletionList]:
-            self._initialize(client, path, options)
-
+            context: Optional[lsp.CompletionContext] = None,
+            position: Optional[lsp.Position] = None,
+        ) -> Optional[lsp.CompletionList]:
             path = path / 'features' / 'project.feature'
+
+            self._initialize(client, path, options)
             self._open(client, path, content)
 
             lines = content.split('\n')
@@ -960,10 +1147,10 @@ class TestGrizzlyLanguageServer:
                 character = 0
 
             if position is None:
-                position = Position(line=line, character=character)
+                position = lsp.Position(line=line, character=character)
 
-            params = CompletionParams(
-                text_document=TextDocumentIdentifier(
+            params = lsp.CompletionParams(
+                text_document=lsp.TextDocumentIdentifier(
                     uri=path.as_uri(),
                 ),
                 position=position,
@@ -972,62 +1159,61 @@ class TestGrizzlyLanguageServer:
                 work_done_token=None,
             )
 
-            response = client.lsp.send_request(TEXT_DOCUMENT_COMPLETION, params).result(timeout=3)  # type: ignore
+            response = client.lsp.send_request(lsp.TEXT_DOCUMENT_COMPLETION, params).result(timeout=3)  # type: ignore
 
-            assert response is None or isinstance(response, CompletionList)
+            assert response is None or isinstance(response, lsp.CompletionList)
 
-            return cast(Optional[CompletionList], response)
+            return cast(Optional[lsp.CompletionList], response)
 
         def _hover(
             self,
             client: LanguageServer,
             path: Path,
-            position: Position,
+            position: lsp.Position,
             content: Optional[str] = None,
-        ) -> Optional[Hover]:
-            self._initialize(client, path, options=None)
-
+        ) -> Optional[lsp.Hover]:
             path = path / 'features' / 'project.feature'
 
+            self._initialize(client, path, options=None)
             self._open(client, path, content)
 
-            params = HoverParams(
-                text_document=TextDocumentIdentifier(
+            params = lsp.HoverParams(
+                text_document=lsp.TextDocumentIdentifier(
                     uri=path.as_uri(),
                 ),
                 position=position,
             )
 
-            response = client.lsp.send_request(TEXT_DOCUMENT_HOVER, params).result(timeout=3)  # type: ignore
+            response = client.lsp.send_request(lsp.TEXT_DOCUMENT_HOVER, params).result(timeout=3)  # type: ignore
 
-            assert response is None or isinstance(response, Hover)
+            assert response is None or isinstance(response, lsp.Hover)
 
-            return cast(Optional[Hover], response)
+            return cast(Optional[lsp.Hover], response)
 
         def _definition(
             self,
             client: LanguageServer,
             path: Path,
-            position: Position,
+            position: lsp.Position,
             content: Optional[str] = None,
-        ) -> Optional[List[LocationLink]]:
-            self._initialize(client, path, options=None)
-
+        ) -> Optional[List[lsp.LocationLink]]:
             path = path / 'features' / 'project.feature'
+
+            self._initialize(client, path, options=None)
             self._open(client, path, content)
 
-            params = DefinitionParams(
-                text_document=TextDocumentIdentifier(
+            params = lsp.DefinitionParams(
+                text_document=lsp.TextDocumentIdentifier(
                     uri=path.as_uri(),
                 ),
                 position=position,
             )
 
-            response = client.lsp.send_request(TEXT_DOCUMENT_DEFINITION, params).result(timeout=3)  # type: ignore
+            response = client.lsp.send_request(lsp.TEXT_DOCUMENT_DEFINITION, params).result(timeout=3)  # type: ignore
 
             assert response is None or isinstance(response, list)
 
-            return cast(Optional[List[LocationLink]], response)
+            return cast(Optional[List[lsp.LocationLink]], response)
 
         def test_initialize(self, lsp_fixture: LspFixture) -> None:
             client = lsp_fixture.client
@@ -1042,7 +1228,7 @@ class TestGrizzlyLanguageServer:
 
             self._initialize(
                 client,
-                lsp_fixture.datadir,
+                lsp_fixture.datadir / 'features' / 'project.feature',
                 options={
                     'variable_pattern': [
                         'hello "([^"]*)"!$',
@@ -1086,7 +1272,7 @@ class TestGrizzlyLanguageServer:
             client = lsp_fixture.client
 
             def filter_keyword_properties(
-                items: List[CompletionItem],
+                items: List[lsp.CompletionItem],
             ) -> List[Dict[str, Any]]:
                 return [
                     {
@@ -1345,7 +1531,7 @@ class TestGrizzlyLanguageServer:
                 client,
                 lsp_fixture.datadir,
                 content,
-                position=Position(line=8, character=28),
+                position=lsp.Position(line=8, character=28),
             )
 
             assert response is not None
@@ -1372,7 +1558,7 @@ class TestGrizzlyLanguageServer:
                 client,
                 lsp_fixture.datadir,
                 content,
-                position=Position(line=17, character=28),
+                position=lsp.Position(line=17, character=28),
             )
 
             assert response is not None
@@ -1398,7 +1584,7 @@ class TestGrizzlyLanguageServer:
                 client,
                 lsp_fixture.datadir,
                 content,
-                position=Position(line=18, character=30),
+                position=lsp.Position(line=18, character=30),
             )
 
             assert response is not None
@@ -1423,7 +1609,7 @@ class TestGrizzlyLanguageServer:
                 client,
                 lsp_fixture.datadir,
                 content,
-                position=Position(line=27, character=28),
+                position=lsp.Position(line=27, character=28),
             )
 
             assert response is not None
@@ -1449,7 +1635,7 @@ class TestGrizzlyLanguageServer:
                 client,
                 lsp_fixture.datadir,
                 content,
-                position=Position(line=28, character=30),
+                position=lsp.Position(line=28, character=30),
             )
 
             assert response is not None
@@ -1482,7 +1668,7 @@ class TestGrizzlyLanguageServer:
                 client,
                 lsp_fixture.datadir,
                 content,
-                position=Position(line=8, character=27),
+                position=lsp.Position(line=8, character=27),
             )
 
             assert response is not None
@@ -1517,7 +1703,7 @@ class TestGrizzlyLanguageServer:
                 client,
                 lsp_fixture.datadir,
                 content,
-                position=Position(line=8, character=62),
+                position=lsp.Position(line=8, character=62),
             )
 
             assert response is not None
@@ -1543,7 +1729,7 @@ class TestGrizzlyLanguageServer:
                     client,
                     lsp_fixture.datadir,
                     content,
-                    position=Position(line=9, character=29),
+                    position=lsp.Position(line=9, character=29),
                 )
 
             assert response is not None
@@ -1573,7 +1759,7 @@ class TestGrizzlyLanguageServer:
             client = lsp_fixture.client
 
             response = self._hover(
-                client, lsp_fixture.datadir, Position(line=2, character=31)
+                client, lsp_fixture.datadir, lsp.Position(line=2, character=31)
             )
 
             assert response is not None
@@ -1583,8 +1769,8 @@ class TestGrizzlyLanguageServer:
             assert response.range.end.line == 2
             assert response.range.start.character == 4
             assert response.range.start.line == 2
-            assert isinstance(response.contents, MarkupContent)
-            assert response.contents.kind == MarkupKind.Markdown
+            assert isinstance(response.contents, lsp.MarkupContent)
+            assert response.contents.kind == lsp.MarkupKind.Markdown
             assert (
                 response.contents.value
                 == '''Sets which type of users the scenario should use and which `host` is the target,
@@ -1608,7 +1794,7 @@ Args:
             )
 
             response = self._hover(
-                client, lsp_fixture.datadir, Position(line=0, character=1)
+                client, lsp_fixture.datadir, lsp.Position(line=0, character=1)
             )
 
             assert response is None
@@ -1616,7 +1802,7 @@ Args:
             response = self._hover(
                 client,
                 lsp_fixture.datadir,
-                Position(line=6, character=12),
+                lsp.Position(line=6, character=12),
                 content='''Feature:
   Scenario: test
     Given a user of type "RestApi" load testing "http://localhost"
@@ -1644,7 +1830,7 @@ Args:
             response = self._definition(
                 client,
                 lsp_fixture.datadir,
-                Position(line=1, character=9),
+                lsp.Position(line=1, character=9),
                 content,
             )
 
@@ -1655,7 +1841,7 @@ Args:
             response = self._definition(
                 client,
                 lsp_fixture.datadir,
-                Position(line=2, character=30),
+                lsp.Position(line=2, character=30),
                 content,
             )
 
@@ -1670,16 +1856,17 @@ Args:
 
             print(f'{actual_definition=}')
             assert actual_definition.target_uri == file_location.as_uri()
-            assert actual_definition.target_range == Range(
-                start=Position(line=lineno, character=0),
-                end=Position(line=lineno, character=0),
+            assert actual_definition.target_range == lsp.Range(
+                start=lsp.Position(line=lineno, character=0),
+                end=lsp.Position(line=lineno, character=0),
             )
             assert (
                 actual_definition.target_range
                 == actual_definition.target_selection_range
             )
-            assert actual_definition.origin_selection_range == Range(
-                start=Position(line=2, character=8), end=Position(line=2, character=70)
+            assert actual_definition.origin_selection_range == lsp.Range(
+                start=lsp.Position(line=2, character=8),
+                end=lsp.Position(line=2, character=70),
             )
             # // -->
 
@@ -1695,25 +1882,25 @@ Args:
                     response = self._definition(
                         client,
                         lsp_fixture.datadir,
-                        Position(line=3, character=27),
+                        lsp.Position(line=3, character=27),
                         content,
                     )
                 assert response is not None
                 assert len(response) == 1
                 actual_definition = response[0]
                 assert actual_definition.target_uri == test_txt_file.as_uri()
-                assert actual_definition.target_range == Range(
-                    start=Position(line=0, character=0),
-                    end=Position(line=0, character=0),
+                assert actual_definition.target_range == lsp.Range(
+                    start=lsp.Position(line=0, character=0),
+                    end=lsp.Position(line=0, character=0),
                 )
                 assert (
                     actual_definition.target_selection_range
                     == actual_definition.target_range
                 )
                 assert actual_definition.origin_selection_range is not None
-                assert actual_definition.origin_selection_range == Range(
-                    start=Position(line=3, character=27),
-                    end=Position(line=3, character=40),
+                assert actual_definition.origin_selection_range == lsp.Range(
+                    start=lsp.Position(line=3, character=27),
+                    end=lsp.Position(line=3, character=40),
                 )
             # // -->
             finally:

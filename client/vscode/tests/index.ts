@@ -13,13 +13,20 @@ export function run(): Promise<void> {
     const testsRoot = __dirname;
 
     return new Promise((resolve, reject) => {
+        const tests = process.env['TESTS']?.split(',');
         glob('**.test.js', { cwd: testsRoot }, (err: Error, files: string[]) => {
             if (err) {
                 return reject(err);
             }
 
             // Add files to the test suite
-            files.forEach((f: string) => mocha.addFile(path.resolve(testsRoot, f)));
+            files.forEach((f: string) => {
+                if ((tests === undefined || tests.includes(`${path.parse(f).name}.ts`))) {
+                    mocha.addFile(path.resolve(testsRoot, f));
+                }
+
+                return;
+            });
 
             try {
                 // Run the mocha test

@@ -112,6 +112,18 @@
           "type": "string",
           "default": "",
           "description": "URL to index that dependencies should be downloaded from instead of pypi.org"
+        },
+        "grizzly.diagnostics_on_save_only": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": true,
+          "description": "Diagnosing a feature file can be a performance hit, only enable if you know what you are doing"
+        },
+        "grizzly.quick_fix.step_impl_template": {
+          "scope": "resource",
+          "type": "string",
+          "default": null,
+          "description": "Template for missing step implementation quick fixes"
         }
       }
     }

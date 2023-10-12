@@ -22,6 +22,10 @@ class DummyClient(LanguageServer):
         def window_work_done_progress_create(*args: Any, **kwargs: Any) -> None:
             return
 
+        @self.feature('textDocument/publishDiagnostics')
+        def text_document_publish_diagnostics(*args: Any, **kwargs: Any) -> None:
+            return
+
 
 class LspFixture:
     client: LanguageServer

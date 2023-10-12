@@ -128,7 +128,7 @@ def run_command(
     try:
         while process.poll() is None:
             stdout = process.stdout
-            if stdout is None:
+            if stdout is None:  # pragma: no cover
                 break
 
             buffer = stdout.readline()
@@ -138,12 +138,12 @@ def run_command(
             output.append(buffer.decode('utf-8'))
 
         process.terminate()
-    except KeyboardInterrupt:
+    except KeyboardInterrupt:  # pragma: no cover
         pass
     finally:
         try:
             process.kill()
-        except Exception:
+        except Exception:  # pragma: no cover
             pass
 
     process.wait()
