@@ -133,514 +133,6 @@ class GrizzlyLanguageServer(LanguageServer):
         signal.signal = _signal  # type: ignore
         self.client_settings = {}
 
-        @self.feature(self.FEATURE_INSTALL)
-        def install(params: FeatureInstallParams) -> None:
-            """
-            See https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize
-
-            > Until the server has responded to the initialize request with an InitializeResult, the client must not send any
-            > additional requests or notifications to the server. In addition the server is not allowed to send any requests
-            > or notifications to the client until it has responded with an InitializeResult
-
-            This custom feature handles being able to send progress report of the, slow, process of installing dependencies needed
-            for it to function properly on the project it is being used.
-            """
-            self.logger.debug(f'{self.FEATURE_INSTALL}: installing')
-
-            with Progress(self.progress, 'grizzly-ls') as progress:
-                # <!-- should a virtual environment be used?
-                use_venv = self.client_settings.get('use_virtual_environment', True)
-                executable = 'python3' if use_venv else sys.executable
-                # // -->
-
-                self.logger.debug(f'workspace root: {self.root_path}')
-
-                env = environ.copy()
-                project_name = self.root_path.stem
-
-                virtual_environment: Optional[Path] = None
-                has_venv: bool = False
-
-                if use_venv:
-                    virtual_environment = (
-                        Path(gettempdir()) / f'grizzly-ls-{project_name}'
-                    )
-                    has_venv = virtual_environment.exists()
-
-                    self.logger.debug(
-                        f'looking for venv at {virtual_environment}, {has_venv=}'
-                    )
-
-                    if not has_venv:
-                        self.logger.debug(
-                            f'creating virtual environment: {virtual_environment}'
-                        )
-                        self.show_message(
-                            'creating virtual environment for language server, this could take a while'
-                        )
-                        try:
-                            progress.report('creating venv', 33)
-                            venv_create(str(virtual_environment), with_pip=True)
-                        except:
-                            self.show_message('failed to create virtual environment')
-                            return
-
-                    if platform.system() == 'Windows':  # pragma: no cover
-                        bin_dir = 'Scripts'
-                    else:
-                        bin_dir = 'bin'
-
-                    paths = [
-                        str(virtual_environment / bin_dir),
-                        env.get('PATH', ''),
-                    ]
-                    env.update(
-                        {
-                            'PATH': pathsep.join(paths),
-                            'VIRTUAL_ENV': str(virtual_environment),
-                            'PYTHONPATH': str(self.root_path / 'features'),
-                        }
-                    )
-
-                    if self.index_url is not None:
-                        index_url_parsed = urlparse(self.index_url)
-                        if (
-                            index_url_parsed.username is None
-                            or index_url_parsed.password is None
-                        ):
-                            self.show_message(
-                                'global.index-url does not contain username and/or password, check your configuration!',
-                                msg_type=lsp.MessageType.Error,
-                            )
-                            return
-
-                        env.update(
-                            {
-                                'PIP_EXTRA_INDEX_URL': self.index_url,
-                            }
-                        )
-
-                requirements_file = self.root_path / 'requirements.txt'
-                if not requirements_file.exists():
-                    self.show_message(
-                        f'project "{project_name}" does not have a requirements.txt in {self.root_path}',
-                        msg_type=lsp.MessageType.Error,
-                    )
-                    return
-
-                project_age_file = (
-                    Path(gettempdir()) / f'grizzly-ls-{project_name}' / '.age'
-                )
-
-                # pip install (slow operation) if:
-                # - age file does not exist
-                # - requirements file has been modified since age file was last touched
-                if not project_age_file.exists() or (
-                    requirements_file.lstat().st_mtime
-                    > project_age_file.lstat().st_mtime
-                ):
-                    action = 'install' if not project_age_file.exists() else 'upgrade'
-
-                    self.logger.debug(f'{action} from {requirements_file}')
-
-                    # <!-- install dependencies
-                    progress.report(f'{action} dependencies', 50)
-
-                    rc, output = run_command(
-                        [
-                            executable,
-                            '-m',
-                            'pip',
-                            'install',
-                            '--upgrade',
-                            '-r',
-                            str(requirements_file),
-                        ],
-                        env=env,
-                    )
-
-                    for line in output:
-                        if line.strip().startswith('ERROR:'):
-                            _, line = line.split(' ', 1)
-                            log_method = self.logger.error
-                        elif rc == 0:
-                            log_method = self.logger.debug
-                        else:
-                            log_method = self.logger.warning
-
-                        if len(line.strip()) > 1:
-                            log_method(line.strip())
-
-                    self.logger.debug(f'{action} done {rc=}')
-
-                    if rc != 0:
-                        self.show_message(
-                            f'failed to {action} from {requirements_file}',
-                            msg_type=lsp.MessageType.Error,
-                        )
-                        return
-
-                    project_age_file.parent.mkdir(parents=True, exist_ok=True)
-                    project_age_file.touch()
-                    # // -->
-
-                if use_venv and virtual_environment is not None:
-                    # modify sys.path to use modules from virtual environment when compiling inventory
-                    venv_sys_path = (
-                        virtual_environment
-                        / 'lib'
-                        / f'python{sys.version_info.major}.{sys.version_info.minor}/site-packages'
-                    )
-                    sys.path.append(str(venv_sys_path))
-
-                try:
-                    # <!-- compile inventory
-                    progress.report('compile inventory', 85)
-                    self._compile_inventory(self.root_path, project_name)
-                    # // ->
-                except ModuleNotFoundError:
-                    self.show_message(
-                        'failed to create step inventory',
-                        msg_type=lsp.MessageType.Error,
-                    )
-                    return
-                finally:
-                    if use_venv and virtual_environment is not None:
-                        # always restore to original value
-                        sys.path.pop()
-
-            document = self.workspace.get_text_document(params.external)
-            diagnostics = self._validate_gherkin(document)
-            self.publish_diagnostics(document.uri, diagnostics)  # type: ignore
-
-        @self.feature(lsp.INITIALIZE)
-        def initialize(params: lsp.InitializeParams) -> None:
-            if params.root_path is None and params.root_uri is None:
-                self.show_message(
-                    'neither root_path or root uri was received from client',
-                    msg_type=lsp.MessageType.Error,
-                )
-                return
-
-            root_path = (
-                Path(unquote(url2pathname(urlparse(params.root_uri).path)))
-                if params.root_uri is not None
-                else Path(cast(str, params.root_path))
-            )
-
-            # fugly as hell
-            if (
-                not root_path.exists()
-                and str(root_path)[0:1] == sep
-                and str(root_path)[2] == ':'
-            ):
-                root_path = Path(str(root_path)[1:])
-
-            self.root_path = root_path
-
-            client_settings = params.initialization_options
-            if client_settings is not None:
-                self.client_settings = cast(Dict[str, Any], client_settings)
-
-            markup_supported: List[lsp.MarkupKind] = get_capability(
-                self.client_capabilities,
-                'text_document.completion.completion_item.documentation_format',
-                [lsp.MarkupKind.Markdown],
-            )
-            if len(markup_supported) < 1:
-                self.markup_kind = lsp.MarkupKind.PlainText
-            else:
-                self.markup_kind = markup_supported[0]
-
-            # <!-- set index url
-            # no index-url specified as argument, check if we have it in pip configuration
-            if self.index_url is None:
-                pip_config = PipConfiguration(isolated=False)
-                try:
-                    pip_config.load()
-                    self.index_url = pip_config.get_value('global.index-url')
-                except PipConfigurationError:
-                    pass
-
-            # no index-url specified in pip config, check if we have it in extension configuration
-            if self.index_url is None:
-                self.index_url = self.client_settings.get('pip_extra_index_url', None)
-                if self.index_url is not None and len(self.index_url.strip()) < 1:
-                    self.index_url = None
-
-            self.logger.debug(f'{self.index_url=}')
-            # // -->
-
-            # <!-- set variable pattern
-            variable_patterns = self.client_settings.get('variable_pattern', [])
-            if len(variable_patterns) > 0:
-                # validate and normalize patterns
-                normalized_variable_patterns: Set[str] = set()
-                for variable_pattern in variable_patterns:
-                    try:
-                        original_variable_pattern = variable_pattern
-                        if not variable_pattern.startswith(
-                            '.*'
-                        ) and not variable_pattern.startswith('^'):
-                            variable_pattern = f'.*{variable_pattern}'
-
-                        if not variable_pattern.startswith('^'):
-                            variable_pattern = f'^{variable_pattern}'
-
-                        if not variable_pattern.endswith('$'):
-                            variable_pattern = f'{variable_pattern}$'
-
-                        self.logger.error(
-                            f'{original_variable_pattern} -> {variable_pattern}'
-                        )
-
-                        pattern = re.compile(variable_pattern)
-
-                        if pattern.groups != 1:
-                            self.show_message(
-                                f'variable pattern "{original_variable_pattern}" contains {pattern.groups} match groups, it must be exactly one'
-                            )
-                            return
-
-                        normalized_variable_patterns.add(variable_pattern)
-                    except:
-                        self.show_message(
-                            f'variable pattern "{variable_pattern}" is not valid, check grizzly.variable_pattern setting',
-                            msg_type=lsp.MessageType.Error,
-                        )
-                        return
-
-                variable_pattern = f'({"|".join(normalized_variable_patterns)})'
-                self.variable_pattern = re.compile(variable_pattern)
-            # // -->
-
-            # <!-- quick fix structure
-            quick_fix = self.client_settings.get('quick_fix', None)
-            if quick_fix is None:
-                self.client_settings.update({'quick_fix': {}})
-            # // -->
-
-            # <!-- missing step impl template
-            step_impl_template = self.client_settings['quick_fix'].get(
-                'step_impl_template', None
-            )
-            if step_impl_template is None or len(step_impl_template.strip()) == 0:
-                step_impl_template = "@{keyword}(u'{expression}')"
-                self.client_settings['quick_fix'].update(
-                    {'step_impl_template': step_impl_template}
-                )
-            # // ->
-
-        @self.feature(lsp.TEXT_DOCUMENT_COMPLETION)
-        def text_document_completion(
-            params: lsp.CompletionParams,
-        ) -> lsp.CompletionList:
-            items: List[lsp.CompletionItem] = []
-
-            if len(self.steps.values()) < 1:
-                self.show_message(
-                    'no steps in inventory', msg_type=lsp.MessageType.Error
-                )
-            else:
-                line = self._current_line(params.text_document.uri, params.position)
-
-                document = self.workspace.get_text_document(params.text_document.uri)
-
-                trigger = line[: params.position.character]
-
-                variable_name_trigger = self.get_variable_name_trigger(trigger)
-
-                self.logger.debug(
-                    f'{line=}, {params.position=}, {trigger=}, {variable_name_trigger=}'
-                )
-
-                if variable_name_trigger is not None and variable_name_trigger[0]:
-                    _, partial_variable_name = variable_name_trigger
-                    items = self._complete_variable_name(
-                        line,
-                        document,
-                        params.position,
-                        partial=partial_variable_name,
-                    )
-                else:
-                    keyword, text = get_step_parts(line)
-                    self.logger.debug(f'{keyword=}, {text=}, {self.keywords=}')
-
-                    if keyword is not None and keyword in self.keywords:
-                        items = self._complete_step(keyword, params.position, text)
-                    else:
-                        items = self._complete_keyword(
-                            keyword, params.position, document
-                        )
-
-            return lsp.CompletionList(
-                is_incomplete=False,
-                items=items,
-            )
-
-        @self.feature(lsp.WORKSPACE_DID_CHANGE_CONFIGURATION)
-        def workspace_did_change_configuration(
-            params: lsp.DidChangeConfigurationParams,
-        ) -> None:
-            self.logger.debug(
-                f'{lsp.WORKSPACE_DID_CHANGE_CONFIGURATION}: {params=}'
-            )  # pragma: no cover
-
-        @self.feature(lsp.TEXT_DOCUMENT_HOVER)
-        def text_document_hover(params: lsp.HoverParams) -> Optional[lsp.Hover]:
-            hover: Optional[lsp.Hover] = None
-            help_text: Optional[str] = None
-            current_line = self._current_line(params.text_document.uri, params.position)
-            keyword, step = get_step_parts(current_line)
-
-            self.logger.debug(f'{keyword=}, {step=}')
-
-            abort: bool = False
-
-            try:
-                abort = (
-                    step is None
-                    or keyword is None
-                    or (
-                        self._get_language_key(keyword) not in self.steps
-                        and keyword not in self.keywords_any
-                    )
-                )
-            except:
-                abort = True
-
-            if abort or keyword is None:
-                return None
-
-            start = current_line.index(keyword)
-            end = len(current_line) - 1
-
-            help_text = self._find_help(current_line)
-
-            if help_text is None:
-                return None
-
-            if 'Args:' in help_text:
-                pre, post = help_text.split('Args:', 1)
-                text = '\n'.join(
-                    [
-                        self._format_arg_line(arg_line)
-                        for arg_line in post.strip().split('\n')
-                    ]
-                )
-
-                help_text = f'{pre}Args:\n\n{text}\n'
-
-            contents = lsp.MarkupContent(kind=self.markup_kind, value=help_text)
-            range = lsp.Range(
-                start=lsp.Position(line=params.position.line, character=start),
-                end=lsp.Position(line=params.position.line, character=end),
-            )
-            hover = lsp.Hover(contents=contents, range=range)
-
-            return hover
-
-        @self.feature(lsp.TEXT_DOCUMENT_DID_CHANGE)
-        def text_document_did_change(params: lsp.DidChangeTextDocumentParams) -> None:
-            document = self.workspace.get_text_document(params.text_document.uri)
-            try:
-                self.language = self._find_language(document.source)
-            except ValueError:
-                pass
-
-        @self.feature(lsp.TEXT_DOCUMENT_DID_OPEN)
-        def text_document_did_open(params: lsp.DidOpenTextDocumentParams) -> None:
-            document = self.workspace.get_text_document(params.text_document.uri)
-            self.language = self._find_language(document.source)
-
-            if self.client_settings.get('diagnostics_on_save_only', True):
-                document = self.workspace.get_text_document(params.text_document.uri)
-                diagnostics = self._validate_gherkin(document)
-                self.publish_diagnostics(document.uri, diagnostics)  # type: ignore
-
-        @self.feature(lsp.TEXT_DOCUMENT_DID_SAVE)
-        def text_document_did_save(params: lsp.DidSaveTextDocumentParams) -> None:
-            if self.client_settings.get('diagnostics_on_save_only', True):
-                document = self.workspace.get_text_document(params.text_document.uri)
-                diagnostics = self._validate_gherkin(document)
-                self.publish_diagnostics(document.uri, diagnostics)  # type: ignore
-
-        @self.feature(lsp.TEXT_DOCUMENT_DEFINITION)
-        def text_document_definition(
-            params: lsp.DefinitionParams,
-        ) -> Optional[List[lsp.LocationLink]]:
-            current_line = self._current_line(params.text_document.uri, params.position)
-            definitions: List[lsp.LocationLink] = []
-
-            self.logger.debug(f'{lsp.TEXT_DOCUMENT_DEFINITION}: {params=}')
-
-            file_url_definitions = self._get_file_url_definition(params, current_line)
-
-            if len(file_url_definitions) > 0:
-                definitions = file_url_definitions
-            else:
-                step_definition = self._get_step_definition(
-                    params.position, current_line
-                )
-                if step_definition is not None:
-                    definitions = [step_definition]
-
-            return definitions if len(definitions) > 0 else None
-
-        @self.feature(
-            lsp.TEXT_DOCUMENT_DIAGNOSTIC,
-            lsp.DiagnosticOptions(
-                identifier='behave',
-                inter_file_dependencies=False,
-                workspace_diagnostics=True,
-            ),
-        )
-        def text_document_diagnostic(
-            params: lsp.DocumentDiagnosticParams,
-        ) -> lsp.DocumentDiagnosticReport:
-            items: List[lsp.Diagnostic] = []
-            if not self.client_settings.get('diagnostics_on_save_only', True):
-                document = self.workspace.get_text_document(params.text_document.uri)
-                items = self._validate_gherkin(document)
-
-            return lsp.RelatedFullDocumentDiagnosticReport(
-                items=items,
-                kind=lsp.DocumentDiagnosticReportKind.Full,
-            )
-
-        @self.feature(lsp.WORKSPACE_DIAGNOSTIC)
-        def workspace_diagnostic(
-            params: lsp.WorkspaceDiagnosticParams,
-        ) -> lsp.WorkspaceDiagnosticReport:
-            items: List[lsp.Diagnostic] = []
-            first_text_document = list(self.workspace.text_documents.keys())[0]
-            document = self.workspace.get_text_document(first_text_document)
-
-            if not self.client_settings.get('diagnostics_on_save_only', True):
-                items = self._validate_gherkin(document)
-
-            return lsp.WorkspaceDiagnosticReport(
-                items=[
-                    lsp.WorkspaceFullDocumentDiagnosticReport(
-                        uri=document.uri,
-                        items=items,
-                        kind=lsp.DocumentDiagnosticReportKind.Full,
-                    )
-                ]
-            )
-
-        @self.feature(lsp.TEXT_DOCUMENT_CODE_ACTION)
-        def text_document_code_action(
-            params: lsp.CodeActionParams,
-        ) -> Optional[List[Union[lsp.Command, lsp.CodeAction]]]:
-            diagnostics = params.context.diagnostics
-            document = self.workspace.get_text_document(params.text_document.uri)
-
-            if len(diagnostics) == 0:
-                return None
-            else:
-                return self._generate_quick_fixes(diagnostics, document)
-
     @property
     def language(self) -> str:
         return self._language
@@ -1189,6 +681,9 @@ def step_impl(context: Context) -> None:
         before_lines = reversed(lines[0 : position.line])
 
         for before_line in before_lines:
+            if len(before_line.strip()) < 1:
+                continue
+
             match = self.variable_pattern.match(before_line)
 
             if match:
@@ -1354,7 +849,6 @@ def step_impl(context: Context) -> None:
                 character = start.character - len(str(expression))
                 character = 0 if character < 0 else character
                 start.character = character
-                self.logger.debug(f'!! {character=}, {expression=}, {new_text=}')
 
             # do not suggest the step that is already written
             if matched_step == expression:
@@ -1441,12 +935,12 @@ def step_impl(context: Context) -> None:
 
         return patterns
 
-    def _compile_inventory(self, root_path: Path, project_name: str) -> None:
+    def _compile_inventory(self, project_name: str) -> None:
         self.logger.debug('creating step registry')
 
         try:
             self.behave_steps = load_step_registry(
-                [path.parent for path in root_path.rglob('*.py')]
+                [path.parent for path in self.root_path.rglob('*.py')]
             )
         except ModuleNotFoundError:
             self.show_message(
@@ -1579,3 +1073,519 @@ def step_impl(context: Context) -> None:
             return None
 
         return possible_help[sorted(possible_help.keys(), reverse=True)[0]]
+
+
+server = GrizzlyLanguageServer()
+
+
+@server.feature(server.FEATURE_INSTALL)
+def install(ls: GrizzlyLanguageServer, params: FeatureInstallParams) -> None:
+    """
+    See https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize
+
+    > Until the server has responded to the initialize request with an InitializeResult, the client must not send any
+    > additional requests or notifications to the server. In addition the server is not allowed to send any requests
+    > or notifications to the client until it has responded with an InitializeResult
+
+    This custom feature handles being able to send progress report of the, slow, process of installing dependencies needed
+    for it to function properly on the project it is being used.
+    """
+    ls.logger.debug(f'{ls.FEATURE_INSTALL}: installing')
+
+    with Progress(ls.progress, 'grizzly-ls') as progress:
+        # <!-- should a virtual environment be used?
+        use_venv = ls.client_settings.get('use_virtual_environment', True)
+        executable = 'python3' if use_venv else sys.executable
+        # // -->
+
+        ls.logger.debug(f'workspace root: {ls.root_path}')
+
+        env = environ.copy()
+        project_name = ls.root_path.stem
+
+        virtual_environment: Optional[Path] = None
+        has_venv: bool = False
+
+        if use_venv:
+            virtual_environment = Path(gettempdir()) / f'grizzly-ls-{project_name}'
+            has_venv = virtual_environment.exists()
+
+            ls.logger.debug(f'looking for venv at {virtual_environment}, {has_venv=}')
+
+            if not has_venv:
+                ls.logger.debug(f'creating virtual environment: {virtual_environment}')
+                ls.show_message(
+                    'creating virtual environment for language server, this could take a while'
+                )
+                try:
+                    progress.report('creating venv', 33)
+                    venv_create(str(virtual_environment), with_pip=True)
+                except:
+                    ls.show_message('failed to create virtual environment')
+                    return
+
+            if platform.system() == 'Windows':  # pragma: no cover
+                bin_dir = 'Scripts'
+            else:
+                bin_dir = 'bin'
+
+            paths = [
+                str(virtual_environment / bin_dir),
+                env.get('PATH', ''),
+            ]
+            env.update(
+                {
+                    'PATH': pathsep.join(paths),
+                    'VIRTUAL_ENV': str(virtual_environment),
+                    'PYTHONPATH': str(ls.root_path / 'features'),
+                }
+            )
+
+            if ls.index_url is not None:
+                index_url_parsed = urlparse(ls.index_url)
+                if (
+                    index_url_parsed.username is None
+                    or index_url_parsed.password is None
+                ):
+                    ls.show_message(
+                        'global.index-url does not contain username and/or password, check your configuration!',
+                        msg_type=lsp.MessageType.Error,
+                    )
+                    return
+
+                env.update(
+                    {
+                        'PIP_EXTRA_INDEX_URL': ls.index_url,
+                    }
+                )
+
+        requirements_file = ls.root_path / 'requirements.txt'
+        if not requirements_file.exists():
+            ls.show_message(
+                f'project "{project_name}" does not have a requirements.txt in {ls.root_path}',
+                msg_type=lsp.MessageType.Error,
+            )
+            return
+
+        project_age_file = Path(gettempdir()) / f'grizzly-ls-{project_name}' / '.age'
+
+        # pip install (slow operation) if:
+        # - age file does not exist
+        # - requirements file has been modified since age file was last touched
+        if not project_age_file.exists() or (
+            requirements_file.lstat().st_mtime > project_age_file.lstat().st_mtime
+        ):
+            action = 'install' if not project_age_file.exists() else 'upgrade'
+
+            ls.logger.debug(f'{action} from {requirements_file}')
+
+            # <!-- install dependencies
+            progress.report(f'{action} dependencies', 50)
+
+            rc, output = run_command(
+                [
+                    executable,
+                    '-m',
+                    'pip',
+                    'install',
+                    '--upgrade',
+                    '-r',
+                    str(requirements_file),
+                ],
+                env=env,
+            )
+
+            for line in output:
+                if line.strip().startswith('ERROR:'):
+                    _, line = line.split(' ', 1)
+                    log_method = ls.logger.error
+                elif rc == 0:
+                    log_method = ls.logger.debug
+                else:
+                    log_method = ls.logger.warning
+
+                if len(line.strip()) > 1:
+                    log_method(line.strip())
+
+            ls.logger.debug(f'{action} done {rc=}')
+
+            if rc != 0:
+                ls.show_message(
+                    f'failed to {action} from {requirements_file}',
+                    msg_type=lsp.MessageType.Error,
+                )
+                return
+
+            project_age_file.parent.mkdir(parents=True, exist_ok=True)
+            project_age_file.touch()
+            # // -->
+
+        if use_venv and virtual_environment is not None:
+            # modify sys.path to use modules from virtual environment when compiling inventory
+            venv_sys_path = (
+                virtual_environment
+                / 'lib'
+                / f'python{sys.version_info.major}.{sys.version_info.minor}/site-packages'
+            )
+            sys.path.append(str(venv_sys_path))
+
+        try:
+            # <!-- compile inventory
+            progress.report('compile inventory', 85)
+            ls._compile_inventory(project_name)
+            # // ->
+        except ModuleNotFoundError:
+            ls.show_message(
+                'failed to create step inventory',
+                msg_type=lsp.MessageType.Error,
+            )
+            return
+        finally:
+            if use_venv and virtual_environment is not None:
+                # always restore to original value
+                sys.path.pop()
+
+    document = ls.workspace.get_text_document(params.external)
+    diagnostics = ls._validate_gherkin(document)
+    ls.publish_diagnostics(document.uri, diagnostics)  # type: ignore
+
+
+@server.feature(lsp.INITIALIZE)
+def initialize(ls: GrizzlyLanguageServer, params: lsp.InitializeParams) -> None:
+    if params.root_path is None and params.root_uri is None:
+        ls.show_message(
+            'neither root_path or root uri was received from client',
+            msg_type=lsp.MessageType.Error,
+        )
+        return
+
+    root_path = (
+        Path(unquote(url2pathname(urlparse(params.root_uri).path)))
+        if params.root_uri is not None
+        else Path(cast(str, params.root_path))
+    )
+
+    # fugly as hell
+    if (
+        not root_path.exists()
+        and str(root_path)[0:1] == sep
+        and str(root_path)[2] == ':'
+    ):
+        root_path = Path(str(root_path)[1:])
+
+    ls.root_path = root_path
+
+    client_settings = params.initialization_options
+    if client_settings is not None:
+        ls.client_settings = cast(Dict[str, Any], client_settings)
+
+    markup_supported: List[lsp.MarkupKind] = get_capability(
+        ls.client_capabilities,
+        'text_document.completion.completion_item.documentation_format',
+        [lsp.MarkupKind.Markdown],
+    )
+    if len(markup_supported) < 1:
+        ls.markup_kind = lsp.MarkupKind.PlainText
+    else:
+        ls.markup_kind = markup_supported[0]
+
+    # <!-- set index url
+    # no index-url specified as argument, check if we have it in pip configuration
+    if ls.index_url is None:
+        pip_config = PipConfiguration(isolated=False)
+        try:
+            pip_config.load()
+            ls.index_url = pip_config.get_value('global.index-url')
+        except PipConfigurationError:
+            pass
+
+    # no index-url specified in pip config, check if we have it in extension configuration
+    if ls.index_url is None:
+        ls.index_url = ls.client_settings.get('pip_extra_index_url', None)
+        if ls.index_url is not None and len(ls.index_url.strip()) < 1:
+            ls.index_url = None
+
+    ls.logger.debug(f'{ls.index_url=}')
+    # // -->
+
+    # <!-- set variable pattern
+    variable_patterns = ls.client_settings.get('variable_pattern', [])
+    if len(variable_patterns) > 0:
+        # validate and normalize patterns
+        normalized_variable_patterns: Set[str] = set()
+        for variable_pattern in variable_patterns:
+            try:
+                original_variable_pattern = variable_pattern
+                if not variable_pattern.startswith(
+                    '.*'
+                ) and not variable_pattern.startswith('^'):
+                    variable_pattern = f'.*{variable_pattern}'
+
+                if not variable_pattern.startswith('^'):
+                    variable_pattern = f'^{variable_pattern}'
+
+                if not variable_pattern.endswith('$'):
+                    variable_pattern = f'{variable_pattern}$'
+
+                pattern = re.compile(variable_pattern)
+
+                if pattern.groups != 1:
+                    ls.show_message(
+                        f'variable pattern "{original_variable_pattern}" contains {pattern.groups} match groups, it must be exactly one'
+                    )
+                    return
+
+                normalized_variable_patterns.add(variable_pattern)
+            except:
+                ls.show_message(
+                    f'variable pattern "{variable_pattern}" is not valid, check grizzly.variable_pattern setting',
+                    msg_type=lsp.MessageType.Error,
+                )
+                return
+
+        variable_pattern = f'({"|".join(normalized_variable_patterns)})'
+        ls.variable_pattern = re.compile(variable_pattern)
+    # // -->
+
+    # <!-- quick fix structure
+    quick_fix = ls.client_settings.get('quick_fix', None)
+    if quick_fix is None:
+        ls.client_settings.update({'quick_fix': {}})
+    # // -->
+
+    # <!-- missing step impl template
+    step_impl_template = ls.client_settings['quick_fix'].get('step_impl_template', None)
+    if step_impl_template is None or len(step_impl_template.strip()) == 0:
+        step_impl_template = "@{keyword}(u'{expression}')"
+        ls.client_settings['quick_fix'].update(
+            {'step_impl_template': step_impl_template}
+        )
+    # // ->
+
+
+@server.feature(lsp.TEXT_DOCUMENT_COMPLETION)
+def text_document_completion(
+    ls: GrizzlyLanguageServer,
+    params: lsp.CompletionParams,
+) -> lsp.CompletionList:
+    items: List[lsp.CompletionItem] = []
+
+    if len(ls.steps.values()) < 1:
+        ls.show_message('no steps in inventory', msg_type=lsp.MessageType.Error)
+    else:
+        line = ls._current_line(params.text_document.uri, params.position)
+
+        document = ls.workspace.get_text_document(params.text_document.uri)
+
+        trigger = line[: params.position.character]
+
+        variable_name_trigger = ls.get_variable_name_trigger(trigger)
+
+        ls.logger.debug(
+            f'{line=}, {params.position=}, {trigger=}, {variable_name_trigger=}'
+        )
+
+        if variable_name_trigger is not None and variable_name_trigger[0]:
+            _, partial_variable_name = variable_name_trigger
+            items = ls._complete_variable_name(
+                line,
+                document,
+                params.position,
+                partial=partial_variable_name,
+            )
+        else:
+            keyword, text = get_step_parts(line)
+            ls.logger.debug(f'{keyword=}, {text=}, {ls.keywords=}')
+
+            if keyword is not None and keyword in ls.keywords:
+                items = ls._complete_step(keyword, params.position, text)
+            else:
+                items = ls._complete_keyword(keyword, params.position, document)
+
+    return lsp.CompletionList(
+        is_incomplete=False,
+        items=items,
+    )
+
+
+@server.feature(lsp.WORKSPACE_DID_CHANGE_CONFIGURATION)
+def workspace_did_change_configuration(
+    ls: GrizzlyLanguageServer,
+    params: lsp.DidChangeConfigurationParams,
+) -> None:
+    ls.logger.debug(
+        f'{lsp.WORKSPACE_DID_CHANGE_CONFIGURATION}: {params=}'
+    )  # pragma: no cover
+
+
+@server.feature(lsp.TEXT_DOCUMENT_HOVER)
+def text_document_hover(
+    ls: GrizzlyLanguageServer, params: lsp.HoverParams
+) -> Optional[lsp.Hover]:
+    hover: Optional[lsp.Hover] = None
+    help_text: Optional[str] = None
+    current_line = ls._current_line(params.text_document.uri, params.position)
+    keyword, step = get_step_parts(current_line)
+
+    ls.logger.debug(f'{keyword=}, {step=}')
+
+    abort: bool = False
+
+    try:
+        abort = (
+            step is None
+            or keyword is None
+            or (
+                ls._get_language_key(keyword) not in ls.steps
+                and keyword not in ls.keywords_any
+            )
+        )
+    except:
+        abort = True
+
+    if abort or keyword is None:
+        return None
+
+    start = current_line.index(keyword)
+    end = len(current_line) - 1
+
+    help_text = ls._find_help(current_line)
+
+    if help_text is None:
+        return None
+
+    if 'Args:' in help_text:
+        pre, post = help_text.split('Args:', 1)
+        text = '\n'.join(
+            [ls._format_arg_line(arg_line) for arg_line in post.strip().split('\n')]
+        )
+
+        help_text = f'{pre}Args:\n\n{text}\n'
+
+    contents = lsp.MarkupContent(kind=ls.markup_kind, value=help_text)
+    range = lsp.Range(
+        start=lsp.Position(line=params.position.line, character=start),
+        end=lsp.Position(line=params.position.line, character=end),
+    )
+    hover = lsp.Hover(contents=contents, range=range)
+
+    return hover
+
+
+@server.feature(lsp.TEXT_DOCUMENT_DID_CHANGE)
+def text_document_did_change(
+    ls: GrizzlyLanguageServer, params: lsp.DidChangeTextDocumentParams
+) -> None:
+    document = ls.workspace.get_text_document(params.text_document.uri)
+    try:
+        ls.language = ls._find_language(document.source)
+    except ValueError:
+        ls.language = 'en'
+
+
+@server.feature(lsp.TEXT_DOCUMENT_DID_OPEN)
+def text_document_did_open(
+    ls: GrizzlyLanguageServer, params: lsp.DidOpenTextDocumentParams
+) -> None:
+    document = ls.workspace.get_text_document(params.text_document.uri)
+    try:
+        ls.language = ls._find_language(document.source)
+    except ValueError:
+        ls.language = 'en'
+
+    if ls.client_settings.get('diagnostics_on_save_only', True):
+        document = ls.workspace.get_text_document(params.text_document.uri)
+        diagnostics = ls._validate_gherkin(document)
+        ls.publish_diagnostics(document.uri, diagnostics)  # type: ignore
+
+
+@server.feature(lsp.TEXT_DOCUMENT_DID_SAVE)
+def text_document_did_save(
+    ls: GrizzlyLanguageServer, params: lsp.DidSaveTextDocumentParams
+) -> None:
+    if ls.client_settings.get('diagnostics_on_save_only', True):
+        document = ls.workspace.get_text_document(params.text_document.uri)
+        diagnostics = ls._validate_gherkin(document)
+        ls.publish_diagnostics(document.uri, diagnostics)  # type: ignore
+
+
+@server.feature(lsp.TEXT_DOCUMENT_DEFINITION)
+def text_document_definition(
+    ls: GrizzlyLanguageServer,
+    params: lsp.DefinitionParams,
+) -> Optional[List[lsp.LocationLink]]:
+    current_line = ls._current_line(params.text_document.uri, params.position)
+    definitions: List[lsp.LocationLink] = []
+
+    ls.logger.debug(f'{lsp.TEXT_DOCUMENT_DEFINITION}: {params=}')
+
+    file_url_definitions = ls._get_file_url_definition(params, current_line)
+
+    if len(file_url_definitions) > 0:
+        definitions = file_url_definitions
+    else:
+        step_definition = ls._get_step_definition(params.position, current_line)
+        if step_definition is not None:
+            definitions = [step_definition]
+
+    return definitions if len(definitions) > 0 else None
+
+
+@server.feature(
+    lsp.TEXT_DOCUMENT_DIAGNOSTIC,
+    lsp.DiagnosticOptions(
+        identifier='behave',
+        inter_file_dependencies=False,
+        workspace_diagnostics=True,
+    ),
+)
+def text_document_diagnostic(
+    ls: GrizzlyLanguageServer,
+    params: lsp.DocumentDiagnosticParams,
+) -> lsp.DocumentDiagnosticReport:
+    items: List[lsp.Diagnostic] = []
+    if not ls.client_settings.get('diagnostics_on_save_only', True):
+        document = ls.workspace.get_text_document(params.text_document.uri)
+        items = ls._validate_gherkin(document)
+
+    return lsp.RelatedFullDocumentDiagnosticReport(
+        items=items,
+        kind=lsp.DocumentDiagnosticReportKind.Full,
+    )
+
+
+@server.feature(lsp.WORKSPACE_DIAGNOSTIC)
+def workspace_diagnostic(
+    ls: GrizzlyLanguageServer,
+    params: lsp.WorkspaceDiagnosticParams,
+) -> lsp.WorkspaceDiagnosticReport:
+    items: List[lsp.Diagnostic] = []
+    first_text_document = list(ls.workspace.text_documents.keys())[0]
+    document = ls.workspace.get_text_document(first_text_document)
+
+    if not ls.client_settings.get('diagnostics_on_save_only', True):
+        items = ls._validate_gherkin(document)
+
+    return lsp.WorkspaceDiagnosticReport(
+        items=[
+            lsp.WorkspaceFullDocumentDiagnosticReport(
+                uri=document.uri,
+                items=items,
+                kind=lsp.DocumentDiagnosticReportKind.Full,
+            )
+        ]
+    )
+
+
+@server.feature(lsp.TEXT_DOCUMENT_CODE_ACTION)
+def text_document_code_action(
+    ls: GrizzlyLanguageServer,
+    params: lsp.CodeActionParams,
+) -> Optional[List[Union[lsp.Command, lsp.CodeAction]]]:
+    diagnostics = params.context.diagnostics
+    document = ls.workspace.get_text_document(params.text_document.uri)
+
+    if len(diagnostics) == 0:
+        return None
+    else:
+        return ls._generate_quick_fixes(diagnostics, document)

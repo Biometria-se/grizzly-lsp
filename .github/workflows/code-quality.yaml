@@ -41,7 +41,7 @@ jobs:
         run: |
           bash ./script/install.sh server
 
-      - name: pytest
+      - name: pytest (unit+e2e)
         id: pytest
         run: python -m pytest
 

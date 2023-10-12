@@ -130,10 +130,10 @@ def test_main(mocker: MockerFixture) -> None:
     )  # no logging in test
 
     server_start_io_mock = mocker.patch(
-        'grizzly_ls.__main__.GrizzlyLanguageServer.start_io', return_value=None
+        'grizzly_ls.server.server.start_io', return_value=None
     )
     server_start_tcp = mocker.patch(
-        'grizzly_ls.__main__.GrizzlyLanguageServer.start_tcp', return_value=None
+        'grizzly_ls.server.server.start_tcp', return_value=None
     )
 
     # <no args>

@@ -4,8 +4,6 @@ import logging
 
 from typing import List, Optional
 
-from .server import GrizzlyLanguageServer
-
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog='grizzly-ls')
@@ -100,7 +98,7 @@ def main() -> None:
 
     setup_logging(args)
 
-    server = GrizzlyLanguageServer()
+    from grizzly_ls.server import server
 
     if not args.socket:
         server.start_io(sys.stdin.buffer, sys.stdout.buffer)  # type: ignore
