@@ -19,7 +19,7 @@ from lsprotocol import types as lsp
 
 from tests.fixtures import LspFixture
 from grizzly_ls import __version__
-from grizzly_ls.server import GrizzlyLanguageServer
+from grizzly_ls.constants import FEATURE_INSTALL
 
 
 class TestE2eGrizzlyLangageServerFeatures:
@@ -67,7 +67,7 @@ class TestE2eGrizzlyLangageServerFeatures:
             ).result(timeout=89)
 
             client.lsp.send_request(  # type: ignore
-                GrizzlyLanguageServer.FEATURE_INSTALL,
+                FEATURE_INSTALL,
                 {'external': file.as_uri(), 'fsPath': str(file)},
             ).result(timeout=89)
         finally:

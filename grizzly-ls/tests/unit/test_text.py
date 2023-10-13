@@ -26,11 +26,16 @@ except ImportError:
 
 import pytest
 
+from lsprotocol.types import Position
+from pygls.workspace import TextDocument
+
 from grizzly_ls.text import (
     RegexPermutationResolver,
     SreParseValue,
     SreParseValueMaxRepeat,
     get_step_parts,
+    format_arg_line,
+    get_current_line,
 )
 
 
@@ -252,3 +257,49 @@ def test_get_step_parts() -> None:
         'Then',
         'make sure that "value" is "None"',
     )
+
+
+def test__format_arg_line() -> None:
+    assert (
+        format_arg_line('hello_world (bool): foo bar description of argument')
+        == '* hello_world `bool`: foo bar description of argument'
+    )
+    assert (
+        format_arg_line('hello: strange stuff (bool)')
+        == '* hello: strange stuff (bool)'
+    )
+
+
+def test_get_current_line() -> None:
+    text_document = TextDocument(
+        'file://test.feature',
+        '''Feature:
+    Scenario: test
+        Then hello world!
+        But foo bar
+''',
+    )
+
+    assert (
+        get_current_line(text_document, Position(line=0, character=0)).strip()
+        == 'Feature:'
+    )
+    assert (
+        get_current_line(text_document, Position(line=1, character=543)).strip()
+        == 'Scenario: test'
+    )
+    assert (
+        get_current_line(text_document, Position(line=2, character=435)).strip()
+        == 'Then hello world!'
+    )
+    assert (
+        get_current_line(text_document, Position(line=3, character=534)).strip()
+        == 'But foo bar'
+    )
+
+    with pytest.raises(IndexError) as ie:
+        assert (
+            get_current_line(text_document, Position(line=10, character=10)).strip()
+            == 'Then hello world!'
+        )
+    assert str(ie.value) == 'list index out of range'

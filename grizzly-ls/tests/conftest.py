@@ -1,4 +1,5 @@
 from typing import Generator
+from pathlib import Path
 
 import pytest
 
@@ -11,3 +12,7 @@ def _lsp_fixture() -> Generator[LspFixture, None, None]:
 
 
 lsp_fixture = pytest.fixture(scope='module')(_lsp_fixture)
+
+GRIZZLY_PROJECT = (Path(__file__) / '..' / '..' / '..' / 'tests' / 'project').resolve()
+
+assert GRIZZLY_PROJECT.is_dir()

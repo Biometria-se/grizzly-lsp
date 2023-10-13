@@ -18,6 +18,13 @@ from typing import (
     cast,
 )
 from dataclasses import dataclass, field
+from tokenize import tokenize, TokenError, TokenInfo
+from io import BytesIO
+
+from lsprotocol.types import Position
+from pygls.workspace import TextDocument
+
+from grizzly_ls.constants import MARKER_LANGUAGE
 
 
 try:
@@ -386,3 +393,47 @@ def clean_help(text: str) -> str:
         text = text.replace(match.group(), replacement_text)
 
     return '\n'.join([line.lstrip() for line in text.split('\n')])
+
+
+def get_tokens(text: str) -> List[TokenInfo]:
+    tokens: List[TokenInfo] = []
+
+    # convert generator to list
+    try:
+        for token in tokenize(BytesIO(text.encode('utf8')).readline):
+            tokens.append(token)
+    except TokenError as e:
+        if 'EOF in multi-line statement' not in str(e):
+            raise
+
+    return tokens
+
+
+def format_arg_line(line: str) -> str:
+    try:
+        argument, description = line.split(':', 1)
+        arg_name, arg_type = argument.split(' ')
+        arg_type = arg_type.replace('(', '').replace(')', '').strip()
+
+        return f'* {arg_name} `{arg_type}`: {description.strip()}'
+    except ValueError:
+        return f'* {line}'
+
+
+def find_language(source: str) -> str:
+    language: str = 'en'
+
+    for line in source.splitlines():
+        line = line.strip()
+        if line.startswith(MARKER_LANGUAGE):
+            _, language = line.strip().split(': ', 1)
+            break
+
+    return language.strip()
+
+
+def get_current_line(text_document: TextDocument, position: Position) -> str:
+    source = text_document.source
+    line = source.split('\n')[position.line]
+
+    return line

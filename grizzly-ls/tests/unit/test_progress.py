@@ -1,6 +1,6 @@
 from unittest.mock import ANY
 
-from grizzly_ls.progress import Progress
+from grizzly_ls.server.progress import Progress
 from pytest_mock import MockerFixture
 
 from tests.fixtures import LspFixture
