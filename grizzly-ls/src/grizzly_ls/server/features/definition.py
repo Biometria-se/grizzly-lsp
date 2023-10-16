@@ -13,7 +13,7 @@ from lsprotocol import types as lsp
 from grizzly_ls.text import get_step_parts
 
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from grizzly_ls.server import GrizzlyLanguageServer
 
 
@@ -82,7 +82,7 @@ def get_file_url_definition(
 
             file_url = f'{file_match.group(1)}{file_match.group(2)}'
 
-            if sys.platform == 'win32':
+            if sys.platform == 'win32':  # pragma: no cover
                 file_url = file_url.replace('\\', '/')
 
             file_parsed = urlparse(file_url)

@@ -7,7 +7,8 @@ name = 'grizzly-loadtester-ls'
 description = 'LSP server implementation for grizzly-loadtester load scenario development'
 dependencies = [
     'pygls >=1.1.0,<1.2.0',
-    'behave ==1.2.6'
+    'behave ==1.2.6',
+    'random-word'
 ]
 readme = 'README.md'
 authors = [

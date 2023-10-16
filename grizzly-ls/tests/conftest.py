@@ -11,7 +11,7 @@ def _lsp_fixture() -> Generator[LspFixture, None, None]:
         yield fixture
 
 
-lsp_fixture = pytest.fixture(scope='module')(_lsp_fixture)
+lsp_fixture = pytest.fixture(scope='session')(_lsp_fixture)
 
 GRIZZLY_PROJECT = (Path(__file__) / '..' / '..' / '..' / 'tests' / 'project').resolve()
 

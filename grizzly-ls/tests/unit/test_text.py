@@ -36,6 +36,7 @@ from grizzly_ls.text import (
     get_step_parts,
     format_arg_line,
     get_current_line,
+    find_language,
 )
 
 
@@ -303,3 +304,11 @@ def test_get_current_line() -> None:
             == 'Then hello world!'
         )
     assert str(ie.value) == 'list index out of range'
+
+
+def test_find_language() -> None:
+    assert find_language('') == 'en'
+    assert find_language('# language: ') == 'en'
+    assert find_language('# language: asdf') == 'asdf'
+    assert find_language('# language: s') == 'en'
+    assert find_language('# language: en-US') == 'en-US'

@@ -75,30 +75,28 @@ class TestGrizzlyLanguageServer:
     def test___init__(
         self, language: str, words: Dict[str, List[str]], lsp_fixture: LspFixture
     ) -> None:
-        server = lsp_fixture.server
+        ls = lsp_fixture.server
         try:
-            server.steps.clear()
+            ls.steps.clear()
             try:
-                server.language = 'dummy'
+                ls.language = 'dummy'
             except ValueError:
                 pass
 
-            server.language = language
+            ls.language = language
 
-            assert server.name == 'grizzly-ls'
-            assert server.version == __version__
-            assert sorted(server.keywords) == sorted(
+            assert ls.name == 'grizzly-ls'
+            assert ls.version == __version__
+            assert sorted(ls.keywords) == sorted(
                 words.get('keywords', []),
             )
-            assert sorted(server.keywords_any) == sorted(words.get('keywords_any', []))
-            assert sorted(server.keywords_once) == sorted(
-                words.get('keywords_once', [])
-            )
+            assert sorted(ls.keywords_any) == sorted(words.get('keywords_any', []))
+            assert sorted(ls.keywords_once) == sorted(words.get('keywords_once', []))
 
-            assert isinstance(server.logger, logging.Logger)
-            assert server.logger.name == 'grizzly_ls.server'
+            assert isinstance(ls.logger, logging.Logger)
+            assert ls.logger.name == 'grizzly_ls.server'
         finally:
-            server.language = 'en'
+            ls.language = 'en'
 
     def test_show_message(
         self,
@@ -106,14 +104,14 @@ class TestGrizzlyLanguageServer:
         caplog: LogCaptureFixture,
         mocker: MockerFixture,
     ) -> None:
-        server = lsp_fixture.server
+        ls = lsp_fixture.server
         show_message_mock = mocker.patch(
             'pygls.server.LanguageServer.show_message', return_value=None
         )
 
         message = 'implicit INFO level'
         with caplog.at_level(logging.INFO):
-            server.show_message(message)
+            ls.show_message(message)
         assert caplog.messages == [message]
         show_message_mock.assert_called_once_with(
             message, msg_type=lsp.MessageType.Info
@@ -123,7 +121,7 @@ class TestGrizzlyLanguageServer:
 
         message = 'explicit INFO level'
         with caplog.at_level(logging.INFO):
-            server.show_message(message, lsp.MessageType.Info)
+            ls.show_message(message, lsp.MessageType.Info)
         assert caplog.messages == [message]
         show_message_mock.assert_called_once_with(
             message, msg_type=lsp.MessageType.Info
@@ -133,7 +131,7 @@ class TestGrizzlyLanguageServer:
 
         message = 'ERROR level'
         with caplog.at_level(logging.ERROR):
-            server.show_message(message, lsp.MessageType.Error)
+            ls.show_message(message, lsp.MessageType.Error)
         assert caplog.messages == [message]
         show_message_mock.assert_called_once_with(
             message, msg_type=lsp.MessageType.Error
@@ -143,7 +141,7 @@ class TestGrizzlyLanguageServer:
 
         message = 'WARNING level'
         with caplog.at_level(logging.WARNING):
-            server.show_message(message, lsp.MessageType.Warning)
+            ls.show_message(message, lsp.MessageType.Warning)
         assert caplog.messages == [message]
         show_message_mock.assert_called_once_with(
             message, msg_type=lsp.MessageType.Warning
@@ -153,7 +151,7 @@ class TestGrizzlyLanguageServer:
 
         message = 'DEBUG level'
         with caplog.at_level(logging.DEBUG):
-            server.show_message(message, lsp.MessageType.Debug)
+            ls.show_message(message, lsp.MessageType.Debug)
         assert caplog.messages == [message]
         show_message_mock.assert_called_once_with(
             message, msg_type=lsp.MessageType.Debug
@@ -163,7 +161,7 @@ class TestGrizzlyLanguageServer:
 
         message = 'CRITICAL level'
         with caplog.at_level(logging.CRITICAL):
-            server.show_message(message, lsp.MessageType.Debug)
+            ls.show_message(message, lsp.MessageType.Debug)
         assert caplog.messages == []
         show_message_mock.assert_called_once_with(
             message, msg_type=lsp.MessageType.Debug
@@ -320,15 +318,15 @@ class TestGrizzlyLanguageServer:
         assert caplog.messages == []
         show_message_mock.assert_not_called()
 
-    def test__find_help(self, lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
-        server = lsp_fixture.server
+    def test__find_help(self, lsp_fixture: LspFixture) -> None:
+        ls = lsp_fixture.server
 
-        server.language = 'en'
+        ls.language = 'en'
 
         def noop() -> None:
             pass
 
-        server.steps = {
+        ls.steps = {
             'then': [
                 Step('Then', 'hello world', noop, 'this is the help for hello world'),
             ],
@@ -346,18 +344,45 @@ class TestGrizzlyLanguageServer:
             ],
         }
 
+        assert ls._find_help('Then hello world') == 'this is the help for hello world'
+        assert ls._find_help('Then hello') == 'this is the help for hello world'
+        assert ls._find_help('asdfasdf') is None
+        assert ls._find_help('And hello') == 'this is the help for hello world'
         assert (
-            server._find_help('Then hello world') == 'this is the help for hello world'
-        )
-        assert server._find_help('Then hello') == 'this is the help for hello world'
-        assert server._find_help('asdfasdf') is None
-        assert server._find_help('And hello') == 'this is the help for hello world'
-        assert (
-            server._find_help('And hello "world"')
+            ls._find_help('And hello "world"')
             == 'this is the help for hello world parameterized'
         )
-        assert server._find_help('But foo') == 'this is the help for foo bar'
+        assert ls._find_help('But foo') == 'this is the help for foo bar'
         assert (
-            server._find_help('But "foo" bar')
+            ls._find_help('But "foo" bar')
             == 'this is the help for foo bar parameterized'
         )
+
+    def test__get_language_key(self, lsp_fixture: LspFixture) -> None:
+        ls = lsp_fixture.server
+
+        ls.language = 'sv'
+        assert ls.get_language_key('Egenskap:') == 'feature'
+        assert ls.get_language_key('Och') == 'step'
+        assert ls.get_language_key('Givet') == 'given'
+        assert ls.get_language_key('Scenariomall:') == 'scenario_outline'
+        assert ls.get_language_key('När') == 'when'
+        assert ls.get_language_key('Så') == 'then'
+        assert ls.get_language_key('Exempel') == 'examples'
+        assert ls.get_language_key('Bakgrund') == 'background'
+        with pytest.raises(ValueError) as ve:
+            ls.get_language_key('Feature')
+        assert str(ve.value) == '"Feature" is not a valid keyword for "sv"'
+
+        ls.language = 'en'
+        assert ls.get_language_key('Feature') == 'feature'
+        assert ls.get_language_key('And') == 'step'
+        assert ls.get_language_key('Given') == 'given'
+        assert ls.get_language_key('Scenario Template:') == 'scenario_outline'
+        assert ls.get_language_key('When') == 'when'
+        assert ls.get_language_key('Then') == 'then'
+        assert ls.get_language_key('Examples') == 'examples'
+        assert ls.get_language_key('Background') == 'background'
+        with pytest.raises(ValueError) as ve:
+            ls.get_language_key('Egenskap')
+        assert str(ve.value) == '"Egenskap" is not a valid keyword for "en"'

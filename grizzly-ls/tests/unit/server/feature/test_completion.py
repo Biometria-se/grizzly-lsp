@@ -5,12 +5,31 @@ from pygls.workspace import TextDocument
 
 from _pytest.logging import LogCaptureFixture
 
-from grizzly_ls.server.features.completion import complete_keyword, complete_step
+from grizzly_ls.server.features.completion import (
+    complete_keyword,
+    complete_step,
+    complete_metadata,
+    complete_variable_name,
+    get_variable_name_trigger,
+)
 from grizzly_ls.server.inventory import compile_inventory
+from grizzly_ls.constants import MARKER_LANGUAGE
 
 from tests.fixtures import LspFixture
 from tests.conftest import GRIZZLY_PROJECT
 from tests.helpers import normalize_completion_item, normalize_completion_text_edit
+
+
+def test_get_variable_name_trigger() -> None:
+    assert get_variable_name_trigger('Then what up') is None
+    assert get_variable_name_trigger('Then what up you "{{') == (
+        True,
+        None,
+    )
+    assert get_variable_name_trigger('Then what up you "{{ foo') == (
+        True,
+        'foo',
+    )
 
 
 def test_complete_keyword(lsp_fixture: LspFixture) -> None:
@@ -371,3 +390,113 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
             actual_completed_step.text_edit is not None
             and actual_completed_step.text_edit.new_text == ' and save in variable "$1"'
         )
+
+
+def test_complete_metadata() -> None:
+    position = lsp.Position(line=0, character=2)
+
+    # <!-- complete metadata attribute
+    actual_items = complete_metadata('#', position)
+
+    assert len(actual_items) == 1
+    actual_item = actual_items[0]
+    assert actual_item.label == MARKER_LANGUAGE
+    assert actual_item.kind == lsp.CompletionItemKind.Property
+    assert isinstance(actual_item.text_edit, lsp.TextEdit)
+    assert actual_item.text_edit.new_text == f'{MARKER_LANGUAGE} '
+    assert actual_item.text_edit.range == lsp.Range(
+        start=lsp.Position(line=position.line, character=0), end=position
+    )
+    # // -->
+
+    # <!-- complete all the languages
+    position = lsp.Position(line=0, character=12)
+    actual_items = complete_metadata('# language: ', position)
+
+    assert len(actual_items) > 10
+    actual_item = actual_items[5]
+    assert actual_item.label == 'da'
+    assert actual_item.kind == lsp.CompletionItemKind.Property
+    assert isinstance(actual_item.text_edit, lsp.TextEdit)
+    assert actual_item.text_edit.new_text == 'da'
+    assert actual_item.text_edit.range == lsp.Range(
+        start=position,
+        end=position,
+    )
+    # // -->
+
+
+def test_complete_variable_name(lsp_fixture: LspFixture) -> None:
+    ls = lsp_fixture.server
+    ls.root_path = GRIZZLY_PROJECT
+
+    text_document = TextDocument(
+        uri='file:///test.feature',
+        source='''Feature:
+    Scenario:
+
+        Given value for variable "foo" is "bar"
+        And what about it?
+        And value for variable "bar" is "foo"
+        And value for variable "foobar" is "barfoo"
+''',
+    )
+
+    position = lsp.Position(line=7, character=19)
+
+    actual_items = complete_variable_name(
+        ls, 'Then log message "{{', text_document, position
+    )
+    assert len(actual_items) == 3
+    actual_text_edits = sorted(
+        [
+            actual_item.text_edit.new_text
+            for actual_item in actual_items
+            if actual_item.text_edit is not None
+        ]
+    )
+    assert actual_text_edits == sorted([' foo }}"', ' bar }}"', ' foobar }}"'])
+
+    actual_items = complete_variable_name(
+        ls, 'Then log message "{{"', text_document, position
+    )
+
+    assert len(actual_items) == 3
+    actual_text_edits = sorted(
+        [
+            actual_item.text_edit.new_text
+            for actual_item in actual_items
+            if actual_item.text_edit is not None
+        ]
+    )
+    assert actual_text_edits == sorted([' foo }}', ' bar }}', ' foobar }}'])
+
+    position = lsp.Position(line=7, character=21)
+    actual_items = complete_variable_name(
+        ls, 'Then log message "{{ }}"', text_document, position
+    )
+
+    assert len(actual_items) == 3
+    actual_text_edits = sorted(
+        [
+            actual_item.text_edit.new_text
+            for actual_item in actual_items
+            if actual_item.text_edit is not None
+        ]
+    )
+    assert actual_text_edits == sorted(['foo ', 'bar ', 'foobar '])
+
+    position = lsp.Position(line=7, character=21)
+    actual_items = complete_variable_name(
+        ls, 'Then log message "{{ f', text_document, position, partial='f'
+    )
+
+    assert len(actual_items) == 2
+    actual_text_edits = sorted(
+        [
+            actual_item.text_edit.new_text
+            for actual_item in actual_items
+            if actual_item.text_edit is not None
+        ]
+    )
+    assert actual_text_edits == sorted(['foo }}"', 'foobar }}"'])

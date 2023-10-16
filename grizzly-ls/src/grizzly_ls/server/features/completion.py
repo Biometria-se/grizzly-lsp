@@ -10,11 +10,13 @@ from difflib import get_close_matches
 
 from lsprotocol import types as lsp
 from pygls.workspace import TextDocument
+from behave.i18n import languages
 
 from grizzly_ls.text import get_tokens
+from grizzly_ls.constants import MARKER_LANGUAGE
 
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from grizzly_ls.server import GrizzlyLanguageServer
 
 
@@ -49,6 +51,65 @@ def get_variable_name_trigger(trigger: str) -> Optional[Tuple[bool, Optional[str
             continue
 
     return None
+
+
+def complete_metadata(
+    line: str,
+    position: lsp.Position,
+) -> List[lsp.CompletionItem]:
+    items: List[lsp.CompletionItem] = []
+    if line.startswith(MARKER_LANGUAGE):
+        _, expression = line.strip().split(MARKER_LANGUAGE, 1)
+        expression = expression.strip()
+
+        for lang, localization in languages.items():
+            name = localization.get('name', ['___12341234_asdf'])[0]
+            native = localization.get('native', ['___12341234_asdf'])[0]
+            if (
+                not (
+                    expression.lower() in name.lower()
+                    or expression.lower() in native.lower()
+                    or expression.lower() in lang
+                )
+                and len(expression.strip()) > 0
+            ):
+                continue
+
+            text_edit = lsp.TextEdit(
+                range=lsp.Range(
+                    start=lsp.Position(
+                        line=position.line,
+                        character=position.character - len(expression),
+                    ),
+                    end=position,
+                ),
+                new_text=lang,
+            )
+
+            items.append(
+                lsp.CompletionItem(
+                    label=lang,
+                    kind=lsp.CompletionItemKind.Property,
+                    text_edit=text_edit,
+                )
+            )
+    else:
+        text_edit = lsp.TextEdit(
+            range=lsp.Range(
+                start=lsp.Position(line=position.line, character=0),
+                end=position,
+            ),
+            new_text=f'{MARKER_LANGUAGE} ',
+        )
+        items = [
+            lsp.CompletionItem(
+                label=MARKER_LANGUAGE,
+                kind=lsp.CompletionItemKind.Property,
+                text_edit=text_edit,
+            )
+        ]
+
+    return items
 
 
 def complete_keyword(
@@ -136,10 +197,9 @@ def complete_variable_name(
         if match:
             variable_name = match.group(2) or match.group(3)
 
-            if variable_name is None:
-                continue
-
-            if partial is not None and not variable_name.startswith(partial):
+            if variable_name is None or (
+                partial is not None and not variable_name.startswith(partial)
+            ):
                 continue
 
             text_edit: Optional[lsp.TextEdit] = None
@@ -273,7 +333,7 @@ def complete_step(
             if not new_text.startswith(' ') and new_text.strip().count(' ') < 1:
                 try:
                     _, new_text = matched_step.rsplit(' ', 1)
-                except:
+                except:  # pragma: no cover
                     pass
         else:
             new_text = matched_step

@@ -48,6 +48,7 @@ from .features.completion import (
     complete_keyword,
     complete_variable_name,
     complete_step,
+    complete_metadata,
 )
 from .features.definition import get_step_definition, get_file_url_definition
 from .features.diagnostics import validate_gherkin
@@ -142,7 +143,7 @@ class GrizzlyLanguageServer(LanguageServer):
             if keyword in values:
                 return key
 
-        raise ValueError(f'"{keyword}" is not a valid keyword')
+        raise ValueError(f'"{keyword}" is not a valid keyword for "{self.language}"')
 
     def _normalize_step_expression(self, step: Union[ParseMatcher, str]) -> List[str]:
         if isinstance(step, ParseMatcher):
@@ -150,11 +151,7 @@ class GrizzlyLanguageServer(LanguageServer):
         else:
             pattern = step
 
-        patterns, errors = self.normalizer(pattern)
-
-        if len(errors) > 0:
-            for message in errors:
-                self.show_message(message, msg_type=lsp.MessageType.Error)
+        patterns = self.normalizer(pattern)
 
         return patterns
 
@@ -502,6 +499,8 @@ def text_document_completion(
                 params.position,
                 partial=partial_variable_name,
             )
+        elif line.strip().startswith('#'):
+            items = complete_metadata(line, params.position)
         else:
             keyword, text = get_step_parts(line)
             ls.logger.debug(f'{keyword=}, {text=}, {ls.keywords=}')
@@ -587,6 +586,7 @@ def text_document_did_change(
     ls: GrizzlyLanguageServer, params: lsp.DidChangeTextDocumentParams
 ) -> None:
     document = ls.workspace.get_text_document(params.text_document.uri)
+
     try:
         ls.language = find_language(document.source)
     except ValueError:
@@ -598,6 +598,7 @@ def text_document_did_open(
     ls: GrizzlyLanguageServer, params: lsp.DidOpenTextDocumentParams
 ) -> None:
     document = ls.workspace.get_text_document(params.text_document.uri)
+
     try:
         ls.language = find_language(document.source)
     except ValueError:
@@ -692,11 +693,11 @@ def workspace_diagnostic(
 def text_document_code_action(
     ls: GrizzlyLanguageServer,
     params: lsp.CodeActionParams,
-) -> Optional[List[Union[lsp.Command, lsp.CodeAction]]]:
+) -> Optional[List[lsp.CodeAction]]:
     diagnostics = params.context.diagnostics
-    document = ls.workspace.get_text_document(params.text_document.uri)
+    text_document = ls.workspace.get_text_document(params.text_document.uri)
 
     if len(diagnostics) == 0:
         return None
     else:
-        return generate_quick_fixes(ls, diagnostics, document)
+        return generate_quick_fixes(ls, text_document, diagnostics)

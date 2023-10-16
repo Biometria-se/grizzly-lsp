@@ -4,6 +4,7 @@ import itertools
 import string
 import inspect
 import sys
+import unicodedata
 
 from typing import (
     List,
@@ -230,9 +231,8 @@ class Normalizer:
     def __init__(self, custom_types: Dict[str, NormalizeHolder]) -> None:
         self.custom_types = custom_types
 
-    def __call__(self, pattern: str) -> Tuple[List[str], List[str]]:
+    def __call__(self, pattern: str) -> List[str]:
         patterns: List[str] = []
-        errors: Set[str] = set()
 
         # replace all non typed variables first, will only result in 1 step
         regex = r'\{[^\}:]*\}'
@@ -363,7 +363,7 @@ class Normalizer:
         if not has_matches and not has_typed_matches or len(patterns) < 1:
             patterns.append(pattern)
 
-        return patterns, list(errors)
+        return patterns
 
 
 def get_step_parts(line: str) -> Tuple[Optional[str], Optional[str]]:
@@ -426,10 +426,17 @@ def find_language(source: str) -> str:
     for line in source.splitlines():
         line = line.strip()
         if line.startswith(MARKER_LANGUAGE):
-            _, language = line.strip().split(': ', 1)
-            break
+            try:
+                _, lang = line.strip().split(': ', 1)
+                lang = lang.strip()
+                if len(lang) >= 2:
+                    language = lang
+            except ValueError:
+                pass
+            finally:
+                break
 
-    return language.strip()
+    return language
 
 
 def get_current_line(text_document: TextDocument, position: Position) -> str:
@@ -437,3 +444,14 @@ def get_current_line(text_document: TextDocument, position: Position) -> str:
     line = source.split('\n')[position.line]
 
     return line
+
+
+def normalize_text(text: str) -> str:
+    text = (
+        unicodedata.normalize('NFKD', str(text))
+        .encode('ascii', 'ignore')
+        .decode('ascii')
+    )
+    text = re.sub(r'[^\w\s-]', '', text)
+
+    return re.sub(r'[-\s]+', '-', text).strip('-_')

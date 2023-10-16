@@ -50,7 +50,7 @@ Feature:
         start=lsp.Position(line=1, character=12),
         end=lsp.Position(line=1, character=16),
     )
-    assert diagnostic.message == 'asdf is not a valid language'
+    assert diagnostic.message == '"asdf" is not a valid language'
     assert diagnostic.severity == lsp.DiagnosticSeverity.Error
     assert diagnostic.code is None
     assert diagnostic.code_description is None
@@ -65,7 +65,7 @@ Feature:
         start=lsp.Position(line=1, character=0),
         end=lsp.Position(line=1, character=16),
     )
-    assert diagnostic.message == '# language: should be on the first line'
+    assert diagnostic.message == '"# language:" should be on the first line'
     assert diagnostic.severity == lsp.DiagnosticSeverity.Warning
     assert diagnostic.code is None
     assert diagnostic.code_description is None

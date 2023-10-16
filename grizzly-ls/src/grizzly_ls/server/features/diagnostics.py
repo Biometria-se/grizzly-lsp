@@ -9,7 +9,12 @@ from lsprotocol import types as lsp
 from behave.parser import parse_feature, ParserError
 from behave.i18n import languages
 
-from grizzly_ls.constants import MARKER_LANGUAGE, MARKER_NO_STEP_IMPL
+from grizzly_ls.constants import (
+    MARKER_LANGUAGE,
+    MARKER_NO_STEP_IMPL,
+    MARKER_LANG_NOT_VALID,
+    MARKER_LANG_WRONG_LINE,
+)
 from grizzly_ls.text import get_step_parts
 
 
@@ -62,7 +67,7 @@ def validate_gherkin(
                                     character=marker_position + len(language),
                                 ),
                             ),
-                            message=f'{language} is not a valid language',
+                            message=f'"{language}" {MARKER_LANG_NOT_VALID}',
                             severity=lsp.DiagnosticSeverity.Error,
                             source=ls.__class__.__name__,
                         )
@@ -78,7 +83,7 @@ def validate_gherkin(
                             start=lsp.Position(line=lineno, character=position),
                             end=lsp.Position(line=lineno, character=len(line)),
                         ),
-                        message=f'{MARKER_LANGUAGE} should be on the first line',
+                        message=f'"{MARKER_LANGUAGE}" {MARKER_LANG_WRONG_LINE}',
                         severity=lsp.DiagnosticSeverity.Warning,
                         source=ls.__class__.__name__,
                     )
