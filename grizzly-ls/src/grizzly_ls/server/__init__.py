@@ -671,22 +671,27 @@ def workspace_diagnostic(
     ls: GrizzlyLanguageServer,
     params: lsp.WorkspaceDiagnosticParams,
 ) -> lsp.WorkspaceDiagnosticReport:
-    items: List[lsp.Diagnostic] = []
-    first_text_document = list(ls.workspace.text_documents.keys())[0]
-    document = ls.workspace.get_text_document(first_text_document)
+    report = lsp.WorkspaceDiagnosticReport(items=[])
 
-    if not ls.client_settings.get('diagnostics_on_save_only', True):
-        items = validate_gherkin(ls, document)
+    try:
+        items: List[lsp.Diagnostic] = []
+        first_text_document = list(ls.workspace.text_documents.keys())[0]
+        document = ls.workspace.get_text_document(first_text_document)
 
-    return lsp.WorkspaceDiagnosticReport(
-        items=[
+        if not ls.client_settings.get('diagnostics_on_save_only', True):
+            items = validate_gherkin(ls, document)
+
+        report.items = [
             lsp.WorkspaceFullDocumentDiagnosticReport(
                 uri=document.uri,
                 items=items,
                 kind=lsp.DocumentDiagnosticReportKind.Full,
             )
         ]
-    )
+    except:
+        pass
+
+    return report
 
 
 @server.feature(lsp.TEXT_DOCUMENT_CODE_ACTION)

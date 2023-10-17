@@ -21,6 +21,12 @@ export async function activate(docUri: vscode.Uri, content: string) {
 
         await setTestContent(content);
 
+        // if the extension for some reason won't start, it is nice to look at the output
+        // to be able to understand why
+        if (ext.exports === undefined) {
+            await sleep(1000*60*60*24);
+        }
+
         // wait until language server is done with everything
         while (!ext.exports.isActivated()) {
             await sleep(1000);

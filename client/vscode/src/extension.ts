@@ -1,103 +1,58 @@
 'use strict';
 
 import * as net from 'net';
+import * as vscode from 'vscode';
+import * as util from 'util';
+import * as child_process from 'child_process';
+import * as path from 'path';
 
-import {
-    workspace,
-    OutputChannel,
-    window as Window,
-    TextDocument,
-    WorkspaceFoldersChangeEvent,
-    WorkspaceFolder,
-    Uri,
-    ConfigurationChangeEvent,
-} from 'vscode';
-import { LanguageClient, LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
+import { LanguageClient, LanguageClientOptions, ServerOptions, State } from 'vscode-languageclient/node';
+import { PythonExtension } from '@vscode/python-extension';
 
-const clients: Map<string, LanguageClient> = new Map();
+import { Settings, ExtensionStatus } from './model';
 
-interface ExtensionStatus {
-    isActivated: () => boolean;
-    setActivated: () => void;
-}
+const exec = util.promisify(child_process.exec);
 
-interface SettingsStdio {
-    executable: string;
-    args: string[];
-}
+let logger: vscode.LogOutputChannel;
+let client: LanguageClient;
+let python: PythonExtension;
+let documentUri: vscode.Uri;
+let serverUri: vscode.Uri;
 
-interface SettingsSocket {
-    host: string;
-    port: number;
-}
+let starting = false;
+let activated = false;
 
-type SettingsServerConnection = 'socket' | 'stdio';
-
-interface SettingsServer {
-    connection: SettingsServerConnection;
-}
-
-interface Settings {
-    server: SettingsServer;
-    stdio: SettingsStdio;
-    socket: SettingsSocket;
-    variable_pattern: string[];
-    pip_extra_index_url: string;
-    use_virtual_environment: boolean;
-    diagnostics_on_save_only: boolean;
-}
-
-let _sortedWorkspaceFolders: string[] | undefined;
-
-function sortedWorkspaceFolders(): string[] {
-    if (_sortedWorkspaceFolders === void 0) {
-        _sortedWorkspaceFolders = workspace.workspaceFolders
-            ? workspace.workspaceFolders
-                .map((folder) => {
-                    let result = folder.uri.toString();
-                    if (result.charAt(result.length - 1) !== '/') {
-                        result = result + '/';
-                    }
-
-                    return result;
-                })
-                .sort((a, b) => {
-                    return a.length - b.length;
-                })
-            : [];
+const status: ExtensionStatus = {
+    isActivated: () => {
+        return activated;
+    },
+    setActivated: (status: boolean = true) => {
+        activated = status;
     }
+};
 
-    return _sortedWorkspaceFolders;
-}
 
-workspace.onDidChangeWorkspaceFolders(() => (_sortedWorkspaceFolders = undefined));
-
-function getOuterMostWorkspaceFolder(folder: WorkspaceFolder): WorkspaceFolder {
-    const foldersSorted = sortedWorkspaceFolders();
-    let folderUri = folder.uri.toString();
-
-    for (const folderSorted of foldersSorted) {
-        if (folderUri.charAt(folderUri.length - 1) !== '/') {
-            folderUri = folderUri + '/';
-        }
-
-        if (folderUri.startsWith(folderSorted)) {
-            return workspace.getWorkspaceFolder(Uri.parse(folderSorted)) || folder;
-        }
-    }
-
-    return folder;
-}
-
-function createStdioLanguageServer(
-    command: string,
+async function createStdioLanguageServer(
+    module: string,
     args: string[],
     documentSelector: string[],
-    outputChannel: OutputChannel,
     initializationOptions: Settings,
-): LanguageClient {
+): Promise<LanguageClient> {
+    const command = await getPythonPath();
+
+    try {
+        const { stdout } = await exec(`${command} -c 'import ${module}; import inspect; print(inspect.getsourcefile(${module}));'`);
+        serverUri = vscode.Uri.file(path.dirname(stdout.trim()));
+        logger.info(`serverUri = ${serverUri}`);
+    } catch (error) {
+        logger.error(`Failed to get module path for ${module}`);
+    }
+
+    args = ['-m', module, ...args];
+
     if (process.env.VERBOSE && !args.includes('--verbose')) {
         args = [...args, '--verbose'];
+        logger.warn('Starting language server in verbose mode');
     }
 
     const serverOptions: ServerOptions = {
@@ -110,7 +65,7 @@ function createStdioLanguageServer(
         markdown: {
             isTrusted: true,
         },
-        outputChannel,
+        outputChannel: logger,
         initializationOptions,
     };
 
@@ -121,7 +76,6 @@ function createSocketLanguageServer(
     host: string,
     port: number,
     documentSelector: string[],
-    outputChannel: OutputChannel,
     initializationOptions: Settings,
 ): LanguageClient {
     const serverOptions: ServerOptions = () => {
@@ -138,7 +92,7 @@ function createSocketLanguageServer(
 
     const clientOptions: LanguageClientOptions = {
         documentSelector: documentSelector,
-        outputChannel: outputChannel,
+        outputChannel: logger,
         markdown: {
             isTrusted: true,
         },
@@ -148,8 +102,8 @@ function createSocketLanguageServer(
     return new LanguageClient(`socket language server (${host}:${port})`, serverOptions, clientOptions);
 }
 
-function createLanguageClient(outputChannel: OutputChannel): LanguageClient {
-    const configuration = workspace.getConfiguration('grizzly');
+async function createLanguageClient(): Promise<LanguageClient> {
+    const configuration = vscode.workspace.getConfiguration('grizzly');
     const documentSelector = ['grizzly-gherkin'];
     let languageClient: LanguageClient;
 
@@ -159,11 +113,10 @@ function createLanguageClient(outputChannel: OutputChannel): LanguageClient {
 
     switch (connectionType) {
         case 'stdio':
-            languageClient = createStdioLanguageServer(
-                configuration.get<string>('stdio.executable') || 'grizzly-ls',
+            languageClient = await createStdioLanguageServer(
+                configuration.get<string>('stdio.module') || 'grizzly_ls',
                 configuration.get<Array<string>>('stdio.args') || [],
                 documentSelector,
-                outputChannel,
                 settings,
             );
             break;
@@ -172,7 +125,6 @@ function createLanguageClient(outputChannel: OutputChannel): LanguageClient {
                 configuration.get<string>('socket.host') || 'localhost',
                 configuration.get<number>('socket.port') || 4444,
                 documentSelector,
-                outputChannel,
                 settings,
             );
             break;
@@ -183,80 +135,141 @@ function createLanguageClient(outputChannel: OutputChannel): LanguageClient {
     return languageClient;
 }
 
-export function activate(): ExtensionStatus {
-    const outputChannel: OutputChannel = Window.createOutputChannel('Grizzly Language Server');
+async function getPythonPath(): Promise<string> {
+    const activeEnvPath = python.environments.getActiveEnvironmentPath();
+    logger.info(`Using environment: ${activeEnvPath.id}: ${activeEnvPath.path}`);
 
-    let activated = false;
+    const activeEnv = await python.environments.resolveEnvironment(activeEnvPath);
 
-    const status: ExtensionStatus = {
-        isActivated: () => {
-            return activated;
-        },
-        setActivated: () => {
-            activated = true;
+    if (!activeEnv) {
+        throw new Error(`Unable to resolve environment: ${activeEnv}`);
+    }
+
+    const pythonUri = activeEnv.executable.uri;
+    if (!pythonUri) {
+        throw new Error('Python executable URI not found');
+    }
+
+    return pythonUri.fsPath;
+}
+
+async function getPythonExtension(): Promise<void> {
+    try {
+        python = await PythonExtension.api();
+    } catch (err) {
+        logger.error(`Unable to load python extension: ${err}`);
+    }
+}
+
+async function startLanguageServer(): Promise<void> {
+    if (starting) {
+        return;
+    }
+
+    starting = true;
+    if (client) {
+        await stopLanguageServer();
+    }
+
+    try {
+        client = await createLanguageClient();
+        await client.start();
+        logger.info(`Installing based on ${documentUri.path}`);
+        await client.sendRequest('grizzly-ls/install', documentUri);
+        status.setActivated(true);
+    } catch (error) {
+        logger.error(`Unable to start language server: ${error}`);
+    } finally {
+        starting = false;
+    }
+}
+
+async function stopLanguageServer(): Promise<void> {
+    if (!client) {
+        return;
+    }
+
+    if (client.state === State.Running) {
+        await client.stop();
+    }
+
+    status.setActivated(false);
+
+    client.dispose();
+    client = undefined;
+}
+
+export async function activate(context: vscode.ExtensionContext): Promise<ExtensionStatus | undefined> {
+    logger = vscode.window.createOutputChannel('Grizzly Language Server', {log: true});
+    logger.show();
+
+    await getPythonExtension();
+    if (!python) {
+        return;
+    }
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('grizzly.server.restart', async () => {
+            if (status.isActivated()) {
+                logger.info('Restarting language server');
+                await startLanguageServer();
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        python.environments.onDidChangeActiveEnvironmentPath(async () => {
+            if (status.isActivated()) {
+                logger.info('Python environment modified, restarting server');
+                await startLanguageServer();
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration(async (event) => {
+            if (event.affectsConfiguration('grizzly') && status.isActivated()) {
+                logger.info('Settings changed, restarting server');
+                await startLanguageServer();
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.workspace.onDidOpenTextDocument(async (textDocument: vscode.TextDocument) => {
+            if (!client && textDocument.languageId === 'grizzly-gherkin') {
+                documentUri = textDocument.uri;
+                await startLanguageServer();
+            }
+        })
+    );
+
+    // hot reload
+    context.subscriptions.push(
+        vscode.workspace.onDidSaveTextDocument(async (textDocument: vscode.TextDocument) => {
+            if (serverUri !== undefined && textDocument.uri.path.startsWith(serverUri.path)) {
+                logger.info(`Hot-reloading server: ${textDocument.uri.toString()} modified`);
+                await startLanguageServer();
+            }
+        })
+    );
+
+    // all open files
+    vscode.workspace.textDocuments.forEach(async (textDocument: vscode.TextDocument) => {
+        if (!client && textDocument.languageId === 'grizzly-gherkin') {
+            documentUri = textDocument.uri;
+            await startLanguageServer();
         }
-    };
-
-    const didOpenTextDocument = async (document: TextDocument): Promise<void> => {
-        if (document.languageId !== 'grizzly-gherkin') {
-            return;
-        }
-
-        let folder = workspace.getWorkspaceFolder(document.uri);
-
-        if (!folder) {
-            return;
-        }
-
-        folder = getOuterMostWorkspaceFolder(folder);
-        const folderUri = folder.uri.toString();
-
-        if (!clients.has(folderUri)) {
-            const client = createLanguageClient(outputChannel);
-            await client.start();
-            clients.set(folderUri, client);
-            outputChannel.appendLine(`started language client for ${folderUri}`);
-            await client.sendRequest('grizzly-ls/install', document.uri);
-            outputChannel.appendLine('ensured dependencies');
-            status.setActivated();
-        }
-    };
+    });
 
     // disable vscode builtin handler of `file://` url's, since it interferse with grizzly-ls definitions
     // https://github.com/microsoft/vscode/blob/f1f645f4ccbee9d56d091b819a81d34af31be17f/src/vs/editor/contrib/links/links.ts#L310-L330
-    const configuration = workspace.getConfiguration('', {languageId: 'grizzly-gherkin'});
+    const configuration = vscode.workspace.getConfiguration('', {languageId: 'grizzly-gherkin'});
     configuration.update('editor.links', false, false, true);
-
-    workspace.onDidOpenTextDocument(didOpenTextDocument);
-    workspace.textDocuments.forEach(didOpenTextDocument);
-    workspace.onDidChangeWorkspaceFolders(async (event: WorkspaceFoldersChangeEvent) => {
-        event.removed.forEach(async (folder) => {
-            const folderUri = folder.uri.toString();
-            const client = clients.get(folderUri);
-
-            if (client) {
-                clients.delete(folderUri);
-                outputChannel.appendLine(`removed workspace folder ${folderUri}`);
-                await client.stop();
-            }
-        });
-    });
-    workspace.onDidChangeConfiguration((event: ConfigurationChangeEvent) => {
-        if (!event.affectsConfiguration('grizzly')) {
-            return;
-        }
-        outputChannel.appendLine('configuration change for "grizzly"');
-    });
 
     return status;
 }
 
-export async function deactivate() {
-    const promises: Thenable<void>[] = [];
-
-    clients.forEach((client) => {
-        promises.push(client.stop());
-    });
-
-    await Promise.all(promises);
+export function deactivate(): Thenable<void> {
+    return stopLanguageServer();
 }

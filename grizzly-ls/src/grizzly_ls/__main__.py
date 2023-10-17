@@ -66,13 +66,18 @@ def setup_logging(args: argparse.Namespace) -> None:
 
     if not args.socket:
         if level < logging.INFO:
-            handlers = [logging.FileHandler('grizzly-ls.log')]
-    else:
-        handlers = [logging.StreamHandler(sys.stderr)]
+            handler = logging.FileHandler('grizzly-ls.log')
+            handler.setFormatter(
+                logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s')
+            )
+            handlers.append(handler)
+
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter('server/%(levelname)s: %(message)s'))
+    handlers.append(handler)
 
     logging.basicConfig(
         level=level,
-        format='[%(asctime)s] %(levelname)s: %(message)s',
         handlers=handlers,
     )
 
@@ -84,13 +89,12 @@ def setup_logging(args: argparse.Namespace) -> None:
     # always supress these loggers
     no_verbose.append('parse')
     no_verbose.append('pip')
+    if not args.verbose:
+        no_verbose.append('pygls')
 
     for logger_name in no_verbose:
-        if logger_name in logging.Logger.manager.loggerDict:
-            logger = logging.getLogger(logger_name)
-            logger.setLevel(logging.ERROR)
-        else:
-            print(f'!! logger "{logger_name}" does not exist', file=sys.stderr)
+        logger = logging.getLogger(logger_name)
+        logger.setLevel(logging.ERROR)
 
 
 def main() -> None:

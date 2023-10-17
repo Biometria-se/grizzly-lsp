@@ -1,14 +1,5 @@
 {
-  "grizzly.server.connection": "socket",
-  "grizzly.socket.host": "localhost",
-  "grizzly.socket.port": 4444,
-  "grizzly.use_virtual_environment": false,
-  "grizzly.diagnostics_on_save_only": true,
-  "grizzly.variable_pattern": [
-    "ask for value of variable \"([^\"]*)\"",
-    "value for variable \"([^\"]*)\" is \".*?\""
-  ],
-  "[grizzly-gherkin]": {
-    "editor.links": false
-  }
+	"[grizzly-gherkin]": {
+		"editor.links": false
+	}
 }

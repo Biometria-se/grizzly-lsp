@@ -4,7 +4,6 @@ import pytest
 
 from pytest_mock import MockerFixture
 from _pytest.logging import LogCaptureFixture
-from pytest_mock import MockerFixture
 
 from grizzly_ls.server.inventory import (
     compile_inventory,

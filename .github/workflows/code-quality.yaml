@@ -138,7 +138,7 @@ jobs:
         id: server-mypy
         if: always()
         working-directory: ./grizzly-ls
-        run: python3 -m mypy src/ tests/
+        run: python3 -m mypy --config-file=pyproject.toml src/ tests/
 
       - name: 'server: flake8'
         id: server-flake8

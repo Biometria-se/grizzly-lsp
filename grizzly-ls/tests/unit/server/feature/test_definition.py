@@ -78,7 +78,7 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
             ls,
             params,
             f'Then this is a variable "file://./requests/test.txt" and this is also a variable "$include::{test_file.as_uri()}$"',
-        )  #                            ^- 26                    ^- 51
+        )  # .character =               ^- 26                    ^- 51
 
         assert len(actual_definitions) == 1
         actual_definition = actual_definitions[0]
@@ -124,7 +124,7 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
         position.character = 16
         actual_definitions = get_file_url_definition(
             ls, params, 'Then send file "test.txt"'
-        )  #                             ^- 16   ^- 24
+        )  # .character =                ^- 16   ^- 24
 
         assert len(actual_definitions) == 1
         actual_definition = actual_definitions[0]

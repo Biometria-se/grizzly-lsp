@@ -146,13 +146,7 @@ ignore = ['E722', 'W503', 'E402', 'F405', 'F403', 'E203']
 exclude = ['.git', '__pycache__', 'docs', 'build', 'dist']
 
 [tool.mypy]
-[[tool.mypy.overrides]]
-module = "behave.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "parse.*"
-ignore_missing_imports = true
+mypy_path = 'types/'
 
 [[tool.mypy.overrides]]
 module = "piplicenses.*"
