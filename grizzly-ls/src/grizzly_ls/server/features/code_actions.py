@@ -91,7 +91,7 @@ def step_impl(context: Context{arguments}) -> None:
         )
 
         target_source = quick_fix_file.read_text().splitlines()
-        position = lsp.Position(line=len(target_source) - 1, character=0)
+        position = lsp.Position(line=len(target_source), character=0)
 
         return lsp.CodeAction(
             title='Create step implementation',
@@ -110,7 +110,9 @@ def step_impl(context: Context{arguments}) -> None:
                 }
             ),
             diagnostics=[diagnostic],
-            disabled=lsp.CodeActionDisabledType(reason='not applicable'),
+            command=lsp.Command(
+                'Rebuild step inventory', 'grizzly.server.inventory.rebuild'
+            ),
         )
     except ValueError:
         return None

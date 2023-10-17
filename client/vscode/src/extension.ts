@@ -218,8 +218,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
     );
 
     context.subscriptions.push(
+        vscode.commands.registerCommand('grizzly.server.inventory.rebuild', async () => {
+            if (client) {
+                vscode.workspace.textDocuments.forEach(async (textDocument: vscode.TextDocument) => {
+                    await textDocument.save();
+                });
+                await vscode.commands.executeCommand('grizzly-ls/rebuild-inventory');
+            }
+        })
+    );
+
+    context.subscriptions.push(
         python.environments.onDidChangeActiveEnvironmentPath(async () => {
-            if (status.isActivated()) {
+            if (client) {
                 logger.info('Python environment modified, restarting server');
                 await startLanguageServer();
             }

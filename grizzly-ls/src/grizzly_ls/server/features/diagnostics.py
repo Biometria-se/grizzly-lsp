@@ -140,7 +140,7 @@ def validate_gherkin(
                             start=lsp.Position(
                                 line=lineno, character=len(line) - len(expression)
                             ),
-                            end=lsp.Position(line=lineno, character=len(line) - 1),
+                            end=lsp.Position(line=lineno, character=len(line)),
                         ),
                         message=f'{MARKER_NO_STEP_IMPL}\n{stripped_line}',
                         severity=lsp.DiagnosticSeverity.Warning,

@@ -12,7 +12,6 @@ from pathlib import Path
 
 from lsprotocol.types import MessageType
 from behave.matchers import ParseMatcher
-from behave.step_registry import registry
 from behave.runner_util import load_step_modules as behave_load_step_modules
 from behave.i18n import languages
 
@@ -34,11 +33,13 @@ logger = logging.getLogger(__name__)
 
 
 def load_step_registry(step_paths: List[Path]) -> Dict[str, List[ParseMatcher]]:
+    from behave import step_registry
+
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         behave_load_step_modules([str(step_path) for step_path in step_paths])
 
-    return registry.steps
+    return step_registry.registry.steps.copy()
 
 
 def create_step_normalizer() -> Normalizer:
@@ -117,16 +118,19 @@ def create_step_normalizer() -> Normalizer:
     return Normalizer(custom_type_permutations)
 
 
-def compile_inventory(ls: GrizzlyLanguageServer, project_name: str) -> None:
+def compile_inventory(ls: GrizzlyLanguageServer, silent: bool = False) -> None:
     logger.debug('creating step registry')
+    project_name = ls.root_path.stem
 
     try:
+        ls.behave_steps.clear()
         ls.behave_steps = load_step_registry(
             [path.parent for path in ls.root_path.rglob('*.py')]
         )
-    except ModuleNotFoundError:
+    except Exception as e:
         ls.show_message(
-            'unable to load behave step expressions', msg_type=MessageType.Error
+            f'unable to load behave step expressions:\n{str(e)}',
+            msg_type=MessageType.Error,
         )
         return
 
@@ -143,9 +147,14 @@ def compile_inventory(ls: GrizzlyLanguageServer, project_name: str) -> None:
         total_steps += len(steps)
 
     compile_keyword_inventory(ls)
-    ls.show_message(
+
+    message = (
         f'found {len(ls.keywords)} keywords and {total_steps} steps in "{project_name}"'
     )
+    if not silent:
+        ls.show_message(message)
+    else:
+        ls.logger.info(message)
 
 
 def compile_step_inventory(ls: GrizzlyLanguageServer) -> None:

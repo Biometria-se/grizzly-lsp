@@ -28,6 +28,7 @@ from urllib.parse import urlparse, unquote
 from urllib.request import url2pathname
 from pip._internal.configuration import Configuration as PipConfiguration
 from pip._internal.exceptions import ConfigurationError as PipConfigurationError
+from time import sleep
 
 import gevent.monkey  # type: ignore
 
@@ -39,7 +40,7 @@ from grizzly_ls import __version__
 from grizzly_ls.text import Normalizer, get_step_parts
 from grizzly_ls.utils import run_command
 from grizzly_ls.model import Step
-from grizzly_ls.constants import FEATURE_INSTALL
+from grizzly_ls.constants import FEATURE_INSTALL, COMMAND_REBUILD_INVENTORY
 from grizzly_ls.text import format_arg_line, find_language, get_current_line
 
 from .progress import Progress
@@ -338,7 +339,7 @@ def install(ls: GrizzlyLanguageServer, params: FeatureInstallParams) -> None:
         try:
             # <!-- compile inventory
             progress.report('compile inventory', 85)
-            compile_inventory(ls, project_name)
+            compile_inventory(ls)
             # // ->
         except ModuleNotFoundError:
             ls.show_message(
@@ -351,9 +352,9 @@ def install(ls: GrizzlyLanguageServer, params: FeatureInstallParams) -> None:
                 # always restore to original value
                 sys.path.pop()
 
-    document = ls.workspace.get_text_document(params.external)
-    diagnostics = validate_gherkin(ls, document)
-    ls.publish_diagnostics(document.uri, diagnostics)  # type: ignore
+    text_document = ls.workspace.get_text_document(params.external)
+    diagnostics = validate_gherkin(ls, text_document)
+    ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
 
 
 @server.feature(lsp.INITIALIZE)
@@ -585,10 +586,10 @@ def text_document_hover(
 def text_document_did_change(
     ls: GrizzlyLanguageServer, params: lsp.DidChangeTextDocumentParams
 ) -> None:
-    document = ls.workspace.get_text_document(params.text_document.uri)
+    text_document = ls.workspace.get_text_document(params.text_document.uri)
 
     try:
-        ls.language = find_language(document.source)
+        ls.language = find_language(text_document.source)
     except ValueError:
         ls.language = 'en'
 
@@ -597,17 +598,16 @@ def text_document_did_change(
 def text_document_did_open(
     ls: GrizzlyLanguageServer, params: lsp.DidOpenTextDocumentParams
 ) -> None:
-    document = ls.workspace.get_text_document(params.text_document.uri)
+    text_document = ls.workspace.get_text_document(params.text_document.uri)
 
     try:
-        ls.language = find_language(document.source)
+        ls.language = find_language(text_document.source)
     except ValueError:
         ls.language = 'en'
 
     if ls.client_settings.get('diagnostics_on_save_only', True):
-        document = ls.workspace.get_text_document(params.text_document.uri)
-        diagnostics = validate_gherkin(ls, document)
-        ls.publish_diagnostics(document.uri, diagnostics)  # type: ignore
+        diagnostics = validate_gherkin(ls, text_document)
+        ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DID_SAVE)
@@ -615,9 +615,9 @@ def text_document_did_save(
     ls: GrizzlyLanguageServer, params: lsp.DidSaveTextDocumentParams
 ) -> None:
     if ls.client_settings.get('diagnostics_on_save_only', True):
-        document = ls.workspace.get_text_document(params.text_document.uri)
-        diagnostics = validate_gherkin(ls, document)
-        ls.publish_diagnostics(document.uri, diagnostics)  # type: ignore
+        text_document = ls.workspace.get_text_document(params.text_document.uri)
+        diagnostics = validate_gherkin(ls, text_document)
+        ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DEFINITION)
@@ -657,8 +657,8 @@ def text_document_diagnostic(
 ) -> lsp.DocumentDiagnosticReport:
     items: List[lsp.Diagnostic] = []
     if not ls.client_settings.get('diagnostics_on_save_only', True):
-        document = ls.workspace.get_text_document(params.text_document.uri)
-        items = validate_gherkin(ls, document)
+        text_document = ls.workspace.get_text_document(params.text_document.uri)
+        items = validate_gherkin(ls, text_document)
 
     return lsp.RelatedFullDocumentDiagnosticReport(
         items=items,
@@ -676,14 +676,14 @@ def workspace_diagnostic(
     try:
         items: List[lsp.Diagnostic] = []
         first_text_document = list(ls.workspace.text_documents.keys())[0]
-        document = ls.workspace.get_text_document(first_text_document)
+        text_document = ls.workspace.get_text_document(first_text_document)
 
         if not ls.client_settings.get('diagnostics_on_save_only', True):
-            items = validate_gherkin(ls, document)
+            items = validate_gherkin(ls, text_document)
 
         report.items = [
             lsp.WorkspaceFullDocumentDiagnosticReport(
-                uri=document.uri,
+                uri=text_document.uri,
                 items=items,
                 kind=lsp.DocumentDiagnosticReportKind.Full,
             )
@@ -706,3 +706,18 @@ def text_document_code_action(
         return None
     else:
         return generate_quick_fixes(ls, text_document, diagnostics)
+
+
+@server.command(COMMAND_REBUILD_INVENTORY)
+def command_rebuild_inventory(ls: GrizzlyLanguageServer, *args: Any) -> None:
+    ls.logger.info(f'executing command: {COMMAND_REBUILD_INVENTORY}')
+    try:
+        sleep(1.0)  # uuhm, some race condition?
+        compile_inventory(ls, silent=True)
+
+        for text_document_uri in ls.workspace.text_documents.keys():
+            text_document = ls.workspace.get_text_document(text_document_uri)
+            diagnostics = validate_gherkin(ls, text_document)
+            ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
+    except:
+        pass

@@ -62,7 +62,9 @@ def test_quick_fix_no_step_impl(lsp_fixture: LspFixture, mocker: MockerFixture) 
     assert quick_fix.title == 'Create step implementation'
     assert quick_fix.kind == lsp.CodeActionKind.QuickFix
     assert quick_fix.diagnostics == [diagnostic]
-    assert quick_fix.disabled == lsp.CodeActionDisabledType(reason='not applicable')
+    assert quick_fix.command == lsp.Command(
+        'Rebuild step inventory', 'grizzly.server.inventory.rebuild'
+    )
 
     actual_edit = quick_fix.edit
     assert isinstance(actual_edit, lsp.WorkspaceEdit)
@@ -82,7 +84,7 @@ def step_impl(context: Context) -> None:
     )
 
     source = expected_quick_fix_file.read_text().splitlines()
-    expected_position = lsp.Position(line=len(source) - 1, character=0)
+    expected_position = lsp.Position(line=len(source), character=0)
 
     assert actual_text_edit.range == lsp.Range(
         start=expected_position, end=expected_position
@@ -110,7 +112,9 @@ def step_impl(context: Context) -> None:
     assert quick_fix.title == 'Create step implementation'
     assert quick_fix.kind == lsp.CodeActionKind.QuickFix
     assert quick_fix.diagnostics == [diagnostic]
-    assert quick_fix.disabled == lsp.CodeActionDisabledType(reason='not applicable')
+    assert quick_fix.command == lsp.Command(
+        'Rebuild step inventory', 'grizzly.server.inventory.rebuild'
+    )
 
     actual_edit = quick_fix.edit
     assert isinstance(actual_edit, lsp.WorkspaceEdit)
@@ -130,7 +134,7 @@ def step_impl(context: Context) -> None:
     )
 
     source = expected_quick_fix_file.read_text().splitlines()
-    expected_position = lsp.Position(line=len(source) - 1, character=0)
+    expected_position = lsp.Position(line=len(source), character=0)
 
     assert actual_text_edit.range == lsp.Range(
         start=expected_position, end=expected_position
@@ -172,7 +176,9 @@ def step_impl(context: Context) -> None:
     assert quick_fix.title == 'Create step implementation'
     assert quick_fix.kind == lsp.CodeActionKind.QuickFix
     assert quick_fix.diagnostics == [diagnostic]
-    assert quick_fix.disabled == lsp.CodeActionDisabledType(reason='not applicable')
+    assert quick_fix.command == lsp.Command(
+        'Rebuild step inventory', 'grizzly.server.inventory.rebuild'
+    )
 
     actual_edit = quick_fix.edit
     assert isinstance(actual_edit, lsp.WorkspaceEdit)
@@ -192,7 +198,7 @@ def step_impl(context: Context, book: str, foobar: str) -> None:
     )
 
     source = expected_quick_fix_file.read_text().splitlines()
-    expected_position = lsp.Position(line=len(source) - 1, character=0)
+    expected_position = lsp.Position(line=len(source), character=0)
 
     assert actual_text_edit.range == lsp.Range(
         start=expected_position, end=expected_position

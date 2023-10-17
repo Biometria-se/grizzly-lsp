@@ -64,12 +64,12 @@
       {
         "command": "grizzly.server.restart",
         "title": "Restart Language Server",
-        "category": "grizzly"
+        "category": "Grizzly"
       },
       {
         "command": "grizzly.server.inventory.rebuild",
         "title": "Rebuild step inventory",
-        "category": "grizzly"
+        "category": "Grizzly"
       }
     ],
     "configuration": {

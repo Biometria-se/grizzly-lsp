@@ -149,7 +149,7 @@ Feature:
 
     assert diagnostic.range == lsp.Range(
         start=lsp.Position(line=6, character=14),
-        end=lsp.Position(line=6, character=35),
+        end=lsp.Position(line=6, character=36),
     )
     assert (
         diagnostic.message
@@ -167,7 +167,7 @@ Feature:
 
     assert diagnostic.range == lsp.Range(
         start=lsp.Position(line=7, character=12),
-        end=lsp.Position(line=7, character=47),
+        end=lsp.Position(line=7, character=48),
     )
     assert (
         diagnostic.message
