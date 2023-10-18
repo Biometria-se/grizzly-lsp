@@ -6,6 +6,7 @@
       "request": "launch",
       "name": "Launch Client",
       "args": [
+        "--profile=extension-context",
         "--extensionDevelopmentPath=${workspaceRoot}/client/vscode",
         "${workspaceFolder}/tests/project"
       ],

@@ -1,75 +1,33 @@
-import parse
-
-from enum import Enum
+import logging
 
 import pytest
 
 from pytest_mock import MockerFixture
+from _pytest.logging import LogCaptureFixture
 
-from grizzly_ls.utils import create_step_normalizer
-from grizzly_extras.text import permutation, PermutationEnum
-from grizzly.types import MessageDirection
-
-
-@parse.with_pattern(r'(hello|world|foo|bar)')
-@permutation(
-    vector=(
-        False,
-        True,
-    )
+from grizzly_ls.server.inventory import (
+    compile_inventory,
+    create_step_normalizer,
 )
-def parse_with_pattern_and_vector(text: str) -> str:
-    return text
 
-
-@parse.with_pattern(r'(alice|bob)')
-def parse_with_pattern(text: str) -> str:
-    return text
-
-
-@parse.with_pattern('')
-def parse_with_pattern_error(text: str) -> str:
-    return text
-
-
-def parse_enum_indirect(text: str) -> MessageDirection:
-    return MessageDirection.from_string(text)
-
-
-class DummyEnum(PermutationEnum):
-    HELLO = 0
-    WORLD = 1
-    FOO = 2
-    BAR = 3
-
-    @classmethod
-    def from_string(cls, value: str) -> 'DummyEnum':
-        for enum_value in cls:
-            if enum_value.name.lower() == value.lower():
-                return enum_value
-
-        raise ValueError(f'{value} is not a valid value')
-
-
-class DummyEnumNoFromString(PermutationEnum):
-    ERROR = 0
-
-    @classmethod
-    def magic(cls, value: str) -> str:
-        return value
-
-
-class DummyEnumNoFromStringType(Enum):
-    ERROR = 1
-
-    @classmethod
-    def from_string(cls, value: str):
-        return value
+from tests.fixtures import LspFixture
+from tests.conftest import GRIZZLY_PROJECT
+from tests.helpers import (
+    parse_with_pattern_and_vector,
+    parse_with_pattern,
+    parse_enum_indirect,
+    parse_with_pattern_error,
+    DummyEnum,
+    DummyEnumNoFromString,
+    DummyEnumNoFromStringType,
+)
 
 
 def test_create_normalizer(mocker: MockerFixture) -> None:
+    namespace = 'grizzly_ls.server.inventory'
+
     mocker.patch(
-        'grizzly_ls.utils.ParseMatcher.custom_types',
+        f'{namespace}.ParseMatcher.custom_types',
         {},  # pyright: ignore[reportUnknownArgumentType]
     )
 
@@ -77,7 +35,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
     assert normalizer.custom_types == {}
 
     mocker.patch(
-        'grizzly_ls.utils.ParseMatcher.custom_types',
+        f'{namespace}.ParseMatcher.custom_types',
         {
             'WithPatternAndVector': parse_with_pattern_and_vector,
             'WithPattern': parse_with_pattern,
@@ -126,7 +84,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
     assert sorted(enum_direct.replacements) == sorted(['hello', 'world', 'foo', 'bar'])
 
     mocker.patch(
-        'grizzly_ls.utils.ParseMatcher.custom_types',
+        f'{namespace}.ParseMatcher.custom_types',
         {
             'WithPattern': parse_with_pattern_error,
         },
@@ -140,7 +98,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
     )
 
     mocker.patch(
-        'grizzly_ls.utils.ParseMatcher.custom_types',
+        f'{namespace}.ParseMatcher.custom_types',
         {
             'EnumError': DummyEnumNoFromString.magic,
         },
@@ -149,7 +107,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
     create_step_normalizer()
 
     mocker.patch(
-        'grizzly_ls.utils.ParseMatcher.custom_types',
+        f'{namespace}.ParseMatcher.custom_types',
         {
             'EnumError': DummyEnumNoFromStringType.from_string,
         },
@@ -161,3 +119,47 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
         str(ve.value)
         == 'could not find the type that from_string method for custom type EnumError returns'
     )
+
+
+def test_compile_inventory(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> None:
+    ls = lsp_fixture.server
+
+    ls.steps.clear()
+
+    assert ls.steps == {}
+
+    ls.root_path = GRIZZLY_PROJECT
+
+    with caplog.at_level(logging.INFO, 'grizzly_ls.server'):
+        compile_inventory(ls)
+
+    assert len(caplog.messages) == 1
+
+    assert not ls.steps == {}
+    assert len(ls.normalizer.custom_types.keys()) >= 8
+
+    keywords = list(ls.steps.keys())
+
+    for keyword in ['given', 'then', 'when']:
+        assert keyword in keywords
+
+
+def test_compile_keyword_inventory(lsp_fixture: LspFixture) -> None:
+    ls = lsp_fixture.server
+
+    ls.steps.clear()
+
+    assert ls.steps == {}
+
+    # create pre-requisites
+    ls.root_path = GRIZZLY_PROJECT
+
+    # indirect call to `compile_keyword_inventory`
+    compile_inventory(ls)
+
+    assert 'Feature' not in ls.keywords  # already used once in feature file
+    assert 'Background' not in ls.keywords  # - " -
+    assert 'And' in ls.keywords  # just an alias for Given, but we need want it
+    assert 'Scenario' in ls.keywords  # can be used multiple times
+    assert 'Given' in ls.keywords  # - " -
+    assert 'When' in ls.keywords

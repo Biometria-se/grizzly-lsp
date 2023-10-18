@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as Mocha from 'mocha';
 import * as glob from 'glob';
+import * as vscode from 'vscode';
 
 export function run(): Promise<void> {
     // Create the mocha test
@@ -13,6 +14,13 @@ export function run(): Promise<void> {
     const testsRoot = __dirname;
 
     return new Promise((resolve, reject) => {
+        console.log('available extensions:');
+        vscode.extensions.all.forEach((extension) => {
+            if (!extension.id.startsWith('vscode.')) {
+                console.log(`${extension.id} ${extension.extensionPath}`);
+            }
+        });
+
         const tests = process.env['TESTS']?.split(',');
         glob('**.test.js', { cwd: testsRoot }, (err: Error, files: string[]) => {
             if (err) {

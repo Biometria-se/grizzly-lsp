@@ -7,8 +7,6 @@ from threading import Thread
 from pathlib import Path
 from importlib import reload as reload_module
 
-from pytest_mock import MockerFixture
-
 from pygls.server import LanguageServer
 from lsprotocol.types import EXIT
 from grizzly_ls.server import GrizzlyLanguageServer
@@ -33,12 +31,8 @@ class LspFixture:
 
     _server_thread: Thread
     _client_thread: Thread
-    _mocker: MockerFixture
 
     datadir: Path
-
-    def __init__(self, mocker: MockerFixture) -> None:
-        self._mocker = mocker
 
     def _reset_behave_runtime(self) -> None:
         from behave import step_registry
@@ -60,7 +54,15 @@ class LspFixture:
             except:
                 pass
 
-        self.server = GrizzlyLanguageServer(loop=asyncio.new_event_loop())  # type: ignore
+        from grizzly_ls.server import server
+
+        server.loop.close()
+        server._owns_loop = False
+        asyncio.set_event_loop(None)
+
+        server.loop = asyncio.new_event_loop()
+
+        self.server = server
         self._server_thread = Thread(
             target=start, args=(self.server, cstdio, sstdout), daemon=True
         )
@@ -75,7 +77,7 @@ class LspFixture:
         self._client_thread.start()
 
         self.datadir = (
-            Path(__file__) / '..' / '..' / '..' / 'tests' / 'project'
+            Path(__file__).parent / '..' / '..' / 'tests' / 'project'
         ).resolve()
 
         return self

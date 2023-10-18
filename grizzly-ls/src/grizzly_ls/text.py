@@ -4,6 +4,7 @@ import itertools
 import string
 import inspect
 import sys
+import unicodedata
 
 from typing import (
     List,
@@ -18,6 +19,13 @@ from typing import (
     cast,
 )
 from dataclasses import dataclass, field
+from tokenize import tokenize, TokenError, TokenInfo
+from io import BytesIO
+
+from lsprotocol.types import Position
+from pygls.workspace import TextDocument
+
+from grizzly_ls.constants import MARKER_LANGUAGE
 
 
 try:
@@ -223,9 +231,8 @@ class Normalizer:
     def __init__(self, custom_types: Dict[str, NormalizeHolder]) -> None:
         self.custom_types = custom_types
 
-    def __call__(self, pattern: str) -> Tuple[List[str], List[str]]:
+    def __call__(self, pattern: str) -> List[str]:
         patterns: List[str] = []
-        errors: Set[str] = set()
 
         # replace all non typed variables first, will only result in 1 step
         regex = r'\{[^\}:]*\}'
@@ -356,7 +363,7 @@ class Normalizer:
         if not has_matches and not has_typed_matches or len(patterns) < 1:
             patterns.append(pattern)
 
-        return patterns, list(errors)
+        return patterns
 
 
 def get_step_parts(line: str) -> Tuple[Optional[str], Optional[str]]:
@@ -386,3 +393,65 @@ def clean_help(text: str) -> str:
         text = text.replace(match.group(), replacement_text)
 
     return '\n'.join([line.lstrip() for line in text.split('\n')])
+
+
+def get_tokens(text: str) -> List[TokenInfo]:
+    tokens: List[TokenInfo] = []
+
+    # convert generator to list
+    try:
+        for token in tokenize(BytesIO(text.encode('utf8')).readline):
+            tokens.append(token)
+    except TokenError as e:
+        if 'EOF in multi-line statement' not in str(e):
+            raise
+
+    return tokens
+
+
+def format_arg_line(line: str) -> str:
+    try:
+        argument, description = line.split(':', 1)
+        arg_name, arg_type = argument.split(' ')
+        arg_type = arg_type.replace('(', '').replace(')', '').strip()
+
+        return f'* {arg_name} `{arg_type}`: {description.strip()}'
+    except ValueError:
+        return f'* {line}'
+
+
+def find_language(source: str) -> str:
+    language: str = 'en'
+
+    for line in source.splitlines():
+        line = line.strip()
+        if line.startswith(MARKER_LANGUAGE):
+            try:
+                _, lang = line.strip().split(': ', 1)
+                lang = lang.strip()
+                if len(lang) >= 2:
+                    language = lang
+            except ValueError:
+                pass
+            finally:
+                break
+
+    return language
+
+
+def get_current_line(text_document: TextDocument, position: Position) -> str:
+    source = text_document.source
+    line = source.split('\n')[position.line]
+
+    return line
+
+
+def normalize_text(text: str) -> str:
+    text = (
+        unicodedata.normalize('NFKD', str(text))
+        .encode('ascii', 'ignore')
+        .decode('ascii')
+    )
+    text = re.sub(r'[^\w\s-]', '', text)
+
+    return re.sub(r'[-\s]+', '-', text).strip('-_')
