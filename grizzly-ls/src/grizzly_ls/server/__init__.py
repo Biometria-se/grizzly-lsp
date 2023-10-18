@@ -16,7 +16,6 @@ from typing import (
     Union,
     Optional,
     Set,
-    NamedTuple,
     cast,
 )
 from types import FrameType
@@ -40,7 +39,7 @@ from grizzly_ls import __version__
 from grizzly_ls.text import Normalizer, get_step_parts
 from grizzly_ls.utils import run_command
 from grizzly_ls.model import Step
-from grizzly_ls.constants import FEATURE_INSTALL, COMMAND_REBUILD_INVENTORY
+from grizzly_ls.constants import FEATURE_INSTALL, COMMAND_REBUILD_INVENTORY, LANGUAGE_ID
 from grizzly_ls.text import format_arg_line, find_language, get_current_line
 
 from .progress import Progress
@@ -55,12 +54,6 @@ from .features.definition import get_step_definition, get_file_url_definition
 from .features.diagnostics import validate_gherkin
 from .features.code_actions import generate_quick_fixes
 from .inventory import compile_inventory, compile_keyword_inventory
-
-
-FeatureInstallParams = NamedTuple(
-    'FeatureInstallParams',
-    [('fsPath', str), ('external', str), ('path', str), ('scheme', str)],
-)
 
 
 class GrizzlyLanguageServer(LanguageServer):
@@ -186,7 +179,7 @@ server = GrizzlyLanguageServer()
 
 
 @server.feature(FEATURE_INSTALL)
-def install(ls: GrizzlyLanguageServer, params: FeatureInstallParams) -> None:
+def install(ls: GrizzlyLanguageServer, *args: Any) -> None:
     """
     See https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize
 
@@ -352,9 +345,12 @@ def install(ls: GrizzlyLanguageServer, params: FeatureInstallParams) -> None:
                 # always restore to original value
                 sys.path.pop()
 
-    text_document = ls.workspace.get_text_document(params.external)
-    diagnostics = validate_gherkin(ls, text_document)
-    ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
+    for text_document in ls.workspace.text_documents.values():
+        if text_document.language_id != LANGUAGE_ID:
+            continue
+
+        diagnostics = validate_gherkin(ls, text_document)
+        ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
 
 
 @server.feature(lsp.INITIALIZE)
@@ -600,6 +596,9 @@ def text_document_did_open(
 ) -> None:
     text_document = ls.workspace.get_text_document(params.text_document.uri)
 
+    if text_document.language_id != LANGUAGE_ID:
+        return
+
     try:
         ls.language = find_language(text_document.source)
     except ValueError:
@@ -614,8 +613,12 @@ def text_document_did_open(
 def text_document_did_save(
     ls: GrizzlyLanguageServer, params: lsp.DidSaveTextDocumentParams
 ) -> None:
+    text_document = ls.workspace.get_text_document(params.text_document.uri)
+
+    if text_document.language_id != LANGUAGE_ID:
+        return
+
     if ls.client_settings.get('diagnostics_on_save_only', True):
-        text_document = ls.workspace.get_text_document(params.text_document.uri)
         diagnostics = validate_gherkin(ls, text_document)
         ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
 
@@ -715,8 +718,10 @@ def command_rebuild_inventory(ls: GrizzlyLanguageServer, *args: Any) -> None:
         sleep(1.0)  # uuhm, some race condition?
         compile_inventory(ls, silent=True)
 
-        for text_document_uri in ls.workspace.text_documents.keys():
-            text_document = ls.workspace.get_text_document(text_document_uri)
+        for text_document in ls.workspace.text_documents.values():
+            if text_document.language_id != LANGUAGE_ID:
+                continue
+
             diagnostics = validate_gherkin(ls, text_document)
             ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
     except:

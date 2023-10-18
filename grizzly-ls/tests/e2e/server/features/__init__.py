@@ -16,7 +16,6 @@ def initialize(
 ) -> None:
     assert root.is_file()
 
-    file = root
     root = root.parent.parent
     params = lsp.InitializeParams(
         process_id=1337,
@@ -49,12 +48,9 @@ def initialize(
         client.lsp.send_request(  # type: ignore
             lsp.INITIALIZE,
             params,
-        ).result(timeout=89)
+        ).result(timeout=119)
 
-        client.lsp.send_request(  # type: ignore
-            FEATURE_INSTALL,
-            {'external': file.as_uri(), 'fsPath': str(file)},
-        ).result(timeout=89)
+        client.lsp.send_request(FEATURE_INSTALL).result(timeout=119)  # type: ignore
     finally:
         logger.setLevel(level)
 

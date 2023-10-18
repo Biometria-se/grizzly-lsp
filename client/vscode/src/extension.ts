@@ -175,7 +175,7 @@ async function startLanguageServer(): Promise<void> {
         client = await createLanguageClient();
         await client.start();
         logger.info(`Installing based on ${documentUri.path}`);
-        await client.sendRequest('grizzly-ls/install', documentUri);
+        await client.sendRequest('grizzly-ls/install', {});
         status.setActivated(true);
     } catch (error) {
         logger.error(`Unable to start language server: ${error}`);
