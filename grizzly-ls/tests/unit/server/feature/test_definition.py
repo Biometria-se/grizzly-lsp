@@ -1,5 +1,8 @@
+import sys
+
 from pathlib import Path
 from shutil import rmtree
+from inspect import getsourcelines
 
 from lsprotocol import types as lsp
 from pygls.workspace import Workspace
@@ -26,7 +29,7 @@ def test_get_step_definition(lsp_fixture: LspFixture) -> None:
     def step_impl() -> None:  # <!-- lineno
         pass
 
-    lineno = 26
+    _, lineno = getsourcelines(step_impl)
 
     ls.steps.update(
         {
@@ -57,6 +60,11 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
     test_file.parent.mkdir(parents=True, exist_ok=True)
     test_file.touch()
 
+    def get_platform_uri(uri: str) -> str:
+        # windows is case-insensitive, and drive letter can be different case...
+        # and drive latters in uri's from LSP seems to be in lower-case...
+        return uri.lower() if sys.platform == 'win32' else uri
+
     try:
         text_document = lsp.TextDocumentIdentifier(test_feature_file.as_uri())
         position = lsp.Position(line=0, character=0)
@@ -82,7 +90,9 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
 
         assert len(actual_definitions) == 1
         actual_definition = actual_definitions[0]
-        assert actual_definition.target_uri == test_file.as_uri()
+        assert get_platform_uri(actual_definition.target_uri) == get_platform_uri(
+            test_file.as_uri()
+        )
         assert actual_definition.target_range == lsp.Range(
             start=lsp.Position(line=0, character=0),
             end=lsp.Position(line=0, character=0),
@@ -98,15 +108,18 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
 
         # `$include::file://..$` in a "variable"
         position.character = 95
+        expression = f'Then this is a variable "file://./requests/test.txt" and this is also a variable "$include::{test_file.as_uri()}$"'
         actual_definitions = get_file_url_definition(
             ls,
             params,
-            f'Then this is a variable "file://./requests/test.txt" and this is also a variable "$include::{test_file.as_uri()}$"',
+            expression,
         )
 
         assert len(actual_definitions) == 1
         actual_definition = actual_definitions[0]
-        assert actual_definition.target_uri == test_file.as_uri()
+        assert get_platform_uri(actual_definition.target_uri) == get_platform_uri(
+            test_file.as_uri()
+        )
         assert actual_definition.target_range == lsp.Range(
             start=lsp.Position(line=0, character=0),
             end=lsp.Position(line=0, character=0),
@@ -117,7 +130,7 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
         )
         assert actual_definition.origin_selection_range == lsp.Range(
             start=lsp.Position(line=0, character=92),
-            end=lsp.Position(line=0, character=163),
+            end=lsp.Position(line=0, character=92 + len(test_file.as_uri())),
         )
 
         # classic (relative to grizzly requests directory)
@@ -128,7 +141,9 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
 
         assert len(actual_definitions) == 1
         actual_definition = actual_definitions[0]
-        assert actual_definition.target_uri == test_file.as_uri()
+        assert get_platform_uri(actual_definition.target_uri) == get_platform_uri(
+            test_file.as_uri()
+        )
         assert actual_definition.target_range == lsp.Range(
             start=lsp.Position(line=0, character=0),
             end=lsp.Position(line=0, character=0),

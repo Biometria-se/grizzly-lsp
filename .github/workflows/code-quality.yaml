@@ -94,6 +94,7 @@ jobs:
       - name: server logs
         id: server-logs
         if: always()
+        continue-on-error: true
         run: |
           cat tests/project/grizzly-ls.log
 

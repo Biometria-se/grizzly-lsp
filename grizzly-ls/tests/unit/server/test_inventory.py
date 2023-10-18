@@ -131,7 +131,7 @@ def test_compile_inventory(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -
     ls.root_path = GRIZZLY_PROJECT
 
     with caplog.at_level(logging.INFO, 'grizzly_ls.server'):
-        compile_inventory(ls, 'project')
+        compile_inventory(ls)
 
     assert len(caplog.messages) == 1
 
@@ -155,7 +155,7 @@ def test_compile_keyword_inventory(lsp_fixture: LspFixture) -> None:
     ls.root_path = GRIZZLY_PROJECT
 
     # indirect call to `compile_keyword_inventory`
-    compile_inventory(ls, 'project')
+    compile_inventory(ls)
 
     assert 'Feature' not in ls.keywords  # already used once in feature file
     assert 'Background' not in ls.keywords  # - " -

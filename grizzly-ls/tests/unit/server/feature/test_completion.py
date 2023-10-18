@@ -35,7 +35,7 @@ def test_get_variable_name_trigger() -> None:
 def test_complete_keyword(lsp_fixture: LspFixture) -> None:
     ls = lsp_fixture.server
     ls.root_path = GRIZZLY_PROJECT
-    compile_inventory(ls, 'project')
+    compile_inventory(ls)
 
     text_document = TextDocument(
         uri='dummy.feature',
@@ -157,7 +157,7 @@ Scenario:
 def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> None:
     ls = lsp_fixture.server
     ls.root_path = GRIZZLY_PROJECT
-    compile_inventory(ls, 'project')
+    compile_inventory(ls)
 
     with caplog.at_level(logging.DEBUG):
         matched_steps = normalize_completion_item(

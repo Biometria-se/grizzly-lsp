@@ -84,6 +84,7 @@ def get_file_url_definition(
 
             if sys.platform == 'win32':  # pragma: no cover
                 file_url = file_url.replace('\\', '/')
+                file_url = file_url.replace('file:///', 'file://')
 
             file_parsed = urlparse(file_url)
 

@@ -181,7 +181,7 @@ class TestGrizzlyLanguageServer:
 
         ls.root_path = GRIZZLY_PROJECT
 
-        compile_inventory(ls, 'project')
+        compile_inventory(ls)
 
         noop = lambda: None  # noqa: E731
 
