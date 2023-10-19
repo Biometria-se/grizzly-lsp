@@ -32,6 +32,8 @@ def validate_gherkin(
     language: str = 'en'
     zero_line_length = 0
 
+    ls.logger.info(f'diagnostics for {text_document.uri}')
+
     for lineno, line in enumerate(text_document.source.splitlines()):
         if lineno == 0:
             zero_line_length = len(line)
@@ -39,7 +41,15 @@ def validate_gherkin(
         stripped_line = line.strip()
 
         # ignore any lines that comes between free text, or empty lines, or lines that could be a table
-        if stripped_line == '"""' or stripped_line.count('|') >= 2:
+        # or lines that are comments
+        if (
+            stripped_line == '"""'
+            or stripped_line.count('|') >= 2
+            or (
+                stripped_line.startswith('#')
+                and not stripped_line.startswith(MARKER_LANGUAGE)
+            )
+        ):
             ignoring = not ignoring
             continue
 
@@ -128,11 +138,13 @@ def validate_gherkin(
             found_step = False
             expression_shell = re.sub(r'"[^"]*"', '""', expression)
 
-            for step in ls.steps.get(lang_key, []):
-                if step.expression == expression_shell:
-                    found_step = True
-                    break
+            for steps in ls.steps.values():
+                for step in steps:
+                    if step.expression == expression_shell:
+                        found_step = True
+                        break
 
+            ls.logger.debug(f'{found_step=}, {expression_shell=}')
             if not found_step:
                 diagnostics.append(
                     lsp.Diagnostic(
