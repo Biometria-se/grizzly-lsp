@@ -32,24 +32,55 @@ def validate_gherkin(
     language: str = 'en'
     zero_line_length = 0
 
-    ls.logger.info(f'diagnostics for {text_document.uri}')
+    ls.logger.debug(f'diagnostics for {text_document.uri}')
 
-    for lineno, line in enumerate(text_document.source.splitlines()):
+    lines = text_document.source.splitlines()
+
+    if text_document.source.count('"""') % 2 != 0:
+        for lineno, line in enumerate(reversed(lines)):
+            stripped_line = line.strip()
+            if not stripped_line.startswith('"""'):
+                continue
+
+            position = len(line) - len(stripped_line)
+
+            diagnostics.append(
+                lsp.Diagnostic(
+                    range=lsp.Range(
+                        start=lsp.Position(
+                            line=len(lines) - lineno - 1, character=position
+                        ),
+                        end=lsp.Position(
+                            line=len(lines) - lineno - 1, character=len(line)
+                        ),
+                    ),
+                    message='Freetext marker is not closed',
+                    severity=lsp.DiagnosticSeverity.Error,
+                    source=ls.__class__.__name__,
+                )
+            )
+
+            break
+
+    for lineno, line in enumerate(lines):
         if lineno == 0:
             zero_line_length = len(line)
 
         stripped_line = line.strip()
 
-        # ignore any lines that comes between free text, or empty lines, or lines that could be a table
-        # or lines that are comments
+        # ignore lines that are plain comments, or tables
         if (
-            stripped_line == '"""'
-            or stripped_line.count('|') >= 2
+            len(stripped_line) < 1
             or (
-                stripped_line.startswith('#')
+                stripped_line[0] == '#'
                 and not stripped_line.startswith(MARKER_LANGUAGE)
             )
+            or (stripped_line[0] == '|' and stripped_line[-1] == '|')
         ):
+            continue
+
+        # ignore any lines that comes between free text, or empty lines, or lines that could be a table
+        if stripped_line[:3] == '"""':
             ignoring = not ignoring
             continue
 
@@ -140,11 +171,14 @@ def validate_gherkin(
 
             for steps in ls.steps.values():
                 for step in steps:
-                    if step.expression == expression_shell:
+                    # some step expressions might have enum values pre-filled,
+                    # clean them out first
+                    step_expression = re.sub(r'"[^"]*"', '""', step.expression)
+
+                    if step_expression == expression_shell:
                         found_step = True
                         break
 
-            ls.logger.debug(f'{found_step=}, {expression_shell=}')
             if not found_step:
                 diagnostics.append(
                     lsp.Diagnostic(
