@@ -118,7 +118,7 @@ def create_step_normalizer() -> Normalizer:
     return Normalizer(custom_type_permutations)
 
 
-def compile_inventory(ls: GrizzlyLanguageServer, silent: bool = False) -> None:
+def compile_inventory(ls: GrizzlyLanguageServer) -> None:
     logger.debug('creating step registry')
     project_name = ls.root_path.stem
 
@@ -131,6 +131,7 @@ def compile_inventory(ls: GrizzlyLanguageServer, silent: bool = False) -> None:
         ls.show_message(
             f'unable to load behave step expressions:\n{str(e)}',
             msg_type=MessageType.Error,
+            exc_info=True,
         )
         return
 
@@ -148,13 +149,9 @@ def compile_inventory(ls: GrizzlyLanguageServer, silent: bool = False) -> None:
 
     compile_keyword_inventory(ls)
 
-    message = (
+    ls.logger.info(
         f'found {len(ls.keywords)} keywords and {total_steps} steps in "{project_name}"'
     )
-    if not silent:
-        ls.show_message(message)
-    else:
-        ls.logger.info(message)
 
 
 def compile_step_inventory(ls: GrizzlyLanguageServer) -> None:

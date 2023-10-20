@@ -38,14 +38,18 @@ async function createStdioLanguageServer(
     documentSelector: string[],
     initializationOptions: Settings,
 ): Promise<LanguageClient> {
-    const command = await getPythonPath();
+    const python = await getPythonPath();
+    const command = `${python} -c "import ${module}; import inspect; print(inspect.getsourcefile(${module}));"`;
 
     try {
-        const { stdout } = await exec(`${command} -c 'import ${module}; import inspect; print(inspect.getsourcefile(${module}));'`);
+        const { stdout } = await exec(command);
         serverUri = vscode.Uri.file(path.dirname(stdout.trim()));
-        logger.info(`serverUri = ${serverUri}`);
+        logger.debug(`serverUri = "${serverUri}"`);
     } catch (error) {
-        logger.error(`Failed to get module path for ${module}`);
+        console.error(`command = "${command}", error = "${error}"`);
+        logger.error(command);
+        logger.error(`Failed ^ to get module path for ${module}: ${error}`);
+        logger.error('Hot-reload of language server will not work');
     }
 
     args = ['-m', module, ...args];
@@ -56,7 +60,7 @@ async function createStdioLanguageServer(
     }
 
     const serverOptions: ServerOptions = {
-        command,
+        command: python,
         args,
     };
 
@@ -69,7 +73,7 @@ async function createStdioLanguageServer(
         initializationOptions,
     };
 
-    return new LanguageClient(command, serverOptions, clientOptions);
+    return new LanguageClient(python, serverOptions, clientOptions);
 }
 
 function createSocketLanguageServer(
