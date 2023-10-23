@@ -108,6 +108,7 @@ class TestGrizzlyLanguageServer:
         show_message_mock = mocker.patch(
             'pygls.server.LanguageServer.show_message', return_value=None
         )
+        logger_error_mock = mocker.spy(ls.logger, 'error')
 
         message = 'implicit INFO level'
         with caplog.at_level(logging.INFO):
@@ -131,12 +132,13 @@ class TestGrizzlyLanguageServer:
 
         message = 'ERROR level'
         with caplog.at_level(logging.ERROR):
-            ls.show_message(message, lsp.MessageType.Error)
+            ls.show_message(message, lsp.MessageType.Error, exc_info=True)
         assert caplog.messages == [message]
         show_message_mock.assert_called_once_with(
             message, msg_type=lsp.MessageType.Error
         )
         show_message_mock.reset_mock()
+        logger_error_mock.assert_called_once_with(message, exc_info=True)
         caplog.clear()
 
         message = 'WARNING level'

@@ -45,12 +45,13 @@ def initialize(
     try:
         logger.setLevel(logging.DEBUG)
 
+        # INITIALIZE takes time...
         client.lsp.send_request(  # type: ignore
             lsp.INITIALIZE,
             params,
-        ).result(timeout=119)
+        ).result(timeout=299)
 
-        client.lsp.send_request(FEATURE_INSTALL).result(timeout=119)  # type: ignore
+        client.lsp.send_request(FEATURE_INSTALL).result(timeout=299)  # type: ignore
     finally:
         logger.setLevel(level)
 

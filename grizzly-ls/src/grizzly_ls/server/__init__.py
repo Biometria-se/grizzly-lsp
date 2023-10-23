@@ -81,7 +81,10 @@ class GrizzlyLanguageServer(LanguageServer):
     markup_kind: lsp.MarkupKind
 
     def show_message(
-        self, message: str, msg_type: Optional[lsp.MessageType] = lsp.MessageType.Info
+        self,
+        message: str,
+        msg_type: Optional[lsp.MessageType] = lsp.MessageType.Info,
+        **kwargs: Any,
     ) -> None:
         if msg_type == lsp.MessageType.Info:
             log_method = self.logger.info
@@ -92,7 +95,7 @@ class GrizzlyLanguageServer(LanguageServer):
         else:
             log_method = self.logger.debug
 
-        log_method(message)
+        log_method(message, **kwargs)
         super().show_message(message, msg_type=msg_type)  # type: ignore
 
     def __init__(self, *args: Tuple[Any, ...], **kwargs: Dict[str, Any]) -> None:
@@ -355,6 +358,7 @@ def install(ls: GrizzlyLanguageServer, *args: Any) -> None:
 
 @server.feature(lsp.INITIALIZE)
 def initialize(ls: GrizzlyLanguageServer, params: lsp.InitializeParams) -> None:
+    ls.logger.info(f'initializing language server {__version__}')
     if params.root_path is None and params.root_uri is None:
         ls.show_message(
             'neither root_path or root uri was received from client',
@@ -716,7 +720,7 @@ def command_rebuild_inventory(ls: GrizzlyLanguageServer, *args: Any) -> None:
     ls.logger.info(f'executing command: {COMMAND_REBUILD_INVENTORY}')
     try:
         sleep(1.0)  # uuhm, some race condition?
-        compile_inventory(ls, silent=True)
+        compile_inventory(ls)
 
         for text_document in ls.workspace.text_documents.values():
             if text_document.language_id != LANGUAGE_ID:

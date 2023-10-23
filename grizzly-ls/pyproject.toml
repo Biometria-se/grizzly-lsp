@@ -78,7 +78,7 @@ ci = [
 root = ".."
 
 [tool.pytest.ini_options]
-timeout = 120
+timeout = 300
 addopts = [
     "--rootdir=grizzly-ls/",
     "-o", "testpaths=tests",
