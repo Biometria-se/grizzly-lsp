@@ -29,8 +29,6 @@ from pip._internal.configuration import Configuration as PipConfiguration
 from pip._internal.exceptions import ConfigurationError as PipConfigurationError
 from time import sleep
 
-import gevent.monkey  # type: ignore
-
 from pygls.server import LanguageServer
 from pygls.capabilities import get_capability
 from lsprotocol import types as lsp
@@ -109,7 +107,12 @@ class GrizzlyLanguageServer(LanguageServer):
         self.language = 'en'  # assumed default
 
         # monkey patch functions to short-circuit them (causes problems in this context)
-        gevent.monkey.patch_all = lambda: None
+        try:
+            import gevent.monkey  # type: ignore
+
+            gevent.monkey.patch_all = lambda: None
+        except ModuleNotFoundError:
+            pass
 
         def _signal(signum: Union[int, signal.Signals], frame: FrameType) -> None:
             return
