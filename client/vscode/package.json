@@ -31,7 +31,7 @@
   "qna": "false",
   "engines": {
     "node": ">=16.17.1",
-    "vscode": "^1.85.0"
+    "vscode": "^1.83.0"
   },
   "extensionDependencies": [
     "ms-python.python"
@@ -162,23 +162,24 @@
     "@vscode/python-extension": "^1.0.5"
   },
   "devDependencies": {
-    "@types/chai": "^4.3.11",
-    "@types/glob": "^8.1.0",
-    "@types/mocha": "^10.0.6",
-    "@types/node": "^20.10.5",
-    "@types/vscode": "^1.85.0",
-    "@typescript-eslint/eslint-plugin": "^6.15.0",
-    "@typescript-eslint/parser": "^6.15.0",
-    "@vscode/test-electron": "^2.3.8",
+    "@types/chai": "^4.3.6",
+    "@types/glob": "^8.0.0",
+    "@types/mocha": "^10.0.2",
+    "@types/node": "^20.8.2",
+    "@types/vscode": "^1.63.0",
+    "@typescript-eslint/eslint-plugin": "^6.7.4",
+    "@typescript-eslint/parser": "^6.7.4",
+    "@vscode/test-electron": "^2.3.5",
     "chai": "^4.3.10",
-    "esbuild": "^0.19.10",
-    "eslint": "^8.56.0",
-    "eslint-config-standard-with-typescript": "^43.0.0",
-    "eslint-plugin-import": "^2.29.1",
-    "eslint-plugin-n": "^16.5.0",
-    "eslint-plugin-promise": "^6.1.1",
+    "esbuild": "^0.19.4",
+    "eslint": "^8.22.0",
+    "eslint-config-standard-with-typescript": "^39.1.0",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-n": "^16.1.0",
+    "eslint-plugin-promise": "^6.0.0",
     "mocha": "^10.2.0",
     "npm-license-crawler": "^0.2.1",
-    "typescript": "^5.3.3"
+    "typescript": "^5.2.2"
   }
 }
+

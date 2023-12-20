@@ -13,6 +13,7 @@ def run_command(
     env: Optional[Dict[str, str]] = None,
     cwd: Optional[str] = None,
 ) -> Tuple[int, List[str]]:
+    logger.debug(f'executing command: {" ".join(command)}')
     output: List[str] = []
 
     if env is None:
@@ -39,7 +40,10 @@ def run_command(
             if not buffer:
                 break
 
-            output.append(buffer.decode('utf-8'))
+            try:
+                output.append(buffer.decode())
+            except Exception:
+                logger.exception(buffer)
 
         process.terminate()
     except KeyboardInterrupt:  # pragma: no cover

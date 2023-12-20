@@ -235,7 +235,7 @@ def install(ls: GrizzlyLanguageServer, *args: Any) -> None:
     with Progress(ls.progress, 'grizzly-ls') as progress:
         # <!-- should a virtual environment be used?
         use_venv = ls.client_settings.get('use_virtual_environment', True)
-        executable = 'python3' if use_venv else sys.executable
+        executable = 'python' if use_venv else sys.executable
         # // -->
 
         ls.logger.debug(f'workspace root: {ls.root_path}')
