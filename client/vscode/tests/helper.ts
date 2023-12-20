@@ -25,6 +25,7 @@ export async function activate(docUri: vscode.Uri, content: string) {
         // if the extension for some reason won't start, it is nice to look at the output
         // to be able to understand why
         if (ext.exports === undefined) {
+            console.error('extension did not start');
             await sleep(1000*60*60*24);
         }
 

@@ -38,7 +38,7 @@ async function installExtension(vscodeExecutablePath: string, extensionId: strin
         const extensionDir = path.join(possibleExtensionPath, 'extensions');
         try {
             await fs.access(extensionDir);
-        } catch {
+        } catch { // weird... but hey, let's cover it
             continue;
         }
         const extensions = (await fs.readdir(extensionDir, {withFileTypes: true})).filter(dir => dir.isDirectory()).map(dir => dir.name)
