@@ -183,44 +183,47 @@ Feature:
     # // -->
 
     # <!-- "complex" document with no errors
-    ls.language = 'sv'
-    text_document = TextDocument(
-        'file://test.feature',
-        '''# language: sv
-# testspecifikation: https://test.nu/specifikation/T01
-Egenskap: T01
-    """
-    lite text
-    bara
-    """
-    Scenario: test
-        Givet en tabell
-        # denna tabell mappar en nyckel med ett värde
-        | nyckel | värde |
-        | foo    | bar   |
-        | bar    | foo   |
-
-        Och följande fråga
+    try:
+        ls.language = 'sv'
+        text_document = TextDocument(
+            'file://test.feature',
+            '''# language: sv
+    # testspecifikation: https://test.nu/specifikation/T01
+    Egenskap: T01
         """
-        SELECT key, value FROM [dbo].[tests]
+        lite text
+        bara
         """
+        Scenario: test
+            Givet en tabell
+            # denna tabell mappar en nyckel med ett värde
+            | nyckel | värde |
+            | foo    | bar   |
+            | bar    | foo   |
 
-        Så producera ett dokument i formatet "json"
-''',
-    )
+            Och följande fråga
+            """
+            SELECT key, value FROM [dbo].[tests]
+            """
 
-    ls.steps.update(
-        {
-            'then': [
-                Step('then', 'producera ett dokument i formatet "json"', func=noop),
-                Step('then', 'producera ett dokument i formatet "xml"', func=noop),
-                Step('then', 'producera ett dokument i formatet "docx"', func=noop),
-            ],
-            'given': [Step('given', 'en tabell', func=noop)],
-            'step': [Step('step', 'följande fråga', func=noop)],
-        }
-    )
-    diagnostics = validate_gherkin(ls, text_document)
+            Så producera ett dokument i formatet "json"
+    ''',
+        )
 
-    assert diagnostics == []
+        ls.steps.update(
+            {
+                'then': [
+                    Step('then', 'producera ett dokument i formatet "json"', func=noop),
+                    Step('then', 'producera ett dokument i formatet "xml"', func=noop),
+                    Step('then', 'producera ett dokument i formatet "docx"', func=noop),
+                ],
+                'given': [Step('given', 'en tabell', func=noop)],
+                'step': [Step('step', 'följande fråga', func=noop)],
+            }
+        )
+        diagnostics = validate_gherkin(ls, text_document)
+
+        assert diagnostics == []
+    finally:
+        ls.language = 'en'
     # // -->

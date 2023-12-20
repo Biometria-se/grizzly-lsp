@@ -164,7 +164,47 @@ def test_completion_steps(lsp_fixture: LspFixture) -> None:
 
     # all Given/And steps
     for keyword in ['Given', 'And']:
-        response = completion(client, lsp_fixture.datadir, keyword, options=None)
+        response = completion(
+            client,
+            lsp_fixture.datadir,
+            f"""Feature:
+    Scenario:
+        Given a user of type "RestApiUser" load testing "dummy://test"
+        {keyword}""",
+            options=None,
+            position=lsp.Position(line=3, character=8 + len(keyword)),
+        )
+        assert response is not None
+        assert not response.is_incomplete
+        unexpected_kinds = list(
+            filter(
+                lambda s: s != 3,
+                map(lambda s: s.kind, response.items),
+            )
+        )
+        assert len(unexpected_kinds) == 0
+
+        labels = [
+            s.text_edit.new_text for s in response.items if s.text_edit is not None
+        ]
+        assert len(labels) > 0
+        assert all([True if label is not None else False for label in labels])
+
+        assert ' ask for value of variable "$1"' in labels
+        assert ' spawn rate is "$1" user per second' in labels
+        assert ' spawn rate is "$1" users per second' in labels
+        assert ' a user of type "$1" with weight "$2" load testing "$3"' in labels
+
+        response = completion(
+            client,
+            lsp_fixture.datadir,
+            f"""Feature:
+    Scenario:
+        Given a user of type "RestApiUser" load testing "dummy://test"
+        {keyword} """,
+            options=None,
+            position=lsp.Position(line=3, character=8 + len(keyword) + 1),
+        )
         assert response is not None
         assert not response.is_incomplete
         unexpected_kinds = list(
@@ -204,7 +244,7 @@ def test_completion_steps(lsp_fixture: LspFixture) -> None:
     assert all([True if label is not None else False for label in labels])
 
     assert 'ask for value of variable ""' in labels
-    assert 'value for variable "" is ""'
+    assert 'value for variable "" is ""' in labels
 
     response = completion(client, lsp_fixture.datadir, 'Given a user of')
     assert response is not None
@@ -223,8 +263,12 @@ def test_completion_steps(lsp_fixture: LspFixture) -> None:
     assert len(labels) > 0
     assert all([True if label is not None else False for label in labels])
 
-    assert 'a user of type "" with weight "" load testing ""' in labels
-    assert 'a user of type "" load testing ""' in labels
+    assert sorted(labels) == sorted(
+        [
+            'a user of type "" with weight "" load testing ""',
+            'a user of type "" load testing ""',
+        ]
+    )
 
     response = completion(
         client, lsp_fixture.datadir, 'Then parse date "{{ datetime.now() }}"'
@@ -235,12 +279,12 @@ def test_completion_steps(lsp_fixture: LspFixture) -> None:
     labels = list(
         map(lambda s: s.label, response.items),
     )
-    insert_texts = [
+    new_texts = [
         s.text_edit.new_text for s in response.items if s.text_edit is not None
     ]
 
     assert labels == ['parse date "{{ datetime.now() }}" and save in variable ""']
-    assert insert_texts == [' and save in variable "$1"']
+    assert new_texts == ['parse date "{{ datetime.now() }}" and save in variable "$1"']
 
 
 def test_completion_variable_names(

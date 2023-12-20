@@ -263,22 +263,14 @@ def complete_step(
     keyword: str,
     position: lsp.Position,
     expression: Optional[str],
+    *,
+    base_keyword: str,
 ) -> List[lsp.CompletionItem]:
-    if keyword in ls.keywords_any:
-        steps = list(
-            set(
-                [
-                    step.expression
-                    for keyword_steps in ls.steps.values()
-                    for step in keyword_steps
-                ]
-            )
-        )
-    else:
-        key = ls.get_language_key(keyword)
-        steps = [
-            step.expression for step in ls.steps.get(key, []) + ls.steps.get('step', [])
-        ]
+    # only suggest step expression related to the specific base keyword
+    key = ls.get_language_key(base_keyword)
+    steps = [
+        step.expression for step in ls.steps.get(key, []) + ls.steps.get('step', [])
+    ]
 
     matched_steps: List[lsp.CompletionItem] = []
     matched_steps_1: Set[str]
@@ -326,17 +318,12 @@ def complete_step(
 
         start = lsp.Position(line=position.line, character=position.character)
         preselect: bool = False
-        if expression is not None and len(expression.strip()) > 0 and ' ' in expression:
-            # only insert the part of the step that has not already been written, up until last space, since vscode
-            # seems to insert text word wise
-            new_text = matched_step.replace(expression, '')
-            if not new_text.startswith(' ') and new_text.strip().count(' ') < 1:
-                try:
-                    _, new_text = matched_step.rsplit(' ', 1)
-                except:  # pragma: no cover
-                    pass
-        else:
-            new_text = matched_step
+
+        new_text = matched_step
+        # completion triggered right next to keyword, no space
+        # add space so keyword isn't overwritten
+        if expression is None:
+            new_text = f' {new_text}'
 
         # if matched step doesn't start what the user already had typed or we haven't removed
         # expression from matched step, we need to replace what already had been typed

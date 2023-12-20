@@ -161,7 +161,13 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
 
     with caplog.at_level(logging.DEBUG):
         matched_steps = normalize_completion_item(
-            complete_step(ls, 'Given', lsp.Position(line=0, character=6), 'variable'),
+            complete_step(
+                ls,
+                'Given',
+                lsp.Position(line=0, character=6),
+                'variable',
+                base_keyword='Given',
+            ),
             lsp.CompletionItemKind.Function,
         )
 
@@ -175,7 +181,13 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
             assert expected_step in matched_steps
 
         matched_steps = normalize_completion_item(
-            complete_step(ls, 'Then', lsp.Position(line=0, character=5), 'save'),
+            complete_step(
+                ls,
+                'Then',
+                lsp.Position(line=0, character=5),
+                'save',
+                base_keyword='Then',
+            ),
             lsp.CompletionItemKind.Function,
         )
         for expected_step in [
@@ -197,6 +209,7 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
             'Then',
             lsp.Position(line=0, character=35),
             'save response metadata "hello"',
+            base_keyword='Then',
         )
         matched_steps = normalize_completion_item(
             suggested_steps, lsp.CompletionItemKind.Function
@@ -215,15 +228,16 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
             ):
                 assert (
                     suggested_step.text_edit is not None
-                    and suggested_step.text_edit.new_text
-                    == ' that matches "$1" in variable "$2"'
+                    and suggested_step.text_edit.new_text.endswith(
+                        ' that matches "$1" in variable "$2"'
+                    )
                 )
             elif (
                 suggested_step.label == 'save response metadata "hello" in variable ""'
             ):
                 assert (
                     suggested_step.text_edit is not None
-                    and suggested_step.text_edit.new_text == ' in variable "$1"'
+                    and suggested_step.text_edit.new_text.endswith(' in variable "$1"')
                 )
             else:
                 raise AssertionError(
@@ -231,7 +245,9 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
                 )
 
         matched_steps = normalize_completion_item(
-            complete_step(ls, 'When', lsp.Position(line=0, character=4), None),
+            complete_step(
+                ls, 'When', lsp.Position(line=0, character=4), None, base_keyword='When'
+            ),
             lsp.CompletionItemKind.Function,
         )
 
@@ -248,7 +264,13 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
             assert expected_step in matched_steps
 
         matched_steps = normalize_completion_item(
-            complete_step(ls, 'When', lsp.Position(line=0, character=13), 'response '),
+            complete_step(
+                ls,
+                'When',
+                lsp.Position(line=0, character=13),
+                'response ',
+                base_keyword='When',
+            ),
             lsp.CompletionItemKind.Function,
         )
 
@@ -263,7 +285,11 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
 
         matched_steps = normalize_completion_item(
             complete_step(
-                ls, 'When', lsp.Position(line=0, character=25), 'response fail request'
+                ls,
+                'When',
+                lsp.Position(line=0, character=25),
+                'response fail request',
+                base_keyword='When',
             ),
             lsp.CompletionItemKind.Function,
         )
@@ -282,6 +308,7 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
                 'When',
                 lsp.Position(line=0, character=39),
                 'response payload "" is fail request',
+                base_keyword='When',
             ),
             lsp.CompletionItemKind.Function,
         )
@@ -295,9 +322,10 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
         matched_steps = normalize_completion_item(
             complete_step(
                 ls,
-                'Given',
+                'And',
                 lsp.Position(line=0, character=50),
                 'a user of type "RestApi" with weight "1" load',
+                base_keyword='Given',
             ),
             lsp.CompletionItemKind.Function,
         )
@@ -309,7 +337,11 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
         )
 
         actual_completed_steps = complete_step(
-            ls, 'And', lsp.Position(line=0, character=20), 'repeat for "1" it'
+            ls,
+            'And',
+            lsp.Position(line=0, character=20),
+            'repeat for "1" it',
+            base_keyword='Given',
         )
 
         matched_steps = normalize_completion_item(
@@ -325,70 +357,90 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
             actual_completed_steps, lsp.CompletionItemKind.Function
         )
 
-        assert sorted(matched_text_edit) == sorted(['iteration', 'iterations'])
-
-        actual_completed_steps = complete_step(
-            ls, 'And', lsp.Position(line=0, character=16), 'repeat for "1"'
+        assert sorted(matched_text_edit) == sorted(
+            ['repeat for "1" iteration', 'repeat for "1" iterations']
         )
-
-        matched_steps = normalize_completion_item(
-            actual_completed_steps,
-            lsp.CompletionItemKind.Function,
-        )
-
-        assert sorted(matched_steps) == sorted(
-            ['repeat for "1" iterations', 'repeat for "1" iteration']
-        )
-
-        matched_text_edit = normalize_completion_text_edit(
-            actual_completed_steps, lsp.CompletionItemKind.Function
-        )
-
-        assert sorted(matched_text_edit) == sorted([' iteration', ' iterations'])
-
-        actual_completed_steps = complete_step(
-            ls, 'And', lsp.Position(line=0, character=17), 'repeat for "1" '
-        )
-
-        matched_steps = normalize_completion_item(
-            actual_completed_steps,
-            lsp.CompletionItemKind.Function,
-        )
-
-        assert sorted(matched_steps) == sorted(
-            ['repeat for "1" iterations', 'repeat for "1" iteration']
-        )
-
-        matched_text_edit = normalize_completion_text_edit(
-            actual_completed_steps, lsp.CompletionItemKind.Function
-        )
-
-        assert sorted(matched_text_edit) == sorted(['iteration', 'iterations'])
 
         actual_completed_steps = complete_step(
             ls,
-            'Then',
+            'And',
+            lsp.Position(line=0, character=16),
+            'repeat for "1"',
+            base_keyword='Given',
+        )
+
+        matched_steps = normalize_completion_item(
+            actual_completed_steps,
+            lsp.CompletionItemKind.Function,
+        )
+
+        assert sorted(matched_steps) == sorted(
+            ['repeat for "1" iterations', 'repeat for "1" iteration']
+        )
+
+        matched_text_edit = normalize_completion_text_edit(
+            actual_completed_steps, lsp.CompletionItemKind.Function
+        )
+
+        assert sorted(matched_text_edit) == sorted(
+            ['repeat for "1" iteration', 'repeat for "1" iterations']
+        )
+
+        actual_completed_steps = complete_step(
+            ls,
+            'And',
+            lsp.Position(line=0, character=17),
+            'repeat for "1" ',
+            base_keyword='Given',
+        )
+
+        matched_steps = normalize_completion_item(
+            actual_completed_steps,
+            lsp.CompletionItemKind.Function,
+        )
+
+        assert sorted(matched_steps) == sorted(
+            ['repeat for "1" iterations', 'repeat for "1" iteration']
+        )
+
+        matched_text_edit = normalize_completion_text_edit(
+            actual_completed_steps, lsp.CompletionItemKind.Function
+        )
+
+        assert sorted(matched_text_edit) == sorted(
+            ['repeat for "1" iteration', 'repeat for "1" iterations']
+        )
+
+        actual_completed_steps = complete_step(
+            ls,
+            'And',
             lsp.Position(line=0, character=38),
             'parse date "{{ datetime.now() }}" ',
+            base_keyword='Then',
         )
         assert len(actual_completed_steps) == 1
         actual_completed_step = actual_completed_steps[0]
         assert (
             actual_completed_step.text_edit is not None
-            and actual_completed_step.text_edit.new_text == 'and save in variable "$1"'
+            and actual_completed_step.text_edit.new_text.endswith(
+                'and save in variable "$1"'
+            )
         )
 
         actual_completed_steps = complete_step(
             ls,
-            'Then',
+            'But',
             lsp.Position(line=0, character=37),
             'parse date "{{ datetime.now() }}"',
+            base_keyword='Then',
         )
         assert len(actual_completed_steps) == 1
         actual_completed_step = actual_completed_steps[0]
         assert (
             actual_completed_step.text_edit is not None
-            and actual_completed_step.text_edit.new_text == ' and save in variable "$1"'
+            and actual_completed_step.text_edit.new_text.endswith(
+                ' and save in variable "$1"'
+            )
         )
 
 

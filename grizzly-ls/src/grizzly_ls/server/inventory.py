@@ -212,9 +212,13 @@ def compile_keyword_inventory(ls: GrizzlyLanguageServer) -> None:
     )
 
     ls.keywords_headers = []
+    ls.keywords_all = []
     for key, values in ls.localizations.items():
         if values[0] != u'*':
             ls.keywords_headers.extend([*ls.localizations.get(key, [])])
+            ls.keywords_all.extend([*values])
+        else:
+            ls.keywords_all.extend([*values[1:]])
 
     # localized keywords
     ls.keywords = list(

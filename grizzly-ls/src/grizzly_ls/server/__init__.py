@@ -30,6 +30,7 @@ from pip._internal.exceptions import ConfigurationError as PipConfigurationError
 from time import sleep
 
 from pygls.server import LanguageServer
+from pygls.workspace import TextDocument
 from pygls.capabilities import get_capability
 from lsprotocol import types as lsp
 
@@ -38,7 +39,11 @@ from grizzly_ls.text import Normalizer, get_step_parts
 from grizzly_ls.utils import run_command
 from grizzly_ls.model import Step
 from grizzly_ls.constants import FEATURE_INSTALL, COMMAND_REBUILD_INVENTORY, LANGUAGE_ID
-from grizzly_ls.text import format_arg_line, find_language, get_current_line
+from grizzly_ls.text import (
+    format_arg_line,
+    find_language,
+    get_current_line,
+)
 
 from .progress import Progress
 from .features.completion import (
@@ -69,6 +74,7 @@ class GrizzlyLanguageServer(LanguageServer):
     keywords_once: List[str] = []
     keywords_any: List[str] = []
     keywords_headers: List[str] = []
+    keywords_all: List[str] = []
     client_settings: Dict[str, Any]
 
     _language: str
@@ -133,17 +139,45 @@ class GrizzlyLanguageServer(LanguageServer):
             self.logger.info(f'language detected: {name} ({value})')
 
     def get_language_key(self, keyword: str) -> str:
-        if keyword.endswith(':'):
-            keyword = keyword[:-1]
-
-        if keyword in self.keywords_any:
-            return 'step'
+        keyword = keyword.rstrip(' :')
 
         for key, values in self.localizations.items():
             if keyword in values:
                 return key
 
         raise ValueError(f'"{keyword}" is not a valid keyword for "{self.language}"')
+
+    def get_base_keyword(
+        self, position: lsp.Position, text_document: TextDocument
+    ) -> str:
+        lines = list(reversed(text_document.source.splitlines()[: position.line + 1]))
+
+        current_line = lines[0]
+        base_keyword, _ = get_step_parts(current_line)
+
+        if base_keyword is None:
+            raise ValueError(f'unable to get keyword from "{current_line}"')
+
+        base_keyword = base_keyword.rstrip(' :')
+
+        if base_keyword not in self.keywords_any and base_keyword in self.keywords_all:
+            return base_keyword
+
+        for line in lines[1:]:
+            step_keyword, _ = get_step_parts(line)
+
+            if step_keyword is None:
+                continue
+
+            step_keyword = step_keyword.rstrip(' :')
+
+            if step_keyword not in self.keywords_all:
+                continue
+
+            if step_keyword not in self.keywords_any:
+                return step_keyword
+
+        return base_keyword
 
     def _normalize_step_expression(self, step: Union[ParseMatcher, str]) -> List[str]:
         if isinstance(step, ParseMatcher):
@@ -507,11 +541,17 @@ def text_document_completion(
             items = complete_metadata(line, params.position)
         else:
             keyword, text = get_step_parts(line)
-            ls.logger.debug(f'{keyword=}, {text=}, {ls.keywords=}')
 
             if keyword is not None and keyword in ls.keywords:
-                items = complete_step(ls, keyword, params.position, text)
+                base_keyword = ls.get_base_keyword(params.position, text_document)
+
+                ls.logger.debug(f'{keyword=}, {base_keyword=}, {text=}, {ls.keywords=}')
+
+                items = complete_step(
+                    ls, keyword, params.position, text, base_keyword=base_keyword
+                )
             else:
+                ls.logger.debug(f'{keyword=}, {text=}, {ls.keywords=}')
                 items = complete_keyword(ls, keyword, params.position, text_document)
 
     return lsp.CompletionList(

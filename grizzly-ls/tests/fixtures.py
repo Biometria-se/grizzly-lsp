@@ -63,6 +63,7 @@ class LspFixture:
         server.loop = asyncio.new_event_loop()
 
         self.server = server
+        self.server.language = 'en'
         self._server_thread = Thread(
             target=start, args=(self.server, cstdio, sstdout), daemon=True
         )

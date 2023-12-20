@@ -1,6 +1,7 @@
 import logging
 
 from typing import Dict, List
+from contextlib import suppress
 
 import pytest
 import gevent.monkey  # type: ignore
@@ -13,6 +14,7 @@ from pytest_mock import MockerFixture
 
 from lsprotocol import types as lsp
 from behave.matchers import ParseMatcher
+from pygls.workspace import TextDocument
 
 from tests.fixtures import LspFixture
 from tests.conftest import GRIZZLY_PROJECT
@@ -323,8 +325,6 @@ class TestGrizzlyLanguageServer:
     def test__find_help(self, lsp_fixture: LspFixture) -> None:
         ls = lsp_fixture.server
 
-        ls.language = 'en'
-
         def noop() -> None:
             pass
 
@@ -363,28 +363,79 @@ class TestGrizzlyLanguageServer:
     def test__get_language_key(self, lsp_fixture: LspFixture) -> None:
         ls = lsp_fixture.server
 
-        ls.language = 'sv'
-        assert ls.get_language_key('Egenskap:') == 'feature'
-        assert ls.get_language_key('Och') == 'step'
-        assert ls.get_language_key('Givet') == 'given'
-        assert ls.get_language_key('Scenariomall:') == 'scenario_outline'
-        assert ls.get_language_key('När') == 'when'
-        assert ls.get_language_key('Så') == 'then'
-        assert ls.get_language_key('Exempel') == 'examples'
-        assert ls.get_language_key('Bakgrund') == 'background'
-        with pytest.raises(ValueError) as ve:
-            ls.get_language_key('Feature')
-        assert str(ve.value) == '"Feature" is not a valid keyword for "sv"'
+        try:
+            ls.language = 'sv'
+            assert ls.get_language_key('Egenskap:') == 'feature'
+            assert ls.get_language_key('Och') == 'and'
+            assert ls.get_language_key('Givet') == 'given'
+            assert ls.get_language_key('Scenariomall:') == 'scenario_outline'
+            assert ls.get_language_key('När') == 'when'
+            assert ls.get_language_key('Så') == 'then'
+            assert ls.get_language_key('Exempel') == 'examples'
+            assert ls.get_language_key('Bakgrund') == 'background'
+            assert ls.get_language_key('Men') == 'but'
+            with pytest.raises(ValueError) as ve:
+                ls.get_language_key('Feature')
+            assert str(ve.value) == '"Feature" is not a valid keyword for "sv"'
 
-        ls.language = 'en'
-        assert ls.get_language_key('Feature') == 'feature'
-        assert ls.get_language_key('And') == 'step'
-        assert ls.get_language_key('Given') == 'given'
-        assert ls.get_language_key('Scenario Template:') == 'scenario_outline'
-        assert ls.get_language_key('When') == 'when'
-        assert ls.get_language_key('Then') == 'then'
-        assert ls.get_language_key('Examples') == 'examples'
-        assert ls.get_language_key('Background') == 'background'
-        with pytest.raises(ValueError) as ve:
-            ls.get_language_key('Egenskap')
-        assert str(ve.value) == '"Egenskap" is not a valid keyword for "en"'
+            ls.language = 'en'
+            assert ls.get_language_key('Feature') == 'feature'
+            assert ls.get_language_key('And') == 'and'
+            assert ls.get_language_key('Given') == 'given'
+            assert ls.get_language_key('Scenario Template:') == 'scenario_outline'
+            assert ls.get_language_key('When') == 'when'
+            assert ls.get_language_key('Then') == 'then'
+            assert ls.get_language_key('Examples') == 'examples'
+            assert ls.get_language_key('Background') == 'background'
+            assert ls.get_language_key('But') == 'but'
+            with pytest.raises(ValueError) as ve:
+                ls.get_language_key('Egenskap')
+            assert str(ve.value) == '"Egenskap" is not a valid keyword for "en"'
+        finally:
+            ls.language = 'en'
+
+    def test_get_base_keyword(self, lsp_fixture: LspFixture) -> None:
+        feature_file = (
+            lsp_fixture.datadir / 'features' / 'test_get_base_keyword.feature'
+        )
+        try:
+            feature_file.write_text(
+                """Feature:
+Scenario: test scenario
+    Given a user of type "RestApi" load testing "dummy://test"
+    And value of variable "hello" is "world"
+    And repeat for "1" iterations
+
+    Then parse date "{{ datetime.now() }} and save in variable "foo"
+    But fail scenario"""
+            )
+            ls = lsp_fixture.server
+
+            text_document = TextDocument(feature_file.as_uri())
+
+            assert (
+                ls.get_base_keyword(lsp.Position(line=7, character=0), text_document)
+                == 'Then'
+            )
+            assert (
+                ls.get_base_keyword(lsp.Position(line=6, character=0), text_document)
+                == 'Then'
+            )
+
+            assert (
+                ls.get_base_keyword(lsp.Position(line=4, character=0), text_document)
+                == 'Given'
+            )
+
+            assert (
+                ls.get_base_keyword(lsp.Position(line=3, character=0), text_document)
+                == 'Given'
+            )
+
+            assert (
+                ls.get_base_keyword(lsp.Position(line=2, character=0), text_document)
+                == 'Given'
+            )
+        finally:
+            with suppress(Exception):
+                feature_file.unlink()

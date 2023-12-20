@@ -25,7 +25,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 def quick_fix_no_step_impl(
-    ls: GrizzlyLanguageServer, diagnostic: lsp.Diagnostic
+    ls: GrizzlyLanguageServer, diagnostic: lsp.Diagnostic, text_document: TextDocument
 ) -> Optional[lsp.CodeAction]:
     files = sorted(
         [
@@ -54,7 +54,9 @@ def quick_fix_no_step_impl(
         return None
 
     try:
-        keyword_key = ls.get_language_key(keyword)
+        base_keyword = ls.get_base_keyword(diagnostic.range.start, text_document)
+
+        keyword_key = ls.get_language_key(base_keyword)
 
         variable_matches = list(
             re.finditer(r'"([^"]*)"', expression or '', flags=re.MULTILINE)
@@ -219,7 +221,7 @@ def generate_quick_fixes(
     for diagnostic in diagnostics:
         quick_fix: Optional[Union[lsp.CodeAction, List[lsp.CodeAction]]] = None
         if diagnostic.message.startswith(MARKER_NO_STEP_IMPL):
-            quick_fix = quick_fix_no_step_impl(ls, diagnostic)
+            quick_fix = quick_fix_no_step_impl(ls, diagnostic, text_document)
         elif diagnostic.message.endswith(MARKER_LANG_NOT_VALID):
             quick_fix = quick_fix_lang_not_valid(text_document, diagnostic)
         elif diagnostic.message.endswith(MARKER_LANG_WRONG_LINE):

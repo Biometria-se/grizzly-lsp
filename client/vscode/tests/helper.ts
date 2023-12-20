@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { expect } from 'chai';
 
 export let doc: vscode.TextDocument | undefined = undefined;
 export let editor: vscode.TextEditor | undefined = undefined;
@@ -50,4 +51,19 @@ export const getDocUri = (p: string) => {
 async function setTestContent(content: string): Promise<boolean> {
     const all = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
     return editor.edit((eb) => eb.replace(all, content));
+}
+
+export async function acceptAndAssertSuggestion(position: vscode.Position, expected: string): Promise<void> {
+    // move cursor
+    editor.selection = new vscode.Selection(position, position);
+
+    const time = 50;
+    vscode.commands.executeCommand('editor.action.triggerSuggest');
+    await sleep(time);
+    vscode.commands.executeCommand('acceptSelectedSuggestion');
+    await sleep(time);
+    const buffer = vscode.window.activeTextEditor.document.getText();
+    const actual = buffer.split(/\r?\n/)[position.line];
+
+    expect(actual).to.be.equal(expected);
 }
