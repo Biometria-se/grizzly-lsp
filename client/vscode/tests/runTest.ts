@@ -67,7 +67,7 @@ async function installExtension(vscodeExecutablePath: string, extensionId: strin
 async function main() {
     try {
 
-        const vscodeExecutablePath = await downloadAndUnzipVSCode('1.83.1');
+        const vscodeExecutablePath = await downloadAndUnzipVSCode();
         const extensionDevelopmentPathExtra = await installExtension(vscodeExecutablePath, 'ms-python.python');
 
         // The folder containing the Extension Manifest package.json

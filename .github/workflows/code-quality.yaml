@@ -79,7 +79,7 @@ jobs:
         run: |
           bash ./script/install.sh client/vscode
           bash ./script/install.sh server +e
-          npm install -g vsce
+          npm install -g @vscode/vsce
 
       - name: test
         id: test
