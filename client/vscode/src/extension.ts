@@ -140,19 +140,26 @@ async function createLanguageClient(): Promise<LanguageClient> {
 }
 
 async function getPythonPath(): Promise<string> {
-    const activeEnvPath = python.environments.getActiveEnvironmentPath();
-    logger.info(`Using environment: ${activeEnvPath.id}: ${activeEnvPath.path}`);
+    // make sure all environments are loaded
+    await python.environments.refreshEnvironments();
 
-    const activeEnv = await python.environments.resolveEnvironment(activeEnvPath);
+    // use virtual env, if one is active
+    const envPath = process.env['VIRTUAL_ENV'] || python.environments.getActiveEnvironmentPath().path;
 
-    if (!activeEnv) {
-        throw new Error(`Unable to resolve environment: ${activeEnv}`);
+    logger.debug(`Active environment path: ${envPath}`);
+
+    const env = await python.environments.resolveEnvironment(envPath);
+
+    if (!env) {
+        throw new Error(`Unable to resolve environment: ${env}`);
     }
 
-    const pythonUri = activeEnv.executable.uri;
+    const pythonUri = env.executable.uri;
     if (!pythonUri) {
         throw new Error('Python executable URI not found');
     }
+
+    logger.info(`Using interpreter: ${pythonUri.fsPath}`);
 
     return pythonUri.fsPath;
 }

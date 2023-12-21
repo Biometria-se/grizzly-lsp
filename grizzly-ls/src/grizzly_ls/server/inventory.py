@@ -124,9 +124,14 @@ def compile_inventory(ls: GrizzlyLanguageServer) -> None:
 
     try:
         ls.behave_steps.clear()
-        ls.behave_steps = load_step_registry(
-            [path.parent for path in ls.root_path.rglob('*.py')]
-        )
+        # only include paths that doesn't contain [unix] hidden directories
+        paths = [
+            path.parent
+            for path in ls.root_path.rglob('*.py')
+            if path.parent.is_dir() and '.' not in path.parent.as_posix()
+        ]
+        logger.debug(f'loading steps from {paths}')
+        ls.behave_steps = load_step_registry(paths)
     except Exception as e:
         ls.show_message(
             f'unable to load behave step expressions:\n{str(e)}',
@@ -207,9 +212,13 @@ def compile_keyword_inventory(ls: GrizzlyLanguageServer) -> None:
     )
 
     ls.keywords_headers = []
+    ls.keywords_all = []
     for key, values in ls.localizations.items():
         if values[0] != u'*':
             ls.keywords_headers.extend([*ls.localizations.get(key, [])])
+            ls.keywords_all.extend([*values])
+        else:
+            ls.keywords_all.extend([*values[1:]])
 
     # localized keywords
     ls.keywords = list(

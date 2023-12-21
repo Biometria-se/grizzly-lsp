@@ -10,12 +10,10 @@ main() {
     if [[ -z "${what}" || "${what}" == "server" ]]; then
         local args="-e"
         pushd "${script_dir}/../grizzly-ls" &> /dev/null
-        touch setup.cfg
         if [[ -n "${*}" && "${*}" == *"+e"* ]]; then
             args=""
         fi
-        python3 -m pip install $args .[dev] || { rm setup.cfg; exit 1; }
-        rm setup.cfg
+        python -m pip install $args .[dev] || { exit 1; }
         popd &> /dev/null
     fi
 

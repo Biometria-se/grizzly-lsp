@@ -79,13 +79,14 @@ jobs:
         run: |
           bash ./script/install.sh client/vscode
           bash ./script/install.sh server +e
-          npm install -g vsce
+          npm install -g @vscode/vsce
 
       - name: test
         id: test
         uses: hankolsen/xvfb-action@dcb076c1c3802845f73bb6fe14a009d8d3377255
         env:
           VERBOSE: true
+          VIRTUAL_ENV: ${{env.pythonLocation}}
         with:
           run: |
             npm test

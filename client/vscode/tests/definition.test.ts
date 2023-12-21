@@ -18,13 +18,13 @@ describe('Should do definitions for step expressions, step implementation defini
         }
 
         const actual = await testDefintion(content, new vscode.Position(3, 26));
-        expect(actual.length).to.be.equal(1);
+        expect(actual.length, 'length is not 1').to.be.equal(1);
         const actual_definition = actual[0];
-        expect(actual_definition.targetUri.path.endsWith('grizzly/steps/scenario/tasks.py')).to.be.true;
-        expect(actual_definition.originSelectionRange.start.line).to.equal(3);
-        expect(actual_definition.originSelectionRange.start.character).to.equal(4);
-        expect(actual_definition.originSelectionRange.end.line).to.equal(3);
-        expect(actual_definition.originSelectionRange.end.character).to.equal(end);
+        expect(actual_definition.targetUri.path.endsWith('grizzly/steps/scenario/tasks/request.py'), `targetUri is not expected: ${actual_definition.targetUri}`).to.be.true;
+        expect(actual_definition.originSelectionRange.start.line, `originSelectionRange.start.line is not as expected: ${actual_definition.originSelectionRange.start.line}`).to.equal(3);
+        expect(actual_definition.originSelectionRange.start.character, `originSelectionRange.start.character is not as expected: ${actual_definition.originSelectionRange.start.character}`).to.equal(4);
+        expect(actual_definition.originSelectionRange.end.line, `originSelectionRange.end.line is not as expected: ${actual_definition.originSelectionRange.end.line}`).to.equal(3);
+        expect(actual_definition.originSelectionRange.end.character, `originSelectionRange.end.character is not as expected: ${actual_definition.originSelectionRange.end.character}`).to.equal(end);
     });
 
     it('Request payload reference in step does exist in features/requests', async () => {

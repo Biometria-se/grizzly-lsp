@@ -49,12 +49,11 @@ def test_hover(lsp_fixture: LspFixture) -> None:
     assert response.contents.kind == lsp.MarkupKind.Markdown
     assert (
         response.contents.value
-        == '''Sets which type of users the scenario should use and which `host` is the target,
+        == '''Set which type of users the scenario should use and which `host` is the target,
 together with `weight` of the user (how many instances of this user should spawn relative to others).
 
 Example:
-
-``` gherkin
+```gherkin
 Given a user of type "RestApi" with weight "2" load testing "..."
 Given a user of type "MessageQueue" with weight "1" load testing "..."
 Given a user of type "ServiceBus" with weight "1" load testing "..."

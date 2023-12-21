@@ -138,18 +138,19 @@ def validate_gherkin(
         # check if keywords are valid in the specified language
         lang_key: Optional[str] = None
         if keyword is not None:
-            if keyword.endswith(':'):
-                keyword = keyword[:-1]
+            start_position = lsp.Position(line=lineno, character=position)
+            keyword = keyword.rstrip(' :')
+            base_keyword = ls.get_base_keyword(start_position, text_document)
 
             try:
-                lang_key = ls.get_language_key(keyword)
+                lang_key = ls.get_language_key(base_keyword)
             except ValueError:
                 name = ls.localizations.get('name', ['unknown'])[0]
 
                 diagnostics.append(
                     lsp.Diagnostic(
                         range=lsp.Range(
-                            start=lsp.Position(line=lineno, character=position),
+                            start=start_position,
                             end=lsp.Position(
                                 line=lineno, character=position + len(keyword)
                             ),
