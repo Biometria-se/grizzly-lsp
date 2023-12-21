@@ -81,15 +81,12 @@ jobs:
           bash ./script/install.sh server +e
           npm install -g @vscode/vsce
 
-          python -c 'import sys; print(sys.executable)'
-          python --version
-          echo "VIRTUAL_ENV=$pythonLocation" >> $GITHUB_ENV
-
       - name: test
         id: test
         uses: hankolsen/xvfb-action@dcb076c1c3802845f73bb6fe14a009d8d3377255
         env:
           VERBOSE: true
+          VIRTUAL_ENV: ${{env.pythonLocation}}
         with:
           run: |
             npm test

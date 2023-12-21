@@ -15,8 +15,6 @@ main() {
         fi
         python -m pip install $args .[dev] || { exit 1; }
         popd &> /dev/null
-
-        python -c 'import sys; print(sys.executable)'
     fi
 
     if [[ -z "${what}" || "${what}" == "client/"* ]]; then

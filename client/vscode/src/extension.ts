@@ -143,17 +143,10 @@ async function getPythonPath(): Promise<string> {
     // make sure all environments are loaded
     await python.environments.refreshEnvironments();
 
-    for (const e of python.environments.known) {
-        console.log(`found ${e.executable.uri.fsPath}`);
-    }
-
-    console.log(`VIRTUAL_ENV=${process.env['VIRTUAL_ENV']}`);
-
     // use virtual env, if one is active
     const envPath = process.env['VIRTUAL_ENV'] || python.environments.getActiveEnvironmentPath().path;
 
     logger.debug(`Active environment path: ${envPath}`);
-    console.log(`Active environment path: ${envPath}`);
 
     const env = await python.environments.resolveEnvironment(envPath);
 
@@ -167,7 +160,6 @@ async function getPythonPath(): Promise<string> {
     }
 
     logger.info(`Using interpreter: ${pythonUri.fsPath}`);
-    console.log(`Using interpreter: ${pythonUri.fsPath}`);
 
     return pythonUri.fsPath;
 }
