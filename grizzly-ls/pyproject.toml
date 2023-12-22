@@ -8,7 +8,8 @@ description = 'LSP server implementation for grizzly-loadtester load scenario de
 dependencies = [
     'pygls >=1.1.0,<1.2.0',
     'behave ==1.2.6',
-    'random-word'
+    'random-word',
+    'colorama ==0.4.6'
 ]
 readme = 'README.md'
 authors = [
@@ -66,7 +67,8 @@ dev = [
     'requests',
     'types-requests',
     'pip-licenses <4.2.0',
-    'pytablewriter'
+    'pytablewriter',
+    'types-colorama'
 ]
 
 ci = [

@@ -153,7 +153,7 @@ Feature:
     )
     assert (
         diagnostic.message
-        == 'No step implementation found for:\nGiven a step in the scenario'
+        == 'No step implementation found\nGiven a step in the scenario'
     )
     assert diagnostic.severity == lsp.DiagnosticSeverity.Warning
     assert diagnostic.code is None
@@ -171,7 +171,7 @@ Feature:
     )
     assert (
         diagnostic.message
-        == 'No step implementation found for:\nAnd another expression with a "variable"'
+        == 'No step implementation found\nAnd another expression with a "variable"'
     )
     assert diagnostic.severity == lsp.DiagnosticSeverity.Warning
     assert diagnostic.code is None

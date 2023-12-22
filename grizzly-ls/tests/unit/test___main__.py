@@ -22,6 +22,7 @@ def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
         verbose=False,
         version=False,
         no_verbose=None,
+        command=None,
     )
 
     sys.argv = [
@@ -43,6 +44,7 @@ def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
         verbose=True,
         version=False,
         no_verbose=['pygls', 'behave'],
+        command=None,
     )
 
     sys.argv = ['grizzly-ls', '--version']
@@ -55,6 +57,26 @@ def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
 
     assert capture.out == ''
     assert not capture.err == ''
+
+    sys.argv = ['grizzly-ls', 'lint']
+
+    with pytest.raises(SystemExit) as se:
+        parse_arguments()
+    assert se.value.code == 2
+
+    sys.argv = ['grizzly-ls', 'lint', '.']
+
+    args = parse_arguments()
+
+    assert args == Namespace(
+        socket=False,
+        socket_port=4444,
+        verbose=False,
+        version=False,
+        no_verbose=None,
+        command='lint',
+        files=['.'],
+    )
 
 
 def test_setup_logging(mocker: MockerFixture, capsys: CaptureFixture[str]) -> None:

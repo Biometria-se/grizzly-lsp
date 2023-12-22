@@ -9,6 +9,7 @@ from typing import List, Dict, Optional, TYPE_CHECKING
 from types import ModuleType
 from importlib import import_module
 from pathlib import Path
+from contextlib import suppress
 
 from lsprotocol.types import MessageType
 from behave.matchers import ParseMatcher
@@ -118,7 +119,7 @@ def create_step_normalizer() -> Normalizer:
     return Normalizer(custom_type_permutations)
 
 
-def compile_inventory(ls: GrizzlyLanguageServer) -> None:
+def compile_inventory(ls: GrizzlyLanguageServer, *, standalone: bool = False) -> None:
     logger.debug('creating step registry')
     project_name = ls.root_path.stem
 
@@ -128,23 +129,36 @@ def compile_inventory(ls: GrizzlyLanguageServer) -> None:
         paths = [
             path.parent
             for path in ls.root_path.rglob('*.py')
-            if path.parent.is_dir() and '.' not in path.parent.as_posix()
+            if path.parent.is_dir()
+            and all(
+                exclude not in path.parent.as_posix()
+                for exclude in ['.', 'node_modules']
+            )
         ]
         logger.debug(f'loading steps from {paths}')
-        ls.behave_steps = load_step_registry(paths)
+        # ignore paths that contains errors
+        for path in paths:
+            with suppress(Exception):
+                ls.behave_steps.update(load_step_registry([path]))
     except Exception as e:
-        ls.show_message(
-            f'unable to load behave step expressions:\n{str(e)}',
-            msg_type=MessageType.Error,
-            exc_info=True,
-        )
-        return
+        if not standalone:
+            ls.show_message(
+                f'unable to load behave step expressions:\n{str(e)}',
+                msg_type=MessageType.Error,
+                exc_info=True,
+            )
+            return
+
+        raise e
 
     try:
         ls.normalizer = create_step_normalizer()
     except ValueError as e:
-        ls.show_message(str(e), msg_type=MessageType.Error)
-        return
+        if not standalone:
+            ls.show_message(str(e), msg_type=MessageType.Error)
+            return
+
+        raise e
 
     compile_step_inventory(ls)
 
