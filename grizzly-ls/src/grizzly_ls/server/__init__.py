@@ -651,9 +651,18 @@ def text_document_did_open(
     except ValueError:
         ls.language = 'en'
 
+    # if only validating on save, we should definitely do it now
     if ls.client_settings.get('diagnostics_on_save_only', True):
         diagnostics = validate_gherkin(ls, text_document)
         ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
+
+
+@server.feature(lsp.TEXT_DOCUMENT_DID_CLOSE)
+def text_document_did_close(
+    ls: GrizzlyLanguageServer, params: lsp.DidCloseTextDocumentParams
+) -> None:
+    # always clear diagnostics when file is closed
+    ls.publish_diagnostics(params.text_document.uri, None)  # type: ignore
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DID_SAVE)
@@ -665,6 +674,7 @@ def text_document_did_save(
     if text_document.language_id != LANGUAGE_ID:
         return
 
+    # if only validating on save, we should definitely do it now
     if ls.client_settings.get('diagnostics_on_save_only', True):
         diagnostics = validate_gherkin(ls, text_document)
         ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
