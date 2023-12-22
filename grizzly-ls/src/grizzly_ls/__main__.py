@@ -9,6 +9,14 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog='grizzly-ls')
 
     parser.add_argument(
+        '--version',
+        action='store_true',
+        required=False,
+        default=False,
+        help='print version and exit',
+    )
+
+    parser.add_argument(
         '--socket',
         action='store_true',
         required=False,
@@ -40,13 +48,10 @@ def parse_arguments() -> argparse.Namespace:
         help='name of loggers to disable',
     )
 
-    parser.add_argument(
-        '--version',
-        action='store_true',
-        required=False,
-        default=False,
-        help='print version and exit',
-    )
+    subparsers = parser.add_subparsers(dest='command')
+
+    lint_parser = subparsers.add_parser('lint', help='command line lint files')
+    lint_parser.add_argument('files', nargs='+', type=str, help='files to lint')
 
     args = parser.parse_args()
 
@@ -97,18 +102,25 @@ def setup_logging(args: argparse.Namespace) -> None:
         logger.setLevel(logging.ERROR)
 
 
-def main() -> None:
+def main() -> int:
     args = parse_arguments()
-
-    setup_logging(args)
 
     from grizzly_ls.server import server
 
-    if not args.socket:
-        server.start_io(sys.stdin.buffer, sys.stdout.buffer)  # type: ignore
+    if args.command == 'lint':
+        from grizzly_ls.cli import cli
+
+        return cli(server, args)
     else:
-        server.start_tcp('127.0.0.1', args.socket_port)  # type: ignore
+        setup_logging(args)
+
+        if not args.socket:
+            server.start_io(sys.stdin.buffer, sys.stdout.buffer)  # type: ignore
+        else:
+            server.start_tcp('127.0.0.1', args.socket_port)  # type: ignore
+
+        return 0
 
 
 if __name__ == '__main__':  # pragma: no cover
-    main()
+    sys.exit(main())
