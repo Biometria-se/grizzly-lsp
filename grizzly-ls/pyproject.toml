@@ -83,7 +83,6 @@ root = ".."
 timeout = 300
 addopts = [
     "--rootdir=grizzly-ls/",
-    "-o", "testpaths=tests",
     "-c", "pyproject.toml",
     "--cov-reset",
     "--cov=src/grizzly_ls",

@@ -4,7 +4,7 @@ from behave.model import Feature
 
 def parse_feature(
     data: str, language: Optional[str], filename: Optional[str]
-) -> Feature: ...
+) -> Optional[Feature]: ...
 
 class ParserError(Exception):
     line: Optional[int]
