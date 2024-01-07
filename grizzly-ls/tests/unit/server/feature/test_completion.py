@@ -1,5 +1,6 @@
 import logging
 
+import pytest
 from lsprotocol import types as lsp
 from pygls.workspace import TextDocument
 
@@ -10,7 +11,8 @@ from grizzly_ls.server.features.completion import (
     complete_step,
     complete_metadata,
     complete_variable_name,
-    get_variable_name_trigger,
+    complete_expression,
+    get_trigger,
 )
 from grizzly_ls.server.inventory import compile_inventory
 from grizzly_ls.constants import MARKER_LANGUAGE
@@ -20,16 +22,11 @@ from tests.conftest import GRIZZLY_PROJECT
 from tests.helpers import normalize_completion_item, normalize_completion_text_edit
 
 
-def test_get_variable_name_trigger() -> None:
-    assert get_variable_name_trigger('Then what up') is None
-    assert get_variable_name_trigger('Then what up you "{{') == (
-        True,
-        None,
-    )
-    assert get_variable_name_trigger('Then what up you "{{ foo') == (
-        True,
-        'foo',
-    )
+@pytest.mark.parametrize('trigger', ['{{', '{%'])
+def test_get_trigger(trigger: str) -> None:
+    assert get_trigger('Then what up', trigger) is False
+    assert get_trigger(f'Then what up you "{trigger}', trigger) is None
+    assert get_trigger(f'Then what up you "{trigger} foo', trigger) == 'foo'
 
 
 def test_complete_keyword(lsp_fixture: LspFixture) -> None:
@@ -552,3 +549,79 @@ def test_complete_variable_name(lsp_fixture: LspFixture) -> None:
         ]
     )
     assert actual_text_edits == sorted(['foo }}"', 'foobar }}"'])
+
+
+def test_complete_expression(lsp_fixture: LspFixture) -> None:
+    ls = lsp_fixture.server
+    ls.root_path = GRIZZLY_PROJECT
+
+    text_document = TextDocument(
+        uri='file:///test.feature',
+        source='''Feature:
+    Scenario:
+        {%
+''',
+    )
+
+    position = lsp.Position(line=2, character=10)
+
+    actual_items = complete_expression(ls, '{%', text_document, position, partial=None)
+    assert len(actual_items) == 1
+    actual_text_edits = sorted(
+        [
+            actual_item.text_edit.new_text
+            for actual_item in actual_items
+            if actual_item.text_edit is not None
+        ]
+    )
+    assert actual_text_edits == sorted([' scenario "$1", feature="$2" %}'])
+
+    actual_items = complete_expression(ls, '{% ', text_document, position, partial=None)
+    assert len(actual_items) == 1
+    actual_text_edits = sorted(
+        [
+            actual_item.text_edit.new_text
+            for actual_item in actual_items
+            if actual_item.text_edit is not None
+        ]
+    )
+    assert actual_text_edits == sorted(['scenario "$1", feature="$2" %}'])
+
+    actual_items = complete_expression(
+        ls, '{% sce', text_document, position, partial='sce'
+    )
+    assert len(actual_items) == 1
+    actual_text_edits = sorted(
+        [
+            actual_item.text_edit.new_text
+            for actual_item in actual_items
+            if actual_item.text_edit is not None
+        ]
+    )
+    assert actual_text_edits == sorted(['scenario "$1", feature="$2" %}'])
+
+    text_document = TextDocument(
+        uri='file:///test.feature',
+        source='''Feature:
+    Scenario:
+        {% scenario
+''',
+    )
+
+    actual_items = complete_expression(
+        ls, '{% scenario', text_document, position, partial='scenario'
+    )
+    assert len(actual_items) == 0
+
+    text_document = TextDocument(
+        uri='file:///test.feature',
+        source='''Feature:
+    Scenario:
+        {% %}
+''',
+    )
+
+    actual_items = complete_expression(
+        ls, '{% %}', text_document, position, partial=None
+    )
+    assert len(actual_items) == 0

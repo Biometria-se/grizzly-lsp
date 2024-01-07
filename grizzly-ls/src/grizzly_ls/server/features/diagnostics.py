@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
-from tokenize import tokenize, NAME, ENCODING, STRING
+from tokenize import tokenize, TokenError, NAME, ENCODING, STRING
 from io import BytesIO
 from pathlib import Path
 from dataclasses import dataclass
@@ -193,10 +193,14 @@ def validate_gherkin(
 
         # handle jinja2 expressions
         if stripped_line[:2] == '{%' and stripped_line[-2:] == '%}':
+            ls.logger.debug(stripped_line)
             # only tokenize the actual jinja2 expression, not the markers
-            tokens = list(
-                tokenize(BytesIO(stripped_line[2:-2].strip().encode()).readline)
-            )
+            try:
+                tokens = list(
+                    tokenize(BytesIO(stripped_line[2:-2].strip().encode()).readline)
+                )
+            except TokenError:
+                continue
 
             if tokens[0].type == ENCODING:
                 tokens.pop(0)
@@ -215,7 +219,7 @@ def validate_gherkin(
                     if token.type == STRING:
                         value = token.string.strip('"\'')
                         arg_scenario = ArgumentPosition(
-                            value, start=token.start[1], end=token.end[1]
+                            value, start=token.start[1] + 2, end=token.end[1]
                         )
                     continue
 
@@ -224,7 +228,7 @@ def validate_gherkin(
                     if token.type == STRING:
                         value = token.string.strip('"\'')
                         arg_feature = ArgumentPosition(
-                            value, start=token.start[1], end=token.end[1]
+                            value, start=token.start[1] + 2, end=token.end[1]
                         )
                         break
 
@@ -260,10 +264,15 @@ def validate_gherkin(
                 continue
 
             # make sure that the specified scenario exists in the specified feature file
-            if arg_feature.value not in included_feature_files:
+            if (
+                arg_feature.value != ''
+                and arg_feature.value not in included_feature_files
+            ):
+                base_path = Path(text_document.path).parent
                 if arg_feature.value[:2] == './':  # relative path
-                    base_path = Path(text_document.path).parent
                     feature_file = base_path / arg_feature.value[2:]
+                elif '/' not in arg_feature.value:  # relative path
+                    feature_file = base_path / arg_feature.value
                 else:  # absolute path
                     feature_file = Path(arg_feature.value).resolve()
 
@@ -338,6 +347,47 @@ def validate_gherkin(
                         )
                     )
                     continue
+
+            if arg_feature.value == '' or arg_scenario.value == '':
+                if arg_feature.value == '':
+                    diagnostics.append(
+                        lsp.Diagnostic(
+                            range=lsp.Range(
+                                start=lsp.Position(
+                                    line=lineno,
+                                    character=arg_feature.start + position + 2,
+                                ),
+                                end=lsp.Position(
+                                    line=lineno,
+                                    character=arg_feature.end + position + 2,
+                                ),
+                            ),
+                            message=f'Feature argument is empty',
+                            severity=lsp.DiagnosticSeverity.Warning,
+                            source=ls.__class__.__name__,
+                        )
+                    )
+
+                if arg_scenario.value == '':
+                    diagnostics.append(
+                        lsp.Diagnostic(
+                            range=lsp.Range(
+                                start=lsp.Position(
+                                    line=lineno,
+                                    character=arg_scenario.start + position + 2,
+                                ),
+                                end=lsp.Position(
+                                    line=lineno,
+                                    character=arg_scenario.end + position + 2,
+                                ),
+                            ),
+                            message=f'Scenario argument is empty',
+                            severity=lsp.DiagnosticSeverity.Warning,
+                            source=ls.__class__.__name__,
+                        )
+                    )
+
+                continue
 
             feature = included_feature_files[arg_feature.value]
 
@@ -453,9 +503,22 @@ def validate_gherkin(
 
     # make sure behave can parse it
     try:
-        parse_feature(
-            text_document.source, language=language, filename=text_document.filename
-        )
+        # remove any expressions from source, since they messes up behave
+        # feature parsing
+        original_source = text_document.source
+        if '{%' in original_source:
+            buffer: List[str] = []
+            for line in original_source.splitlines():
+                stripped_line = line.lstrip()
+                if stripped_line.startswith('{%'):
+                    continue
+                buffer.append(line)
+
+            source = '\n'.join(buffer)
+        else:
+            source = original_source
+
+        parse_feature(source, language=language, filename=text_document.filename)
     except ParserError as pe:
         character, message = _get_message_from_parse_error(pe, line_map=line_map)
         diagnostics.append(

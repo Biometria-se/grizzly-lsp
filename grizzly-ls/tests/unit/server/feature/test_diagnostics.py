@@ -333,6 +333,28 @@ def test_validate_gherkin_scenario_tag(lsp_fixture: LspFixture) -> None:
         assert diagnostic.severity == lsp.DiagnosticSeverity.Error
         # // -->
 
+        # <!-- empty scenario and feature arguments
+        feature_file.write_text(
+            '''Feature: test scenario tag
+    Scenario: included
+        {% scenario "", feature="" %}
+    '''
+        )
+        text_document = TextDocument(feature_file.as_posix())
+
+        diagnostics = validate_gherkin(ls, text_document)
+        assert len(diagnostics) == 2
+        diagnostic = diagnostics[0]
+        assert diagnostic.message == 'Feature argument is empty'
+        assert str(diagnostic.range) == '2:33-2:33'
+        assert diagnostic.severity == lsp.DiagnosticSeverity.Warning
+
+        diagnostic = diagnostics[1]
+        assert diagnostic.message == 'Scenario argument is empty'
+        assert str(diagnostic.range) == '2:21-2:21'
+        assert diagnostic.severity == lsp.DiagnosticSeverity.Warning
+        # // -->
+
         # <!-- missing feature argument, scenario argument both as positional and named
         for argument in ['"foo"', 'scenario="foo"']:
             feature_file.write_text(
