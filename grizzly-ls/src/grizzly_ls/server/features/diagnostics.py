@@ -240,7 +240,7 @@ def validate_gherkin(
                             start=lsp.Position(line=lineno, character=position),
                             end=lsp.Position(line=lineno, character=len(line)),
                         ),
-                        message=f'scenario tag is invalid, could not find scenario argument',
+                        message='Scenario tag is invalid, could not find scenario argument',
                         severity=lsp.DiagnosticSeverity.Error,
                         source=ls.__class__.__name__,
                     )
@@ -253,7 +253,7 @@ def validate_gherkin(
                             start=lsp.Position(line=lineno, character=position),
                             end=lsp.Position(line=lineno, character=len(line)),
                         ),
-                        message=f'scenario tag is invalid, could not find feature argument',
+                        message='Scenario tag is invalid, could not find feature argument',
                         severity=lsp.DiagnosticSeverity.Error,
                         source=ls.__class__.__name__,
                     )
@@ -298,7 +298,7 @@ def validate_gherkin(
 
                 try:
                     feature = parse_feature(
-                        feature_file.read_text(),
+                        feature_file.read_text(encoding='utf-8'),
                         language=None,
                         filename=feature_file.as_posix(),
                     )
@@ -362,7 +362,7 @@ def validate_gherkin(
                                     character=arg_feature.end + position + 2,
                                 ),
                             ),
-                            message=f'Feature argument is empty',
+                            message='Feature argument is empty',
                             severity=lsp.DiagnosticSeverity.Warning,
                             source=ls.__class__.__name__,
                         )
@@ -381,7 +381,7 @@ def validate_gherkin(
                                     character=arg_scenario.end + position + 2,
                                 ),
                             ),
-                            message=f'Scenario argument is empty',
+                            message='Scenario argument is empty',
                             severity=lsp.DiagnosticSeverity.Warning,
                             source=ls.__class__.__name__,
                         )
