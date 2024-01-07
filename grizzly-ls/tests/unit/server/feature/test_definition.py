@@ -60,6 +60,9 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
     test_file.parent.mkdir(parents=True, exist_ok=True)
     test_file.touch()
 
+    test_feature_file_included = ls.root_path / 'features' / 'included.feature'
+    test_feature_file_included.touch()
+
     def get_platform_uri(uri: str) -> str:
         # windows is case-insensitive, and drive letter can be different case...
         # and drive latters in uri's from LSP seems to be in lower-case...
@@ -156,5 +159,31 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
             start=lsp.Position(line=0, character=16),
             end=lsp.Position(line=0, character=24),
         )
+
+        # {% scenario ... %}
+        position.character = 30
+        for path in ['', './', f'{test_feature_file_included.parent.as_posix()}/']:
+            feature_argument = f'{path}included.feature'
+            actual_definitions = get_file_url_definition(
+                ls, params, f'{{% scenario "hello", feature="{feature_argument}" %}}'
+            )
+            assert len(actual_definitions) == 1
+            actual_definition = actual_definitions[0]
+            assert get_platform_uri(actual_definition.target_uri) == get_platform_uri(
+                test_feature_file_included.as_uri()
+            )
+
+            assert actual_definition.target_range == lsp.Range(
+                start=lsp.Position(line=0, character=0),
+                end=lsp.Position(line=0, character=0),
+            )
+            assert actual_definition.target_selection_range == lsp.Range(
+                start=lsp.Position(line=0, character=0),
+                end=lsp.Position(line=0, character=0),
+            )
+            assert actual_definition.origin_selection_range == lsp.Range(
+                start=lsp.Position(line=0, character=30),
+                end=lsp.Position(line=0, character=30 + len(feature_argument)),
+            )
     finally:
         rmtree(test_file.parent)
