@@ -4,7 +4,7 @@ import logging
 import itertools
 import re
 
-from typing import Optional, Tuple, List, Set, Dict, TYPE_CHECKING
+from typing import Optional, List, Set, Dict, Union, TYPE_CHECKING
 from tokenize import NAME, OP
 from difflib import get_close_matches
 
@@ -23,34 +23,31 @@ if TYPE_CHECKING:  # pragma: no cover
 logger = logging.getLogger(__name__)
 
 
-def get_variable_name_trigger(trigger: str) -> Optional[Tuple[bool, Optional[str]]]:
-    partial_variable_name: Optional[str] = None
+def get_trigger(value: str, trigger: str) -> Union[bool, Optional[str]]:
+    partial_value: Optional[str] = None
 
-    token_list = get_tokens(trigger)
+    token_list = get_tokens(value)
 
     tokens_reversed = list(reversed(token_list))
 
-    for index, token in enumerate(tokens_reversed):
-        if index == 0 and token.type == NAME:
-            partial_variable_name = token.string
+    for index, next_token in enumerate(tokens_reversed):
+        if index == 0 and next_token.type == NAME:
+            partial_value = next_token.string
             continue
 
         try:
-            next_token = tokens_reversed[index + 1]
+            token = tokens_reversed[index + 1]
             if (
                 token.type == OP
-                and token.string == '{'
+                and token.string == trigger[0]
                 and next_token.type == OP
-                and next_token.string == '{'
+                and next_token.string == trigger[1]
             ):
-                return (
-                    True,
-                    partial_variable_name,
-                )
+                return partial_value
         except IndexError:  # no variable name...
             continue
 
-    return None
+    return False
 
 
 def complete_metadata(
@@ -174,6 +171,53 @@ def complete_keyword(
     return items
 
 
+def complete_expression(
+    ls: GrizzlyLanguageServer,
+    line: str,
+    text_document: TextDocument,
+    position: lsp.Position,
+    *,
+    partial: Optional[str] = None,
+) -> List[lsp.CompletionItem]:
+    start = lsp.Position(
+        line=position.line, character=position.character - len(partial or '')
+    )
+
+    # ugly workaround for now, as to not insert complete text on already written text
+    # that would result in an invalid expression...
+    if (partial is not None and 'scenario' in partial) or '%}' in line:
+        return []
+
+    new_text = 'scenario "$1", feature="$2" %}'
+
+    right_stripped_line = line.rstrip()
+
+    # is there a whitespace or not when auto-complete triggered?
+    if right_stripped_line == line and (
+        partial is None or (not new_text.startswith(partial))
+    ):
+        new_text = f' {new_text}'
+
+    text_edit = lsp.TextEdit(
+        range=lsp.Range(
+            start=start,
+            end=lsp.Position(
+                line=position.line, character=start.character + len(partial or '')
+            ),
+        ),
+        new_text=new_text,
+    )
+    return [
+        lsp.CompletionItem(
+            label='scenario reference',
+            kind=lsp.CompletionItemKind.Reference,
+            deprecated=False,
+            text_edit=text_edit,
+            insert_text_format=lsp.InsertTextFormat.Snippet,
+        )
+    ]
+
+
 def complete_variable_name(
     ls: GrizzlyLanguageServer,
     line: str,
@@ -201,8 +245,6 @@ def complete_variable_name(
                 partial is not None and not variable_name.startswith(partial)
             ):
                 continue
-
-            text_edit: Optional[lsp.TextEdit] = None
 
             if partial is not None:
                 prefix = ''

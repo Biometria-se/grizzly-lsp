@@ -72,6 +72,9 @@ def get_file_url_definition(
     definitions: List[lsp.LocationLink] = []
     matches = re.finditer(r'"([^"]*)"', current_line, re.MULTILINE)
 
+    stripped_line = current_line.strip()
+    is_expression = stripped_line[:2] == '{%' and stripped_line[-2:] == '%}'
+
     for variable_match in matches:
         variable_value = variable_match.group(1)
 
@@ -102,7 +105,18 @@ def get_file_url_definition(
             end_offset = -1 if variable_value.endswith('$') else 0
         else:
             # this is quite grizzly specific...
-            payload_file = ls.root_path / 'features' / 'requests' / variable_value
+            if is_expression:
+                ls.logger.debug(f'{variable_value=}')
+                base_path = Path(text_document.path).parent
+                if variable_value[:2] == './':  # relative path
+                    payload_file = base_path / variable_value[2:]
+                elif '/' not in variable_value:  # relative path
+                    payload_file = base_path / variable_value
+                else:  # absolute path
+                    payload_file = Path(variable_value).resolve()
+            else:
+                payload_file = ls.root_path / 'features' / 'requests' / variable_value
+
             start_offset = 0
             end_offset = 0
 

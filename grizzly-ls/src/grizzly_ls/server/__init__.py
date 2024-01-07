@@ -47,11 +47,12 @@ from grizzly_ls.text import (
 
 from .progress import Progress
 from .features.completion import (
-    get_variable_name_trigger,
+    get_trigger,
     complete_keyword,
     complete_variable_name,
     complete_step,
     complete_metadata,
+    complete_expression,
 )
 from .features.definition import get_step_definition, get_file_url_definition
 from .features.diagnostics import validate_gherkin
@@ -516,28 +517,35 @@ def text_document_completion(
 
     if len(ls.steps.values()) < 1:
         ls.show_message('no steps in inventory', msg_type=lsp.MessageType.Error)
-    else:
-        text_document = ls.workspace.get_text_document(params.text_document.uri)
-        line = get_current_line(text_document, params.position)
-
-        trigger = line[: params.position.character]
-
-        variable_name_trigger = get_variable_name_trigger(trigger)
-
-        ls.logger.debug(
-            f'{line=}, {params.position=}, {trigger=}, {variable_name_trigger=}'
+        return lsp.CompletionList(
+            is_incomplete=False,
+            items=items,
         )
 
-        if variable_name_trigger is not None and variable_name_trigger[0]:
-            _, partial_variable_name = variable_name_trigger
-            items = complete_variable_name(
-                ls,
-                line,
-                text_document,
-                params.position,
-                partial=partial_variable_name,
+    text_document = ls.workspace.get_text_document(params.text_document.uri)
+    line = get_current_line(text_document, params.position)
+
+    trigger = line[: params.position.character]
+
+    ls.logger.debug(f'{line=}, {params.position=}, {trigger=}')
+
+    for trigger_characters, completion_func in [
+        ('{{', complete_variable_name),
+        ('{%', complete_expression),
+    ]:
+        if trigger_characters not in trigger:
+            continue
+
+        partial_value = get_trigger(trigger, trigger_characters)
+        if not isinstance(partial_value, bool):
+            ls.logger.debug(f'{trigger_characters=}, {partial_value=}')
+            items = completion_func(
+                ls, line, text_document, params.position, partial=partial_value
             )
-        elif line.strip().startswith('#'):
+            break
+
+    if len(items) < 1:
+        if line.strip().startswith('#'):
             items = complete_metadata(line, params.position)
         else:
             keyword, text = get_step_parts(line)
