@@ -8,7 +8,7 @@ import re
 from typing import List, Dict, Optional, TYPE_CHECKING
 from types import ModuleType
 from importlib import import_module
-from pathlib import Path
+from pathlib import Path, PurePath
 from contextlib import suppress
 
 from lsprotocol.types import MessageType
@@ -125,16 +125,23 @@ def compile_inventory(ls: GrizzlyLanguageServer, *, standalone: bool = False) ->
 
     try:
         ls.behave_steps.clear()
-        # only include paths that doesn't contain [unix] hidden directories
-        paths = [
-            path.parent
-            for path in ls.root_path.rglob('*.py')
-            if path.parent.is_dir()
-            and all(
-                exclude not in path.parent.as_posix()
-                for exclude in ['.', 'node_modules']
-            )
-        ]
+        # Ignore [unix] hidden files, node_modules and bin by default
+        file_ignore_patterns = (
+            ls.file_ignore_patterns
+            if ls.file_ignore_patterns
+            else ['**/.*', '**/node_modules', '**/bin']
+        )
+        paths = set(
+            [
+                path.parent
+                for path in ls.root_path.rglob('*.py')
+                if path.parent.is_dir()
+                and any(
+                    not PurePath(path.as_posix()).match(ignore_pattern)
+                    for ignore_pattern in file_ignore_patterns
+                )
+            ]
+        )
         logger.debug(f'loading steps from {paths}')
         # ignore paths that contains errors
         for path in paths:

@@ -67,6 +67,7 @@ class GrizzlyLanguageServer(LanguageServer):
         r'(.*ask for value of variable "([^"]*)"$|.*value for variable "([^"]*)" is ".*?"$)'
     )
 
+    file_ignore_patterns: List[str]
     root_path: Path
     index_url: Optional[str]
     behave_steps: Dict[str, List[ParseMatcher]]
@@ -112,6 +113,7 @@ class GrizzlyLanguageServer(LanguageServer):
         self.keywords = []
         self.markup_kind = lsp.MarkupKind.Markdown  # assume, until initialized request
         self.language = 'en'  # assumed default
+        self.file_ignore_patterns = []
 
         # monkey patch functions to short-circuit them (causes problems in this context)
         try:
@@ -490,6 +492,12 @@ def initialize(ls: GrizzlyLanguageServer, params: lsp.InitializeParams) -> None:
 
         variable_pattern = f'({"|".join(normalized_variable_patterns)})'
         ls.variable_pattern = re.compile(variable_pattern)
+    # // -->
+
+    # <!-- set file ignore patterns
+    file_ignore_patterns = ls.client_settings.get('file_ignore_patterns', [])
+    if len(file_ignore_patterns) > 0:
+        ls.file_ignore_patterns = file_ignore_patterns
     # // -->
 
     # <!-- quick fix structure

@@ -121,7 +121,9 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
     )
 
 
-def test_compile_inventory(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> None:
+def test_compile_inventory(
+    lsp_fixture: LspFixture, caplog: LogCaptureFixture, mocker: MockerFixture
+) -> None:
     ls = lsp_fixture.server
 
     ls.steps.clear()
@@ -142,6 +144,67 @@ def test_compile_inventory(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -
 
     for keyword in ['given', 'then', 'when']:
         assert keyword in keywords
+
+    # Test file ignore pattern, default
+    ls.steps.clear()
+    caplog.clear()
+    load_step_registry_mock = mocker.patch(
+        'grizzly_ls.server.inventory.load_step_registry'
+    )
+
+    assert ls.steps == {}
+
+    ls.root_path = GRIZZLY_PROJECT
+
+    with caplog.at_level(logging.INFO, 'grizzly_ls.server'):
+        compile_inventory(ls)
+
+    assert len(caplog.messages) == 1
+
+    assert load_step_registry_mock.call_count == 2
+    mock_args = [
+        arg[0][0][0].as_posix() for arg in load_step_registry_mock.call_args_list
+    ]
+    assert any(arg.endswith('/tests/project') for arg in mock_args)
+    assert any(arg.endswith('/tests/project/steps') for arg in mock_args)
+
+    # Test file ignore pattern, ignore below steps/
+    ls.steps.clear()
+    caplog.clear()
+    ls.file_ignore_patterns = ['**/steps/*']
+    load_step_registry_mock.reset_mock()
+
+    assert ls.steps == {}
+
+    ls.root_path = GRIZZLY_PROJECT
+
+    with caplog.at_level(logging.INFO, 'grizzly_ls.server'):
+        compile_inventory(ls)
+
+    assert load_step_registry_mock.call_count == 1
+    mock_args = [
+        arg[0][0][0].as_posix() for arg in load_step_registry_mock.call_args_list
+    ]
+    assert any(arg.endswith('/tests/project') for arg in mock_args)
+
+    # Test file ignore pattern, ignore below project/
+    ls.steps.clear()
+    caplog.clear()
+    ls.file_ignore_patterns = ['**/project/*']
+    load_step_registry_mock.reset_mock()
+
+    assert ls.steps == {}
+
+    ls.root_path = GRIZZLY_PROJECT
+
+    with caplog.at_level(logging.INFO, 'grizzly_ls.server'):
+        compile_inventory(ls)
+
+    assert load_step_registry_mock.call_count == 1
+    mock_args = [
+        arg[0][0][0].as_posix() for arg in load_step_registry_mock.call_args_list
+    ]
+    assert any(arg.endswith('/tests/project/steps') for arg in mock_args)
 
 
 def test_compile_keyword_inventory(lsp_fixture: LspFixture) -> None:
