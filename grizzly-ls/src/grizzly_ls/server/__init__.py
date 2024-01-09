@@ -495,9 +495,7 @@ def initialize(ls: GrizzlyLanguageServer, params: lsp.InitializeParams) -> None:
     # // -->
 
     # <!-- set file ignore patterns
-    file_ignore_patterns = ls.client_settings.get('file_ignore_patterns', [])
-    if len(file_ignore_patterns) > 0:
-        ls.file_ignore_patterns = file_ignore_patterns
+    ls.file_ignore_patterns = ls.client_settings.get('file_ignore_patterns', [])
     # // -->
 
     # <!-- quick fix structure

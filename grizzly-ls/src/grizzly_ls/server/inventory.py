@@ -5,7 +5,8 @@ import warnings
 import inspect
 import re
 
-from typing import List, Dict, Optional, TYPE_CHECKING
+from os import sep
+from typing import Iterable, List, Dict, Optional, TYPE_CHECKING, Set
 from types import ModuleType
 from importlib import import_module
 from pathlib import Path, PurePath
@@ -119,29 +120,49 @@ def create_step_normalizer() -> Normalizer:
     return Normalizer(custom_type_permutations)
 
 
+def _match_path(path: Path, pattern: str) -> bool:
+    return any(
+        [
+            PurePath(sep.join(path.parts[: i + 2])).match(pattern)
+            for i in range(len(path.parts) - 1)
+        ]
+    )
+
+
+def _filter_source_directories(
+    ls: GrizzlyLanguageServer, source_file_paths: Iterable[Path]
+) -> Set[Path]:
+    # Ignore [unix] hidden files, node_modules and bin by default
+    file_ignore_patterns = (
+        ls.file_ignore_patterns
+        if ls.file_ignore_patterns
+        else [
+            '**/.*',
+            '**/node_modules',
+            '**/bin',
+        ]
+    )
+    return set(
+        [
+            path.parent
+            for path in source_file_paths
+            if path.parent.is_dir()
+            and all(
+                not _match_path(path.parent, ignore_pattern)
+                for ignore_pattern in file_ignore_patterns
+            )
+        ]
+    )
+
+
 def compile_inventory(ls: GrizzlyLanguageServer, *, standalone: bool = False) -> None:
     logger.debug('creating step registry')
     project_name = ls.root_path.stem
 
     try:
         ls.behave_steps.clear()
-        # Ignore [unix] hidden files, node_modules and bin by default
-        file_ignore_patterns = (
-            ls.file_ignore_patterns
-            if ls.file_ignore_patterns
-            else ['**/.*', '**/node_modules', '**/bin']
-        )
-        paths = set(
-            [
-                path.parent
-                for path in ls.root_path.rglob('*.py')
-                if path.parent.is_dir()
-                and any(
-                    not PurePath(path.as_posix()).match(ignore_pattern)
-                    for ignore_pattern in file_ignore_patterns
-                )
-            ]
-        )
+        paths = _filter_source_directories(ls, ls.root_path.rglob('*.py'))
+
         logger.debug(f'loading steps from {paths}')
         # ignore paths that contains errors
         for path in paths:

@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 import pytest
 
@@ -6,6 +7,7 @@ from pytest_mock import MockerFixture
 from _pytest.logging import LogCaptureFixture
 
 from grizzly_ls.server.inventory import (
+    _filter_source_directories,
     compile_inventory,
     create_step_normalizer,
 )
@@ -121,6 +123,55 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
     )
 
 
+def test__filter_source_paths(lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
+    ls = lsp_fixture.server
+    m = mocker.patch('pathlib.Path.is_dir', return_value=True)
+
+    test_paths = [
+        Path('/my/directory/.venv/foo/file.py'),
+        Path('/my/directory/node_modules/sub1/sub2/sub.py'),
+        Path('/my/directory/bin/some_bin.py'),
+        Path('/my/directory/steps/step1.py'),
+        Path('/my/directory/steps/step2.py'),
+        Path('/my/directory/steps/helpers/helper.py'),
+        Path('/my/directory/util/utils.py'),
+        Path('/my/directory/util/utils2.py'),
+        Path('/my/directory/util/utils2.py'),
+    ]
+
+    # Default, subdirectories under .venv and node_modules should be ignored,
+    # and bin directory
+    ls.file_ignore_patterns = []
+    filtered = _filter_source_directories(ls, test_paths)
+    assert m.call_count == 9
+    assert len(filtered) == 3
+    assert Path('/my/directory/steps') in filtered
+    assert Path('/my/directory/steps/helpers') in filtered
+    assert Path('/my/directory/util') in filtered
+
+    # Ignore util directory
+    ls.file_ignore_patterns = ['**/util']
+    filtered = _filter_source_directories(ls, test_paths)
+    assert len(filtered) == 5
+    assert Path('/my/directory/.venv/foo') in filtered
+    assert Path('/my/directory/node_modules/sub1/sub2') in filtered
+    assert Path('/my/directory/steps') in filtered
+    assert Path('/my/directory/steps/helpers') in filtered
+    assert Path('/my/directory/bin') in filtered
+
+    # Ignore steps and any subdirectory under it
+    ls.file_ignore_patterns = ['**/steps', '**/steps/**']
+    filtered = _filter_source_directories(ls, test_paths)
+    assert len(filtered) == 4
+    assert Path('/my/directory/.venv/foo') in filtered
+    assert Path('/my/directory/node_modules/sub1/sub2') in filtered
+    assert Path('/my/directory/util') in filtered
+    assert Path('/my/directory/bin') in filtered
+
+    # Cleanup
+    ls.file_ignore_patterns = []
+
+
 def test_compile_inventory(
     lsp_fixture: LspFixture, caplog: LogCaptureFixture, mocker: MockerFixture
 ) -> None:
@@ -144,67 +195,6 @@ def test_compile_inventory(
 
     for keyword in ['given', 'then', 'when']:
         assert keyword in keywords
-
-    # Test file ignore pattern, default
-    ls.steps.clear()
-    caplog.clear()
-    load_step_registry_mock = mocker.patch(
-        'grizzly_ls.server.inventory.load_step_registry'
-    )
-
-    assert ls.steps == {}
-
-    ls.root_path = GRIZZLY_PROJECT
-
-    with caplog.at_level(logging.INFO, 'grizzly_ls.server'):
-        compile_inventory(ls)
-
-    assert len(caplog.messages) == 1
-
-    assert load_step_registry_mock.call_count == 2
-    mock_args = [
-        arg[0][0][0].as_posix() for arg in load_step_registry_mock.call_args_list
-    ]
-    assert any(arg.endswith('/tests/project') for arg in mock_args)
-    assert any(arg.endswith('/tests/project/steps') for arg in mock_args)
-
-    # Test file ignore pattern, ignore below steps/
-    ls.steps.clear()
-    caplog.clear()
-    ls.file_ignore_patterns = ['**/steps/*']
-    load_step_registry_mock.reset_mock()
-
-    assert ls.steps == {}
-
-    ls.root_path = GRIZZLY_PROJECT
-
-    with caplog.at_level(logging.INFO, 'grizzly_ls.server'):
-        compile_inventory(ls)
-
-    assert load_step_registry_mock.call_count == 1
-    mock_args = [
-        arg[0][0][0].as_posix() for arg in load_step_registry_mock.call_args_list
-    ]
-    assert any(arg.endswith('/tests/project') for arg in mock_args)
-
-    # Test file ignore pattern, ignore below project/
-    ls.steps.clear()
-    caplog.clear()
-    ls.file_ignore_patterns = ['**/project/*']
-    load_step_registry_mock.reset_mock()
-
-    assert ls.steps == {}
-
-    ls.root_path = GRIZZLY_PROJECT
-
-    with caplog.at_level(logging.INFO, 'grizzly_ls.server'):
-        compile_inventory(ls)
-
-    assert load_step_registry_mock.call_count == 1
-    mock_args = [
-        arg[0][0][0].as_posix() for arg in load_step_registry_mock.call_args_list
-    ]
-    assert any(arg.endswith('/tests/project/steps') for arg in mock_args)
 
 
 def test_compile_keyword_inventory(lsp_fixture: LspFixture) -> None:
