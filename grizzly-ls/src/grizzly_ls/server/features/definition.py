@@ -41,7 +41,7 @@ def get_step_definition(
                 end=lsp.Position(line=lineno, character=0),
             )
             step_definition = lsp.LocationLink(
-                target_uri=Path(file_location).as_uri(),
+                target_uri=Path(file_location).resolve().as_uri(),
                 target_range=range,
                 target_selection_range=range,
                 origin_selection_range=lsp.Range(
