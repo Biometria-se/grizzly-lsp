@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from typing import List
 
 import pytest
 
@@ -140,7 +141,7 @@ def test__filter_source_paths(mocker: MockerFixture) -> None:
 
     # Default, subdirectories under .venv and node_modules should be ignored,
     # and bin directory
-    file_ignore_patterns = []
+    file_ignore_patterns: List[str] = []
     filtered = _filter_source_directories(file_ignore_patterns, test_paths)
     assert m.call_count == 9
     assert len(filtered) == 3
