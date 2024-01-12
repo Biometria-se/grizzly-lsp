@@ -140,6 +140,12 @@
           "type": "string",
           "default": null,
           "description": "Template for missing step implementation quick fixes"
+        },
+        "grizzly.file_ignore_patterns": {
+          "scope": "resource",
+          "type": "array",
+          "default": null,
+          "description": "List of glob patterns for files to ignore during source compilation"
         }
       }
     }
@@ -182,4 +188,3 @@
     "typescript": "^5.3.3"
   }
 }
-
