@@ -130,18 +130,16 @@ def _match_path(path: Path, pattern: str) -> bool:
 
 
 def _filter_source_directories(
-    ls: GrizzlyLanguageServer, source_file_paths: Iterable[Path]
+    file_ignore_patterns: List[str], source_file_paths: Iterable[Path]
 ) -> Set[Path]:
     # Ignore [unix] hidden files, node_modules and bin by default
-    file_ignore_patterns = (
-        ls.file_ignore_patterns
-        if ls.file_ignore_patterns
-        else [
+    if not file_ignore_patterns:
+        file_ignore_patterns = [
             '**/.*',
             '**/node_modules',
             '**/bin',
         ]
-    )
+
     return set(
         [
             path.parent
@@ -161,7 +159,9 @@ def compile_inventory(ls: GrizzlyLanguageServer, *, standalone: bool = False) ->
 
     try:
         ls.behave_steps.clear()
-        paths = _filter_source_directories(ls, ls.root_path.rglob('*.py'))
+        paths = _filter_source_directories(
+            ls.file_ignore_patterns, ls.root_path.rglob('*.py')
+        )
 
         logger.debug(f'loading steps from {paths}')
         # ignore paths that contains errors

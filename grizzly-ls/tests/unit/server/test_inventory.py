@@ -123,8 +123,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
     )
 
 
-def test__filter_source_paths(lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
-    ls = lsp_fixture.server
+def test__filter_source_paths(mocker: MockerFixture) -> None:
     m = mocker.patch('pathlib.Path.is_dir', return_value=True)
 
     test_paths = [
@@ -141,8 +140,8 @@ def test__filter_source_paths(lsp_fixture: LspFixture, mocker: MockerFixture) ->
 
     # Default, subdirectories under .venv and node_modules should be ignored,
     # and bin directory
-    ls.file_ignore_patterns = []
-    filtered = _filter_source_directories(ls, test_paths)
+    file_ignore_patterns = []
+    filtered = _filter_source_directories(file_ignore_patterns, test_paths)
     assert m.call_count == 9
     assert len(filtered) == 3
     assert Path('/my/directory/steps') in filtered
@@ -150,8 +149,8 @@ def test__filter_source_paths(lsp_fixture: LspFixture, mocker: MockerFixture) ->
     assert Path('/my/directory/util') in filtered
 
     # Ignore util directory
-    ls.file_ignore_patterns = ['**/util']
-    filtered = _filter_source_directories(ls, test_paths)
+    file_ignore_patterns = ['**/util']
+    filtered = _filter_source_directories(file_ignore_patterns, test_paths)
     assert len(filtered) == 5
     assert Path('/my/directory/.venv/foo') in filtered
     assert Path('/my/directory/node_modules/sub1/sub2') in filtered
@@ -160,16 +159,13 @@ def test__filter_source_paths(lsp_fixture: LspFixture, mocker: MockerFixture) ->
     assert Path('/my/directory/bin') in filtered
 
     # Ignore steps and any subdirectory under it
-    ls.file_ignore_patterns = ['**/steps', '**/steps/**']
-    filtered = _filter_source_directories(ls, test_paths)
+    file_ignore_patterns = ['**/steps']
+    filtered = _filter_source_directories(file_ignore_patterns, test_paths)
     assert len(filtered) == 4
     assert Path('/my/directory/.venv/foo') in filtered
     assert Path('/my/directory/node_modules/sub1/sub2') in filtered
     assert Path('/my/directory/util') in filtered
     assert Path('/my/directory/bin') in filtered
-
-    # Cleanup
-    ls.file_ignore_patterns = []
 
 
 def test_compile_inventory(
