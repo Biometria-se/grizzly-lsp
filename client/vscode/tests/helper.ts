@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { expect } from 'chai';
+import * as os from 'os';
 
 export let doc: vscode.TextDocument | undefined = undefined;
 export let editor: vscode.TextEditor | undefined = undefined;
@@ -58,7 +59,17 @@ export async function acceptAndAssertSuggestion(position: vscode.Position, expec
     // move cursor
     editor.selection = new vscode.Selection(position, position);
 
-    const time = 50;
+    let time: number;
+
+    switch (os.platform()) {
+        case 'darwin':
+            time = 75;
+            break;
+        default:
+            time = 50;
+            break;
+    }
+
     vscode.commands.executeCommand('editor.action.triggerSuggest');
     await sleep(time);
     vscode.commands.executeCommand('acceptSelectedSuggestion');
