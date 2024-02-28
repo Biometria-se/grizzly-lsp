@@ -33,15 +33,11 @@ def get_step_definition(
             if step.expression != expression:
                 continue
 
-            wrapped_func = getattr(step.func, '__wrapped__', None)
-            ls.logger.info(f'{wrapped_func=}, {step.func=}')
+            # support projects that wraps the behave step decorators
+            step_func = getattr(step.func, '__wrapped__', step.func)
 
-            file_location = inspect.getfile(step.func)
-            if wrapped_func is not None:
-                wrapped_file_location = inspect.getfile(wrapped_func)
-                ls.logger.info(f'{wrapped_file_location=}, {file_location=}')
-
-            _, lineno = inspect.getsourcelines(step.func)
+            file_location = inspect.getfile(step_func)
+            _, lineno = inspect.getsourcelines(step_func)
 
             range = lsp.Range(
                 start=lsp.Position(line=lineno, character=0),
