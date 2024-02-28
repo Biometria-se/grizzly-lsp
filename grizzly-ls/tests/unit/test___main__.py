@@ -81,12 +81,8 @@ def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
 
 def test_setup_logging(mocker: MockerFixture, capsys: CaptureFixture[str]) -> None:
     logging_basicConfig_mock = mocker.patch('grizzly_ls.__main__.logging.basicConfig')
-    logging_FileHandler_mock = mocker.patch(
-        'grizzly_ls.__main__.logging.FileHandler', spec_set=logging.FileHandler
-    )
-    logging_StreamHandler_mock = mocker.patch(
-        'grizzly_ls.__main__.logging.StreamHandler', spec_set=logging.StreamHandler
-    )
+    logging_FileHandler_mock = mocker.patch('grizzly_ls.__main__.logging.FileHandler', spec_set=logging.FileHandler)
+    logging_StreamHandler_mock = mocker.patch('grizzly_ls.__main__.logging.StreamHandler', spec_set=logging.StreamHandler)
 
     # <no args>
     arguments = Namespace(socket=False, verbose=False, no_verbose=None)
@@ -151,16 +147,10 @@ def test_setup_logging(mocker: MockerFixture, capsys: CaptureFixture[str]) -> No
 
 
 def test_main(mocker: MockerFixture) -> None:
-    mocker.patch(
-        'grizzly_ls.__main__.setup_logging', return_value=None
-    )  # no logging in test
+    mocker.patch('grizzly_ls.__main__.setup_logging', return_value=None)  # no logging in test
 
-    server_start_io_mock = mocker.patch(
-        'grizzly_ls.server.server.start_io', return_value=None
-    )
-    server_start_tcp = mocker.patch(
-        'grizzly_ls.server.server.start_tcp', return_value=None
-    )
+    server_start_io_mock = mocker.patch('grizzly_ls.server.server.start_io', return_value=None)
+    server_start_tcp = mocker.patch('grizzly_ls.server.server.start_tcp', return_value=None)
 
     # <no args>
     sys.argv = ['grizzly-ls']

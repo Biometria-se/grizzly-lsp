@@ -17,9 +17,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from grizzly_ls.server import GrizzlyLanguageServer
 
 
-def get_step_definition(
-    ls: GrizzlyLanguageServer, params: lsp.DefinitionParams, current_line: str
-) -> Optional[lsp.LocationLink]:
+def get_step_definition(ls: GrizzlyLanguageServer, params: lsp.DefinitionParams, current_line: str) -> Optional[lsp.LocationLink]:
     step_definition: Optional[lsp.LocationLink] = None
 
     keyword, expression = get_step_parts(current_line)

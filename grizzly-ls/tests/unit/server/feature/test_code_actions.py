@@ -26,9 +26,7 @@ def test_quick_fix_no_step_impl(lsp_fixture: LspFixture, mocker: MockerFixture) 
     ls.root_path = GRIZZLY_PROJECT
     expected_quick_fix_file = GRIZZLY_PROJECT / 'steps' / 'steps.py'
 
-    feature_file = (
-        lsp_fixture.datadir / 'features' / 'test_quick_fix_no_step_impl.feature'
-    )
+    feature_file = lsp_fixture.datadir / 'features' / 'test_quick_fix_no_step_impl.feature'
 
     text_document = TextDocument(feature_file.as_uri())
 
@@ -56,9 +54,7 @@ def test_quick_fix_no_step_impl(lsp_fixture: LspFixture, mocker: MockerFixture) 
 
         assert quick_fix_no_step_impl(ls, diagnostic, text_document) is None
 
-        ls.client_settings.update(
-            {'quick_fix': {'step_impl_template': "@{keyword}(u'{expression}')"}}
-        )
+        ls.client_settings.update({'quick_fix': {'step_impl_template': "@{keyword}(u'{expression}')"}})
 
         # no quick fix file
         ls.root_path = Path('/tmp/asdf')
@@ -73,9 +69,7 @@ def test_quick_fix_no_step_impl(lsp_fixture: LspFixture, mocker: MockerFixture) 
         assert quick_fix.title == 'Create step implementation'
         assert quick_fix.kind == lsp.CodeActionKind.QuickFix
         assert quick_fix.diagnostics == [diagnostic]
-        assert quick_fix.command == lsp.Command(
-            'Rebuild step inventory', 'grizzly.server.inventory.rebuild'
-        )
+        assert quick_fix.command == lsp.Command('Rebuild step inventory', 'grizzly.server.inventory.rebuild')
 
         actual_edit = quick_fix.edit
         assert isinstance(actual_edit, lsp.WorkspaceEdit)
@@ -97,9 +91,7 @@ def step_impl(context: Context) -> None:
         source = expected_quick_fix_file.read_text().splitlines()
         expected_position = lsp.Position(line=len(source), character=0)
 
-        assert actual_text_edit.range == lsp.Range(
-            start=expected_position, end=expected_position
-        )
+        assert actual_text_edit.range == lsp.Range(start=expected_position, end=expected_position)
         # // -->
 
         # <!-- Given
@@ -113,13 +105,7 @@ def step_impl(context: Context) -> None:
             source='Dummy',
         )
 
-        ls.client_settings.update(
-            {
-                'quick_fix': {
-                    'step_impl_template': "@step({keyword}, en=u'{expression}')"
-                }
-            }
-        )
+        ls.client_settings.update({'quick_fix': {'step_impl_template': "@step({keyword}, en=u'{expression}')"}})
 
         quick_fix = quick_fix_no_step_impl(ls, diagnostic, text_document)
         assert quick_fix is not None
@@ -127,9 +113,7 @@ def step_impl(context: Context) -> None:
         assert quick_fix.title == 'Create step implementation'
         assert quick_fix.kind == lsp.CodeActionKind.QuickFix
         assert quick_fix.diagnostics == [diagnostic]
-        assert quick_fix.command == lsp.Command(
-            'Rebuild step inventory', 'grizzly.server.inventory.rebuild'
-        )
+        assert quick_fix.command == lsp.Command('Rebuild step inventory', 'grizzly.server.inventory.rebuild')
 
         actual_edit = quick_fix.edit
         assert isinstance(actual_edit, lsp.WorkspaceEdit)
@@ -151,9 +135,7 @@ def step_impl(context: Context) -> None:
         source = expected_quick_fix_file.read_text().splitlines()
         expected_position = lsp.Position(line=len(source), character=0)
 
-        assert actual_text_edit.range == lsp.Range(
-            start=expected_position, end=expected_position
-        )
+        assert actual_text_edit.range == lsp.Range(start=expected_position, end=expected_position)
         # // -->
 
         # <!-- no a valid gherkin expression
@@ -191,9 +173,7 @@ def step_impl(context: Context) -> None:
         assert quick_fix.title == 'Create step implementation'
         assert quick_fix.kind == lsp.CodeActionKind.QuickFix
         assert quick_fix.diagnostics == [diagnostic]
-        assert quick_fix.command == lsp.Command(
-            'Rebuild step inventory', 'grizzly.server.inventory.rebuild'
-        )
+        assert quick_fix.command == lsp.Command('Rebuild step inventory', 'grizzly.server.inventory.rebuild')
 
         actual_edit = quick_fix.edit
         assert isinstance(actual_edit, lsp.WorkspaceEdit)
@@ -215,9 +195,7 @@ def step_impl(context: Context, book: str, foobar: str) -> None:
         source = expected_quick_fix_file.read_text().splitlines()
         expected_position = lsp.Position(line=len(source), character=0)
 
-        assert actual_text_edit.range == lsp.Range(
-            start=expected_position, end=expected_position
-        )
+        assert actual_text_edit.range == lsp.Range(start=expected_position, end=expected_position)
         # // -->
 
         # <!-- error...
@@ -393,15 +371,9 @@ def test_generate_quick_fixes(lsp_fixture: LspFixture, mocker: MockerFixture) ->
 
     diagnostics: List[lsp.Diagnostic] = []
 
-    quick_fix_no_step_impl_mock = mocker.patch(
-        'grizzly_ls.server.features.code_actions.quick_fix_no_step_impl'
-    )
-    quick_fix_lang_not_valid_mock = mocker.patch(
-        'grizzly_ls.server.features.code_actions.quick_fix_lang_not_valid'
-    )
-    quick_fix_lang_wrong_line_mock = mocker.patch(
-        'grizzly_ls.server.features.code_actions.quick_fix_lang_wrong_line'
-    )
+    quick_fix_no_step_impl_mock = mocker.patch('grizzly_ls.server.features.code_actions.quick_fix_no_step_impl')
+    quick_fix_lang_not_valid_mock = mocker.patch('grizzly_ls.server.features.code_actions.quick_fix_lang_not_valid')
+    quick_fix_lang_wrong_line_mock = mocker.patch('grizzly_ls.server.features.code_actions.quick_fix_lang_wrong_line')
 
     text_document = TextDocument(
         uri='file:///test.feature',
@@ -463,11 +435,7 @@ Feature: hello
     quick_fixes = generate_quick_fixes(ls, text_document, diagnostics)
     assert quick_fixes is not None
     assert len(quick_fixes) == 3
-    quick_fix_no_step_impl_mock.assert_called_once_with(
-        ls, diagnostics[2], text_document
-    )
-    quick_fix_lang_wrong_line_mock.assert_called_once_with(
-        text_document, diagnostics[0]
-    )
+    quick_fix_no_step_impl_mock.assert_called_once_with(ls, diagnostics[2], text_document)
+    quick_fix_lang_wrong_line_mock.assert_called_once_with(text_document, diagnostics[0])
     quick_fix_lang_not_valid_mock.assert_called_once_with(text_document, diagnostics[1])
     # // -->

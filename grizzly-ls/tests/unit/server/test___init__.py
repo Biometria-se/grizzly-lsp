@@ -74,9 +74,7 @@ class TestGrizzlyLanguageServer:
             ),
         ],
     )
-    def test___init__(
-        self, language: str, words: Dict[str, List[str]], lsp_fixture: LspFixture
-    ) -> None:
+    def test___init__(self, language: str, words: Dict[str, List[str]], lsp_fixture: LspFixture) -> None:
         ls = lsp_fixture.server
         try:
             ls.steps.clear()
@@ -107,18 +105,14 @@ class TestGrizzlyLanguageServer:
         mocker: MockerFixture,
     ) -> None:
         ls = lsp_fixture.server
-        show_message_mock = mocker.patch(
-            'pygls.server.LanguageServer.show_message', return_value=None
-        )
+        show_message_mock = mocker.patch('pygls.server.LanguageServer.show_message', return_value=None)
         logger_error_mock = mocker.spy(ls.logger, 'error')
 
         message = 'implicit INFO level'
         with caplog.at_level(logging.INFO):
             ls.show_message(message)
         assert caplog.messages == [message]
-        show_message_mock.assert_called_once_with(
-            message, msg_type=lsp.MessageType.Info
-        )
+        show_message_mock.assert_called_once_with(message, msg_type=lsp.MessageType.Info)
         show_message_mock.reset_mock()
         caplog.clear()
 
@@ -126,9 +120,7 @@ class TestGrizzlyLanguageServer:
         with caplog.at_level(logging.INFO):
             ls.show_message(message, lsp.MessageType.Info)
         assert caplog.messages == [message]
-        show_message_mock.assert_called_once_with(
-            message, msg_type=lsp.MessageType.Info
-        )
+        show_message_mock.assert_called_once_with(message, msg_type=lsp.MessageType.Info)
         show_message_mock.reset_mock()
         caplog.clear()
 
@@ -136,9 +128,7 @@ class TestGrizzlyLanguageServer:
         with caplog.at_level(logging.ERROR):
             ls.show_message(message, lsp.MessageType.Error, exc_info=True)
         assert caplog.messages == [message]
-        show_message_mock.assert_called_once_with(
-            message, msg_type=lsp.MessageType.Error
-        )
+        show_message_mock.assert_called_once_with(message, msg_type=lsp.MessageType.Error)
         show_message_mock.reset_mock()
         logger_error_mock.assert_called_once_with(message, exc_info=True)
         caplog.clear()
@@ -147,9 +137,7 @@ class TestGrizzlyLanguageServer:
         with caplog.at_level(logging.WARNING):
             ls.show_message(message, lsp.MessageType.Warning)
         assert caplog.messages == [message]
-        show_message_mock.assert_called_once_with(
-            message, msg_type=lsp.MessageType.Warning
-        )
+        show_message_mock.assert_called_once_with(message, msg_type=lsp.MessageType.Warning)
         show_message_mock.reset_mock()
         caplog.clear()
 
@@ -157,9 +145,7 @@ class TestGrizzlyLanguageServer:
         with caplog.at_level(logging.DEBUG):
             ls.show_message(message, lsp.MessageType.Debug)
         assert caplog.messages == [message]
-        show_message_mock.assert_called_once_with(
-            message, msg_type=lsp.MessageType.Debug
-        )
+        show_message_mock.assert_called_once_with(message, msg_type=lsp.MessageType.Debug)
         show_message_mock.reset_mock()
         caplog.clear()
 
@@ -167,15 +153,11 @@ class TestGrizzlyLanguageServer:
         with caplog.at_level(logging.CRITICAL):
             ls.show_message(message, lsp.MessageType.Debug)
         assert caplog.messages == []
-        show_message_mock.assert_called_once_with(
-            message, msg_type=lsp.MessageType.Debug
-        )
+        show_message_mock.assert_called_once_with(message, msg_type=lsp.MessageType.Debug)
         show_message_mock.reset_mock()
         caplog.clear()
 
-    def test__normalize_step_expression(
-        self, lsp_fixture: LspFixture, mocker: MockerFixture, caplog: LogCaptureFixture
-    ) -> None:
+    def test__normalize_step_expression(self, lsp_fixture: LspFixture, mocker: MockerFixture, caplog: LogCaptureFixture) -> None:
         mocker.patch('parse.Parser.__init__', return_value=None)
         ls = lsp_fixture.server
 
@@ -206,9 +188,7 @@ class TestGrizzlyLanguageServer:
             ]
         )
 
-        step = ParseMatcher(
-            noop, 'send from {from_node:MessageDirection} to {to_node:MessageDirection}'
-        )
+        step = ParseMatcher(noop, 'send from {from_node:MessageDirection} to {to_node:MessageDirection}')
 
         assert sorted(ls._normalize_step_expression(step)) == sorted(
             [
@@ -284,11 +264,7 @@ class TestGrizzlyLanguageServer:
             ]
         )
 
-        assert sorted(
-            ls._normalize_step_expression(
-                '{method:Method} {direction:Direction} endpoint "{endpoint:s}"'
-            )
-        ) == sorted(
+        assert sorted(ls._normalize_step_expression('{method:Method} {direction:Direction} endpoint "{endpoint:s}"')) == sorted(
             [
                 'send to endpoint ""',
                 'send from endpoint ""',
@@ -340,9 +316,7 @@ class TestGrizzlyLanguageServer:
                     'this is the help for hello world parameterized',
                 ),
                 Step('But', 'foo bar', noop, 'this is the help for foo bar'),
-                Step(
-                    'But', '"" bar', noop, 'this is the help for foo bar parameterized'
-                ),
+                Step('But', '"" bar', noop, 'this is the help for foo bar parameterized'),
             ],
         }
 
@@ -350,15 +324,9 @@ class TestGrizzlyLanguageServer:
         assert ls._find_help('Then hello') == 'this is the help for hello world'
         assert ls._find_help('asdfasdf') is None
         assert ls._find_help('And hello') == 'this is the help for hello world'
-        assert (
-            ls._find_help('And hello "world"')
-            == 'this is the help for hello world parameterized'
-        )
+        assert ls._find_help('And hello "world"') == 'this is the help for hello world parameterized'
         assert ls._find_help('But foo') == 'this is the help for foo bar'
-        assert (
-            ls._find_help('But "foo" bar')
-            == 'this is the help for foo bar parameterized'
-        )
+        assert ls._find_help('But "foo" bar') == 'this is the help for foo bar parameterized'
 
     def test__get_language_key(self, lsp_fixture: LspFixture) -> None:
         ls = lsp_fixture.server
@@ -395,9 +363,7 @@ class TestGrizzlyLanguageServer:
             ls.language = 'en'
 
     def test_get_base_keyword(self, lsp_fixture: LspFixture) -> None:
-        feature_file = (
-            lsp_fixture.datadir / 'features' / 'test_get_base_keyword.feature'
-        )
+        feature_file = lsp_fixture.datadir / 'features' / 'test_get_base_keyword.feature'
         try:
             feature_file.write_text(
                 """Feature:
@@ -413,29 +379,14 @@ Scenario: test scenario
 
             text_document = TextDocument(feature_file.as_uri())
 
-            assert (
-                ls.get_base_keyword(lsp.Position(line=7, character=0), text_document)
-                == 'Then'
-            )
-            assert (
-                ls.get_base_keyword(lsp.Position(line=6, character=0), text_document)
-                == 'Then'
-            )
+            assert ls.get_base_keyword(lsp.Position(line=7, character=0), text_document) == 'Then'
+            assert ls.get_base_keyword(lsp.Position(line=6, character=0), text_document) == 'Then'
 
-            assert (
-                ls.get_base_keyword(lsp.Position(line=4, character=0), text_document)
-                == 'Given'
-            )
+            assert ls.get_base_keyword(lsp.Position(line=4, character=0), text_document) == 'Given'
 
-            assert (
-                ls.get_base_keyword(lsp.Position(line=3, character=0), text_document)
-                == 'Given'
-            )
+            assert ls.get_base_keyword(lsp.Position(line=3, character=0), text_document) == 'Given'
 
-            assert (
-                ls.get_base_keyword(lsp.Position(line=2, character=0), text_document)
-                == 'Given'
-            )
+            assert ls.get_base_keyword(lsp.Position(line=2, character=0), text_document) == 'Given'
         finally:
             with suppress(Exception):
                 feature_file.unlink()

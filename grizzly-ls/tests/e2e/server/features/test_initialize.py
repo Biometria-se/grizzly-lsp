@@ -41,14 +41,9 @@ def test_initialize(lsp_fixture: LspFixture) -> None:
         assert isinstance(server.variable_pattern, re.Pattern)
         assert '^.*hello "([^"]*)"!$' in server.variable_pattern.pattern
         assert '^.*foo bar is a (nice|bad) word$' in server.variable_pattern.pattern
-        assert (
-            '^.*and they lived (happy|unfortunate) ever after$'
-            in server.variable_pattern.pattern
-        )
+        assert '^.*and they lived (happy|unfortunate) ever after$' in server.variable_pattern.pattern
         assert '^foo(bar)$' in server.variable_pattern.pattern
-        assert (
-            server.variable_pattern.pattern.count('^') == 4 + 1
-        )  # first pattern has ^ in the pattern...
+        assert server.variable_pattern.pattern.count('^') == 4 + 1  # first pattern has ^ in the pattern...
         assert server.variable_pattern.pattern.count('(') == 5
         assert server.variable_pattern.pattern.count(')') == 5
 

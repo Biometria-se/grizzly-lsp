@@ -126,9 +126,7 @@ Scenario:
 
     assert sorted(
         normalize_completion_item(
-            complete_keyword(
-                ls, 'EN', lsp.Position(line=0, character=2), text_document
-            ),
+            complete_keyword(ls, 'EN', lsp.Position(line=0, character=2), text_document),
             lsp.CompletionItemKind.Keyword,
         )
     ) == sorted(
@@ -208,9 +206,7 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
             'save response metadata "hello"',
             base_keyword='Then',
         )
-        matched_steps = normalize_completion_item(
-            suggested_steps, lsp.CompletionItemKind.Function
-        )
+        matched_steps = normalize_completion_item(suggested_steps, lsp.CompletionItemKind.Function)
 
         for expected_step in [
             'save response metadata "hello" in variable ""',
@@ -219,32 +215,15 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
             assert expected_step in matched_steps
 
         for suggested_step in suggested_steps:
-            if (
-                suggested_step.label
-                == 'save response metadata "hello" that matches "" in variable ""'
-            ):
-                assert (
-                    suggested_step.text_edit is not None
-                    and suggested_step.text_edit.new_text.endswith(
-                        ' that matches "$1" in variable "$2"'
-                    )
-                )
-            elif (
-                suggested_step.label == 'save response metadata "hello" in variable ""'
-            ):
-                assert (
-                    suggested_step.text_edit is not None
-                    and suggested_step.text_edit.new_text.endswith(' in variable "$1"')
-                )
+            if suggested_step.label == 'save response metadata "hello" that matches "" in variable ""':
+                assert suggested_step.text_edit is not None and suggested_step.text_edit.new_text.endswith(' that matches "$1" in variable "$2"')
+            elif suggested_step.label == 'save response metadata "hello" in variable ""':
+                assert suggested_step.text_edit is not None and suggested_step.text_edit.new_text.endswith(' in variable "$1"')
             else:
-                raise AssertionError(
-                    f'"{suggested_step.label}" was an unexpected suggested step'
-                )
+                raise AssertionError(f'"{suggested_step.label}" was an unexpected suggested step')
 
         matched_steps = normalize_completion_item(
-            complete_step(
-                ls, 'When', lsp.Position(line=0, character=4), None, base_keyword='When'
-            ),
+            complete_step(ls, 'When', lsp.Position(line=0, character=4), None, base_keyword='When'),
             lsp.CompletionItemKind.Function,
         )
 
@@ -328,10 +307,7 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
         )
 
         assert len(matched_steps) == 1
-        assert (
-            matched_steps[0]
-            == 'a user of type "RestApi" with weight "1" load testing ""'
-        )
+        assert matched_steps[0] == 'a user of type "RestApi" with weight "1" load testing ""'
 
         actual_completed_steps = complete_step(
             ls,
@@ -346,17 +322,11 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
             lsp.CompletionItemKind.Function,
         )
 
-        assert sorted(matched_steps) == sorted(
-            ['repeat for "1" iterations', 'repeat for "1" iteration']
-        )
+        assert sorted(matched_steps) == sorted(['repeat for "1" iterations', 'repeat for "1" iteration'])
 
-        matched_text_edit = normalize_completion_text_edit(
-            actual_completed_steps, lsp.CompletionItemKind.Function
-        )
+        matched_text_edit = normalize_completion_text_edit(actual_completed_steps, lsp.CompletionItemKind.Function)
 
-        assert sorted(matched_text_edit) == sorted(
-            ['repeat for "1" iteration', 'repeat for "1" iterations']
-        )
+        assert sorted(matched_text_edit) == sorted(['repeat for "1" iteration', 'repeat for "1" iterations'])
 
         actual_completed_steps = complete_step(
             ls,
@@ -371,17 +341,11 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
             lsp.CompletionItemKind.Function,
         )
 
-        assert sorted(matched_steps) == sorted(
-            ['repeat for "1" iterations', 'repeat for "1" iteration']
-        )
+        assert sorted(matched_steps) == sorted(['repeat for "1" iterations', 'repeat for "1" iteration'])
 
-        matched_text_edit = normalize_completion_text_edit(
-            actual_completed_steps, lsp.CompletionItemKind.Function
-        )
+        matched_text_edit = normalize_completion_text_edit(actual_completed_steps, lsp.CompletionItemKind.Function)
 
-        assert sorted(matched_text_edit) == sorted(
-            ['repeat for "1" iteration', 'repeat for "1" iterations']
-        )
+        assert sorted(matched_text_edit) == sorted(['repeat for "1" iteration', 'repeat for "1" iterations'])
 
         actual_completed_steps = complete_step(
             ls,
@@ -396,17 +360,11 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
             lsp.CompletionItemKind.Function,
         )
 
-        assert sorted(matched_steps) == sorted(
-            ['repeat for "1" iterations', 'repeat for "1" iteration']
-        )
+        assert sorted(matched_steps) == sorted(['repeat for "1" iterations', 'repeat for "1" iteration'])
 
-        matched_text_edit = normalize_completion_text_edit(
-            actual_completed_steps, lsp.CompletionItemKind.Function
-        )
+        matched_text_edit = normalize_completion_text_edit(actual_completed_steps, lsp.CompletionItemKind.Function)
 
-        assert sorted(matched_text_edit) == sorted(
-            ['repeat for "1" iteration', 'repeat for "1" iterations']
-        )
+        assert sorted(matched_text_edit) == sorted(['repeat for "1" iteration', 'repeat for "1" iterations'])
 
         actual_completed_steps = complete_step(
             ls,
@@ -417,12 +375,7 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
         )
         assert len(actual_completed_steps) == 1
         actual_completed_step = actual_completed_steps[0]
-        assert (
-            actual_completed_step.text_edit is not None
-            and actual_completed_step.text_edit.new_text.endswith(
-                'and save in variable "$1"'
-            )
-        )
+        assert actual_completed_step.text_edit is not None and actual_completed_step.text_edit.new_text.endswith('and save in variable "$1"')
 
         actual_completed_steps = complete_step(
             ls,
@@ -433,12 +386,7 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
         )
         assert len(actual_completed_steps) == 1
         actual_completed_step = actual_completed_steps[0]
-        assert (
-            actual_completed_step.text_edit is not None
-            and actual_completed_step.text_edit.new_text.endswith(
-                ' and save in variable "$1"'
-            )
-        )
+        assert actual_completed_step.text_edit is not None and actual_completed_step.text_edit.new_text.endswith(' and save in variable "$1"')
 
 
 def test_complete_metadata() -> None:
@@ -453,9 +401,7 @@ def test_complete_metadata() -> None:
     assert actual_item.kind == lsp.CompletionItemKind.Property
     assert isinstance(actual_item.text_edit, lsp.TextEdit)
     assert actual_item.text_edit.new_text == f'{MARKER_LANGUAGE} '
-    assert actual_item.text_edit.range == lsp.Range(
-        start=lsp.Position(line=position.line, character=0), end=position
-    )
+    assert actual_item.text_edit.range == lsp.Range(start=lsp.Position(line=position.line, character=0), end=position)
     # // -->
 
     # <!-- complete all the languages
@@ -493,61 +439,29 @@ def test_complete_variable_name(lsp_fixture: LspFixture) -> None:
 
     position = lsp.Position(line=7, character=19)
 
-    actual_items = complete_variable_name(
-        ls, 'Then log message "{{', text_document, position
-    )
+    actual_items = complete_variable_name(ls, 'Then log message "{{', text_document, position)
     assert len(actual_items) == 3
-    actual_text_edits = sorted(
-        [
-            actual_item.text_edit.new_text
-            for actual_item in actual_items
-            if actual_item.text_edit is not None
-        ]
-    )
+    actual_text_edits = sorted([actual_item.text_edit.new_text for actual_item in actual_items if actual_item.text_edit is not None])
     assert actual_text_edits == sorted([' foo }}"', ' bar }}"', ' foobar }}"'])
 
-    actual_items = complete_variable_name(
-        ls, 'Then log message "{{"', text_document, position
-    )
+    actual_items = complete_variable_name(ls, 'Then log message "{{"', text_document, position)
 
     assert len(actual_items) == 3
-    actual_text_edits = sorted(
-        [
-            actual_item.text_edit.new_text
-            for actual_item in actual_items
-            if actual_item.text_edit is not None
-        ]
-    )
+    actual_text_edits = sorted([actual_item.text_edit.new_text for actual_item in actual_items if actual_item.text_edit is not None])
     assert actual_text_edits == sorted([' foo }}', ' bar }}', ' foobar }}'])
 
     position = lsp.Position(line=7, character=21)
-    actual_items = complete_variable_name(
-        ls, 'Then log message "{{ }}"', text_document, position
-    )
+    actual_items = complete_variable_name(ls, 'Then log message "{{ }}"', text_document, position)
 
     assert len(actual_items) == 3
-    actual_text_edits = sorted(
-        [
-            actual_item.text_edit.new_text
-            for actual_item in actual_items
-            if actual_item.text_edit is not None
-        ]
-    )
+    actual_text_edits = sorted([actual_item.text_edit.new_text for actual_item in actual_items if actual_item.text_edit is not None])
     assert actual_text_edits == sorted(['foo ', 'bar ', 'foobar '])
 
     position = lsp.Position(line=7, character=21)
-    actual_items = complete_variable_name(
-        ls, 'Then log message "{{ f', text_document, position, partial='f'
-    )
+    actual_items = complete_variable_name(ls, 'Then log message "{{ f', text_document, position, partial='f')
 
     assert len(actual_items) == 2
-    actual_text_edits = sorted(
-        [
-            actual_item.text_edit.new_text
-            for actual_item in actual_items
-            if actual_item.text_edit is not None
-        ]
-    )
+    actual_text_edits = sorted([actual_item.text_edit.new_text for actual_item in actual_items if actual_item.text_edit is not None])
     assert actual_text_edits == sorted(['foo }}"', 'foobar }}"'])
 
 
@@ -567,37 +481,17 @@ def test_complete_expression(lsp_fixture: LspFixture) -> None:
 
     actual_items = complete_expression(ls, '{%', text_document, position, partial=None)
     assert len(actual_items) == 1
-    actual_text_edits = sorted(
-        [
-            actual_item.text_edit.new_text
-            for actual_item in actual_items
-            if actual_item.text_edit is not None
-        ]
-    )
+    actual_text_edits = sorted([actual_item.text_edit.new_text for actual_item in actual_items if actual_item.text_edit is not None])
     assert actual_text_edits == sorted([' scenario "$1", feature="$2" %}'])
 
     actual_items = complete_expression(ls, '{% ', text_document, position, partial=None)
     assert len(actual_items) == 1
-    actual_text_edits = sorted(
-        [
-            actual_item.text_edit.new_text
-            for actual_item in actual_items
-            if actual_item.text_edit is not None
-        ]
-    )
+    actual_text_edits = sorted([actual_item.text_edit.new_text for actual_item in actual_items if actual_item.text_edit is not None])
     assert actual_text_edits == sorted(['scenario "$1", feature="$2" %}'])
 
-    actual_items = complete_expression(
-        ls, '{% sce', text_document, position, partial='sce'
-    )
+    actual_items = complete_expression(ls, '{% sce', text_document, position, partial='sce')
     assert len(actual_items) == 1
-    actual_text_edits = sorted(
-        [
-            actual_item.text_edit.new_text
-            for actual_item in actual_items
-            if actual_item.text_edit is not None
-        ]
-    )
+    actual_text_edits = sorted([actual_item.text_edit.new_text for actual_item in actual_items if actual_item.text_edit is not None])
     assert actual_text_edits == sorted(['scenario "$1", feature="$2" %}'])
 
     text_document = TextDocument(
@@ -608,9 +502,7 @@ def test_complete_expression(lsp_fixture: LspFixture) -> None:
 ''',
     )
 
-    actual_items = complete_expression(
-        ls, '{% scenario', text_document, position, partial='scenario'
-    )
+    actual_items = complete_expression(ls, '{% scenario', text_document, position, partial='scenario')
     assert len(actual_items) == 0
 
     text_document = TextDocument(
@@ -621,7 +513,5 @@ def test_complete_expression(lsp_fixture: LspFixture) -> None:
 ''',
     )
 
-    actual_items = complete_expression(
-        ls, '{% %}', text_document, position, partial=None
-    )
+    actual_items = complete_expression(ls, '{% %}', text_document, position, partial=None)
     assert len(actual_items) == 0

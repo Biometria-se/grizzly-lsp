@@ -32,9 +32,7 @@ def _get_severity_color(severity: Optional[DiagnosticSeverity]) -> str:
 
 def diagnostic_to_text(filename: str, diagnostic: Diagnostic) -> str:
     color = _get_severity_color(diagnostic.severity)
-    severity = (
-        diagnostic.severity.name if diagnostic.severity is not None else 'UNKNOWN'
-    )
+    severity = diagnostic.severity.name if diagnostic.severity is not None else 'UNKNOWN'
     message = ': '.join(diagnostic.message.split('\n'))
 
     return '\t'.join(

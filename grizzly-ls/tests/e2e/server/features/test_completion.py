@@ -67,9 +67,7 @@ def test_completion_keywords(lsp_fixture: LspFixture) -> None:
             {
                 'label': item.label,
                 'kind': item.kind,
-                'text_edit': item.text_edit.new_text
-                if item.text_edit is not None
-                else None,
+                'text_edit': item.text_edit.new_text if item.text_edit is not None else None,
             }
             for item in items
         ]
@@ -151,9 +149,7 @@ def test_completion_keywords(lsp_fixture: LspFixture) -> None:
     unexpected_kinds = [k.kind for k in response.items if k.kind != 14]
     assert len(unexpected_kinds) == 0
     labels = [k.label for k in response.items]
-    text_edits = [
-        k.text_edit.new_text for k in response.items if k.text_edit is not None
-    ]
+    text_edits = [k.text_edit.new_text for k in response.items if k.text_edit is not None]
     assert all([True if label is not None else False for label in labels])
     assert labels == ['Feature']
     assert text_edits == ['Feature: ']
@@ -184,9 +180,7 @@ def test_completion_steps(lsp_fixture: LspFixture) -> None:
         )
         assert len(unexpected_kinds) == 0
 
-        labels = [
-            s.text_edit.new_text for s in response.items if s.text_edit is not None
-        ]
+        labels = [s.text_edit.new_text for s in response.items if s.text_edit is not None]
         assert len(labels) > 0
         assert all([True if label is not None else False for label in labels])
 
@@ -215,9 +209,7 @@ def test_completion_steps(lsp_fixture: LspFixture) -> None:
         )
         assert len(unexpected_kinds) == 0
 
-        labels = [
-            s.text_edit.new_text for s in response.items if s.text_edit is not None
-        ]
+        labels = [s.text_edit.new_text for s in response.items if s.text_edit is not None]
         assert len(labels) > 0
         assert all([True if label is not None else False for label in labels])
 
@@ -270,26 +262,20 @@ def test_completion_steps(lsp_fixture: LspFixture) -> None:
         ]
     )
 
-    response = completion(
-        client, lsp_fixture.datadir, 'Then parse date "{{ datetime.now() }}"'
-    )
+    response = completion(client, lsp_fixture.datadir, 'Then parse date "{{ datetime.now() }}"')
     assert response is not None
     assert not response.is_incomplete
 
     labels = list(
         map(lambda s: s.label, response.items),
     )
-    new_texts = [
-        s.text_edit.new_text for s in response.items if s.text_edit is not None
-    ]
+    new_texts = [s.text_edit.new_text for s in response.items if s.text_edit is not None]
 
     assert labels == ['parse date "{{ datetime.now() }}" and save in variable ""']
     assert new_texts == ['parse date "{{ datetime.now() }}" and save in variable "$1"']
 
 
-def test_completion_variable_names(
-    lsp_fixture: LspFixture, caplog: LogCaptureFixture
-) -> None:
+def test_completion_variable_names(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> None:
     client = lsp_fixture.client
 
     content = '''Feature: test
@@ -308,13 +294,9 @@ def test_completion_variable_names(
     labels = list(
         map(lambda s: s.label, response.items),
     )
-    text_edits = list(
-        [s.text_edit.new_text for s in response.items if s.text_edit is not None]
-    )
+    text_edits = list([s.text_edit.new_text for s in response.items if s.text_edit is not None])
 
-    assert sorted(text_edits) == sorted(
-        [' price }}"', ' foo }}"', ' test }}"', ' bar }}"']
-    )
+    assert sorted(text_edits) == sorted([' price }}"', ' foo }}"', ' test }}"', ' bar }}"'])
     assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
 
     content = '''Feature: test
@@ -360,13 +342,9 @@ def test_completion_variable_names(
     labels = list(
         map(lambda s: s.label, response.items),
     )
-    text_edits = list(
-        [s.text_edit.new_text for s in response.items if s.text_edit is not None]
-    )
+    text_edits = list([s.text_edit.new_text for s in response.items if s.text_edit is not None])
 
-    assert sorted(text_edits) == sorted(
-        [' price }}"', ' foo }}"', ' test }}"', ' bar }}"']
-    )
+    assert sorted(text_edits) == sorted([' price }}"', ' foo }}"', ' test }}"', ' bar }}"'])
     assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
     # // -->
 
@@ -383,13 +361,9 @@ def test_completion_variable_names(
     labels = list(
         map(lambda s: s.label, response.items),
     )
-    text_edits = list(
-        [s.text_edit.new_text for s in response.items if s.text_edit is not None]
-    )
+    text_edits = list([s.text_edit.new_text for s in response.items if s.text_edit is not None])
 
-    assert sorted(text_edits) == sorted(
-        [' weight1 }}', ' hello1 }}', ' test1 }}', ' world1 }}']
-    )
+    assert sorted(text_edits) == sorted([' weight1 }}', ' hello1 }}', ' test1 }}', ' world1 }}'])
     assert sorted(labels) == sorted(['weight1', 'hello1', 'test1', 'world1'])
 
     # partial variable name
@@ -405,9 +379,7 @@ def test_completion_variable_names(
     labels = list(
         map(lambda s: s.label, response.items),
     )
-    text_edits = list(
-        [s.text_edit.new_text for s in response.items if s.text_edit is not None]
-    )
+    text_edits = list([s.text_edit.new_text for s in response.items if s.text_edit is not None])
 
     assert sorted(text_edits) == sorted(['weight1 }}', 'world1 }}'])
     assert sorted(labels) == sorted(['weight1', 'world1'])
@@ -426,9 +398,7 @@ def test_completion_variable_names(
     labels = list(
         map(lambda s: s.label, response.items),
     )
-    text_edits = list(
-        [s.text_edit.new_text for s in response.items if s.text_edit is not None]
-    )
+    text_edits = list([s.text_edit.new_text for s in response.items if s.text_edit is not None])
 
     assert sorted(text_edits) == sorted([' weight2', ' hello2', ' test2', ' world2'])
     assert sorted(labels) == sorted(['weight2', 'hello2', 'test2', 'world2'])
@@ -446,9 +416,7 @@ def test_completion_variable_names(
     labels = list(
         map(lambda s: s.label, response.items),
     )
-    text_edits = list(
-        [s.text_edit.new_text for s in response.items if s.text_edit is not None]
-    )
+    text_edits = list([s.text_edit.new_text for s in response.items if s.text_edit is not None])
 
     assert sorted(text_edits) == sorted(['weight2 ', 'world2 '])
     assert sorted(labels) == sorted(['weight2', 'world2'])
@@ -476,9 +444,7 @@ def test_completion_variable_names(
     labels = list(
         map(lambda s: s.label, response.items),
     )
-    text_edits = list(
-        [s.text_edit.new_text for s in response.items if s.text_edit is not None]
-    )
+    text_edits = list([s.text_edit.new_text for s in response.items if s.text_edit is not None])
 
     assert sorted(text_edits) == sorted([' price }}', ' foo }}', ' test }}', ' bar }}'])
     assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
@@ -506,9 +472,7 @@ def test_completion_variable_names(
     labels = list(
         map(lambda s: s.label, response.items),
     )
-    text_edits = list(
-        [s.text_edit.new_text for s in response.items if s.text_edit is not None]
-    )
+    text_edits = list([s.text_edit.new_text for s in response.items if s.text_edit is not None])
 
     assert sorted(text_edits) == sorted([' price }}', ' foo }}', ' test }}', ' bar }}'])
     assert sorted(labels) == sorted(['price', 'foo', 'test', 'bar'])
@@ -525,9 +489,7 @@ def test_completion_variable_names(
     labels = list(
         map(lambda s: s.label, response.items),
     )
-    text_edits = list(
-        [s.text_edit.new_text for s in response.items if s.text_edit is not None]
-    )
+    text_edits = list([s.text_edit.new_text for s in response.items if s.text_edit is not None])
 
     assert sorted(text_edits) == sorted(
         [

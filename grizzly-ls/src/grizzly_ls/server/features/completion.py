@@ -37,12 +37,7 @@ def get_trigger(value: str, trigger: str) -> Union[bool, Optional[str]]:
 
         try:
             token = tokens_reversed[index + 1]
-            if (
-                token.type == OP
-                and token.string == trigger[0]
-                and next_token.type == OP
-                and next_token.string == trigger[1]
-            ):
+            if token.type == OP and token.string == trigger[0] and next_token.type == OP and next_token.string == trigger[1]:
                 return partial_value
         except IndexError:  # no variable name...
             continue
@@ -62,14 +57,7 @@ def complete_metadata(
         for lang, localization in languages.items():
             name = localization.get('name', ['___12341234_asdf'])[0]
             native = localization.get('native', ['___12341234_asdf'])[0]
-            if (
-                not (
-                    expression.lower() in name.lower()
-                    or expression.lower() in native.lower()
-                    or expression.lower() in lang
-                )
-                and len(expression.strip()) > 0
-            ):
+            if not (expression.lower() in name.lower() or expression.lower() in native.lower() or expression.lower() in lang) and len(expression.strip()) > 0:
                 continue
 
             text_edit = lsp.TextEdit(
@@ -124,12 +112,7 @@ def complete_keyword(
             *ls.localizations.get('scenario_outline', []),
         ]
 
-        if not any(
-            [
-                scenario_keyword in text_document.source
-                for scenario_keyword in scenario_keywords
-            ]
-        ):
+        if not any([scenario_keyword in text_document.source for scenario_keyword in scenario_keywords]):
             keywords = scenario_keywords
         else:
             keywords = ls.keywords.copy()
@@ -143,9 +126,7 @@ def complete_keyword(
             keywords = [k for k in keywords if keyword.strip().lower() in k.lower()]
 
     for suggested_keyword in sorted(keywords):
-        start = lsp.Position(
-            line=position.line, character=position.character - len(keyword or '')
-        )
+        start = lsp.Position(line=position.line, character=position.character - len(keyword or ''))
         if suggested_keyword in ls.keywords_headers:
             suffix = ': '
         else:
@@ -179,9 +160,7 @@ def complete_expression(
     *,
     partial: Optional[str] = None,
 ) -> List[lsp.CompletionItem]:
-    start = lsp.Position(
-        line=position.line, character=position.character - len(partial or '')
-    )
+    start = lsp.Position(line=position.line, character=position.character - len(partial or ''))
 
     # ugly workaround for now, as to not insert complete text on already written text
     # that would result in an invalid expression...
@@ -193,17 +172,13 @@ def complete_expression(
     right_stripped_line = line.rstrip()
 
     # is there a whitespace or not when auto-complete triggered?
-    if right_stripped_line == line and (
-        partial is None or (not new_text.startswith(partial))
-    ):
+    if right_stripped_line == line and (partial is None or (not new_text.startswith(partial))):
         new_text = f' {new_text}'
 
     text_edit = lsp.TextEdit(
         range=lsp.Range(
             start=start,
-            end=lsp.Position(
-                line=position.line, character=start.character + len(partial or '')
-            ),
+            end=lsp.Position(line=position.line, character=start.character + len(partial or '')),
         ),
         new_text=new_text,
     )
@@ -241,9 +216,7 @@ def complete_variable_name(
         if match:
             variable_name = match.group(2) or match.group(3)
 
-            if variable_name is None or (
-                partial is not None and not variable_name.startswith(partial)
-            ):
+            if variable_name is None or (partial is not None and not variable_name.startswith(partial)):
                 continue
 
             if partial is not None:
@@ -251,17 +224,9 @@ def complete_variable_name(
             else:
                 prefix = '' if line[: position.character].endswith(' ') else ' '
 
-            suffix = (
-                '"'
-                if not line.rstrip().endswith('"') and line.count('"') % 2 != 0
-                else ''
-            )
+            suffix = '"' if not line.rstrip().endswith('"') and line.count('"') % 2 != 0 else ''
             affix = '' if line[position.character :].strip().startswith('}}') else '}}'
-            affix_suffix = (
-                ''
-                if not line[position.character :].startswith('}}') and affix != '}}'
-                else ' '
-            )
+            affix_suffix = '' if not line[position.character :].startswith('}}') and affix != '}}' else ' '
             new_text = f'{prefix}{variable_name}{affix_suffix}{affix}{suffix}'
 
             start = lsp.Position(
@@ -289,12 +254,7 @@ def complete_variable_name(
                     text_edit=text_edit,
                 )
             )
-        elif any(
-            [
-                scenario_keyword in before_line
-                for scenario_keyword in ls.localizations.get('scenario', [])
-            ]
-        ):
+        elif any([scenario_keyword in before_line for scenario_keyword in ls.localizations.get('scenario', [])]):
             break
 
     return items
@@ -310,9 +270,7 @@ def complete_step(
 ) -> List[lsp.CompletionItem]:
     # only suggest step expression related to the specific base keyword
     key = ls.get_language_key(base_keyword)
-    steps = [
-        step.expression for step in ls.steps.get(key, []) + ls.steps.get('step', [])
-    ]
+    steps = [step.expression for step in ls.steps.get(key, []) + ls.steps.get('step', [])]
 
     matched_steps: List[lsp.CompletionItem] = []
     matched_steps_1: Set[str]
@@ -333,23 +291,15 @@ def complete_step(
             matched_steps_2 = set(filter(lambda s: expression_shell in s, steps))  # type: ignore
 
             # 3. "fuzzy" matching
-            matched_steps_3 = set(
-                get_close_matches(expression_shell, steps, len(steps), 0.6)
-            )
+            matched_steps_3 = set(get_close_matches(expression_shell, steps, len(steps), 0.6))
 
     # keep order so that 1. matches comes before 2. matches etc.
     matched_steps_container: Dict[str, lsp.CompletionItem] = {}
 
-    input_matches = list(
-        re.finditer(r'"([^"]*)"', expression or '', flags=re.MULTILINE)
-    )
+    input_matches = list(re.finditer(r'"([^"]*)"', expression or '', flags=re.MULTILINE))
 
-    for matched_step in itertools.chain(
-        matched_steps_1, matched_steps_2, matched_steps_3
-    ):
-        output_matches = list(
-            re.finditer(r'"([^"]*)"', matched_step, flags=re.MULTILINE)
-        )
+    for matched_step in itertools.chain(matched_steps_1, matched_steps_2, matched_steps_3):
+        output_matches = list(re.finditer(r'"([^"]*)"', matched_step, flags=re.MULTILINE))
 
         # suggest step with already entetered variables in their correct place
         if input_matches and output_matches:
@@ -369,11 +319,7 @@ def complete_step(
 
         # if matched step doesn't start what the user already had typed or we haven't removed
         # expression from matched step, we need to replace what already had been typed
-        if (
-            expression is not None
-            and not new_text.startswith(expression)
-            or new_text == matched_step
-        ):
+        if expression is not None and not new_text.startswith(expression) or new_text == matched_step:
             character = start.character - len(str(expression))
             character = 0 if character < 0 else character
             start.character = character
@@ -385,13 +331,7 @@ def complete_step(
             preselect = True
 
         # if typed expression ends with whitespace, do not insert text starting with a whitespace
-        if (
-            expression is not None
-            and len(expression.strip()) > 0
-            and expression[-1] == ' '
-            and expression[-2] != ' '
-            and new_text[0] == ' '
-        ):
+        if expression is not None and len(expression.strip()) > 0 and expression[-1] == ' ' and expression[-2] != ' ' and new_text[0] == ' ':
             new_text = new_text[1:]
 
         logger.debug(f'{expression=}, {new_text=}, {matched_step=}')
