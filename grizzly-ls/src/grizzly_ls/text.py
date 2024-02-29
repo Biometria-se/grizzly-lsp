@@ -1,4 +1,6 @@
 # pyright: reportGeneralTypeIssues=false, reportUnknownVariableType=false, reportUnknownParameterType=false, reportUnknownArgumentType=false
+from __future__ import annotations
+
 import re
 import itertools
 import string
@@ -28,16 +30,12 @@ from pygls.workspace import TextDocument
 from grizzly_ls.constants import MARKER_LANGUAGE
 
 
-try:
-    from re._constants import (  # type: ignore
-        _NamedIntConstant as SreNamedIntConstant,
-        ANY,
-        BRANCH,
-        LITERAL,
-        MAX_REPEAT,
-        SUBPATTERN,
-    )
-except ImportError:  # pragma: no cover
+if sys.version_info >= (3, 11):
+    from re._constants import _NamedIntConstant as SreNamedIntConstant  # type: ignore [reportMissingStubs]
+    from re._constants import ANY, BRANCH, LITERAL, MAX_REPEAT, SUBPATTERN  # type: ignore [reportAttributeAccessIssue]
+
+    from re._parser import parse as sre_parse, SubPattern  # type: ignore
+else:  # pragma: no cover
     from sre_constants import (
         _NamedIntConstant as SreNamedIntConstant,
         ANY,
@@ -46,12 +44,7 @@ except ImportError:  # pragma: no cover
         MAX_REPEAT,
         SUBPATTERN,
     )
-
-try:
-    from re._parser import parse as sre_parse, SubPattern  # type: ignore
-except ImportError:  # pragma: no cover
     from sre_parse import SubPattern, parse as sre_parse  # type: ignore
-
 
 SreParseTokens = Union[
     List[
@@ -77,15 +70,16 @@ class regexp_handler:
         self.sre_type = sre_type
 
     def __call__(
-        self, func: Callable[['RegexPermutationResolver', SreParseValue], List[str]]
-    ) -> Callable[['RegexPermutationResolver', SreParseValue], List[str]]:
+        self,
+        func: Callable[[RegexPermutationResolver, SreParseValue], List[str]],
+    ) -> Callable[[RegexPermutationResolver, SreParseValue], List[str]]:
         setattr(func, '__handler_type__', self.sre_type)
 
         return func
 
     @classmethod
     def make_registry(
-        cls, instance: 'RegexPermutationResolver'
+        cls, instance: RegexPermutationResolver
     ) -> Dict[SreNamedIntConstant, Callable[[SreParseValue], List[str]]]:
         registry: Dict[SreNamedIntConstant, Callable[[SreParseValue], List[str]]] = {}
         for name, func in inspect.getmembers(instance, predicate=inspect.ismethod):
@@ -115,14 +109,16 @@ class RegexPermutationResolver:
         self._handlers = regexp_handler.make_registry(self)
 
     @regexp_handler(ANY)
-    def handle_any(self, _: SreParseValue) -> List[str]:
+    def handle_any(self: RegexPermutationResolver, _: SreParseValue) -> List[str]:
         printables: List[str] = []
         printables[:0] = string.printable
 
         return printables
 
     @regexp_handler(BRANCH)
-    def handle_branch(self, token_value: SreParseValue) -> List[str]:
+    def handle_branch(
+        self: RegexPermutationResolver, token_value: SreParseValue
+    ) -> List[str]:
         token_value = cast(SreParseValueBranch, token_value)
         _, value = token_value
         options: Set[str] = set()
@@ -134,13 +130,17 @@ class RegexPermutationResolver:
         return list(options)
 
     @regexp_handler(LITERAL)
-    def handle_literal(self, value: SreParseValue) -> List[str]:
+    def handle_literal(
+        self: RegexPermutationResolver, value: SreParseValue
+    ) -> List[str]:
         value = cast(int, value)
 
         return [chr(value)]
 
     @regexp_handler(MAX_REPEAT)
-    def handle_max_repeat(self, value: SreParseValue) -> List[str]:
+    def handle_max_repeat(
+        self: RegexPermutationResolver, value: SreParseValue
+    ) -> List[str]:
         minimum, maximum, subpattern = cast(SreParseValueMaxRepeat, value)
 
         if maximum > 5000:
@@ -149,7 +149,9 @@ class RegexPermutationResolver:
         values: List[Generator[List[str], None, None]] = []
 
         for sub_token, sub_value in subpattern:  # type: ignore
-            options = self.handle_token(sub_token, sub_value)
+            options = self.handle_token(
+                cast(SreNamedIntConstant, sub_token), cast(SreParseValue, sub_value)
+            )
 
             for x in range(minimum, maximum + 1):
                 joined = self.cartesian_join([options] * x)
@@ -158,7 +160,9 @@ class RegexPermutationResolver:
         return [''.join(it) for it in itertools.chain(*values)]
 
     @regexp_handler(SUBPATTERN)
-    def handle_subpattern(self, value: SreParseValue) -> List[str]:
+    def handle_subpattern(
+        self: RegexPermutationResolver, value: SreParseValue
+    ) -> List[str]:
         tokens = cast(SreParseValueSubpattern, value)[-1]
         return list(self.permute_tokens(tokens))
 
@@ -402,9 +406,8 @@ def get_tokens(text: str) -> List[TokenInfo]:
     try:
         for token in tokenize(BytesIO(text.encode('utf8')).readline):
             tokens.append(token)
-    except TokenError as e:
-        if 'EOF in multi-line statement' not in str(e):
-            raise
+    except TokenError:
+        pass
 
     return tokens
 

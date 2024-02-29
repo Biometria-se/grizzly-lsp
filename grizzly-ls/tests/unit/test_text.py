@@ -1,19 +1,14 @@
 # pyright: reportGeneralTypeIssues=false, reportUnknownVariableType=false, reportUnknownParameterType=false, reportUnknownArgumentType=false
+import sys
+
 from typing import cast
 
 import string
 
-try:
-    from re._constants import (  # type: ignore
-        _NamedIntConstant as SreNamedIntConstant,
-        ANY,
-        BRANCH,
-        LITERAL,
-        MAX_REPEAT,
-        SUBPATTERN,
-        IN,
-    )
-except ImportError:
+if sys.version_info >= (3, 11):
+    from re._constants import ANY, BRANCH, LITERAL, MAX_REPEAT, SUBPATTERN, IN  # type: ignore [reportAttributeAccessIssue]
+    from re._constants import _NamedIntConstant as SreNamedIntConstant  # type: ignore [reportMissingStubs]
+else:
     from sre_constants import (
         _NamedIntConstant as SreNamedIntConstant,
         ANY,

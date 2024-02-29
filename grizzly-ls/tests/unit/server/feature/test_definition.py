@@ -186,4 +186,5 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
                 end=lsp.Position(line=0, character=30 + len(feature_argument)),
             )
     finally:
+        test_feature_file_included.unlink()
         rmtree(test_file.parent)
