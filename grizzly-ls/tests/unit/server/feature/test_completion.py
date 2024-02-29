@@ -27,6 +27,7 @@ def test_get_trigger(trigger_char: str) -> None:
     assert get_trigger('Then what up', trigger_char) is False
     assert get_trigger(f'Then what up you "{trigger_char}', trigger_char) is None
     assert get_trigger(f'Then what up you "{trigger_char} foo', trigger_char) == 'foo'
+    assert get_trigger(f'    Then try to complete variable "{trigger_char} f', trigger_char) == 'f'
 
 
 def test_complete_keyword(lsp_fixture: LspFixture) -> None:

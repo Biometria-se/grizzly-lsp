@@ -7,6 +7,7 @@ import string
 import inspect
 import sys
 import unicodedata
+import tokenize
 
 from typing import (
     List,
@@ -21,8 +22,7 @@ from typing import (
     cast,
 )
 from dataclasses import dataclass, field
-from tokenize import tokenize, TokenError, TokenInfo
-from io import BytesIO
+from tokenize import TokenInfo
 
 from lsprotocol.types import Position
 from pygls.workspace import TextDocument
@@ -361,14 +361,47 @@ def clean_help(text: str) -> str:
 
 
 def get_tokens(text: str) -> List[TokenInfo]:
+    """Own implementation of `tokenize.tokenize`, since it behaves differently between platforms
+    and/or python versions.
+
+    Any word/section in a string that is only alphanumerical characters is classified as NAME,
+    everything else is OP.
+    """
     tokens: List[TokenInfo] = []
 
-    # convert generator to list
-    try:
-        for token in tokenize(BytesIO(text.encode('utf8')).readline):
-            tokens.append(token)
-    except TokenError:
-        pass
+    sections = text.strip().split(' ')
+    end: int = 0
+
+    indentation_end = len(text) - len(text.strip())
+
+    if indentation_end > 0:
+        text_indentation = text[0:indentation_end]
+        tokens.append(TokenInfo(tokenize.INDENT, string=text_indentation, start=(1, 0), end=(1, indentation_end), line=text))
+
+    for section in sections:
+        # find where we are in the text
+        start = text.index(section, end)
+        end = start + len(section)
+
+        if section.isalpha():
+            tokens.append(
+                TokenInfo(
+                    tokenize.NAME,
+                    string=section,
+                    start=(1, start),
+                    end=(1, end),
+                    line=text,
+                )
+            )
+        else:
+            end -= len(section)  # wind back, since we need to start in the begining of the current section
+
+            for char in section:
+                tokens.append(TokenInfo(tokenize.OP, string=char, start=(1, start), end=(1, end), line=text))
+
+                # move forward in the section
+                start = text.index(char, end)
+                end = start + len(char)
 
     return tokens
 
