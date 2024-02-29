@@ -136,7 +136,9 @@ def compile_inventory(ls: GrizzlyLanguageServer, *, standalone: bool = False) ->
         ls.behave_steps.clear()
         paths = _filter_source_directories(ls.file_ignore_patterns, ls.root_path.rglob('*.py'))
 
-        logger.debug(f'loading steps from {paths}')
+        plain_paths = [path.as_posix() for path in paths]
+
+        logger.debug(f'loading steps from {plain_paths}')
         # ignore paths that contains errors
         for path in paths:
             with suppress(Exception):
