@@ -24,15 +24,9 @@ if TYPE_CHECKING:  # pragma: no cover
     from grizzly_ls.server import GrizzlyLanguageServer
 
 
-def quick_fix_no_step_impl(
-    ls: GrizzlyLanguageServer, diagnostic: lsp.Diagnostic, text_document: TextDocument
-) -> Optional[lsp.CodeAction]:
+def quick_fix_no_step_impl(ls: GrizzlyLanguageServer, diagnostic: lsp.Diagnostic, text_document: TextDocument) -> Optional[lsp.CodeAction]:
     files = sorted(
-        [
-            file
-            for file in ls.root_path.rglob('*.py')
-            if file.name in ['environment.py', 'steps.py']
-        ],
+        [file for file in ls.root_path.rglob('*.py') if file.name in ['environment.py', 'steps.py']],
         reverse=True,
     )
 
@@ -41,9 +35,7 @@ def quick_fix_no_step_impl(
     if quick_fix_file is None or not quick_fix_file.exists():
         return None
 
-    step_impl_template = ls.client_settings.get('quick_fix', {}).get(
-        'step_impl_template', None
-    )
+    step_impl_template = ls.client_settings.get('quick_fix', {}).get('step_impl_template', None)
 
     if step_impl_template is None:
         return None
@@ -58,9 +50,7 @@ def quick_fix_no_step_impl(
 
         keyword_key = ls.get_language_key(base_keyword)
 
-        variable_matches = list(
-            re.finditer(r'"([^"]*)"', expression or '', flags=re.MULTILINE)
-        )
+        variable_matches = list(re.finditer(r'"([^"]*)"', expression or '', flags=re.MULTILINE))
 
         if variable_matches:
             generator = RandomWords()
@@ -72,9 +62,7 @@ def quick_fix_no_step_impl(
                     variable_name = generator.get_random_word().lower()
 
                 expression = f'{expression[0:variable_match.start()+offset]}"{{{variable_name}}}"{expression[variable_match.end()+offset:]}'
-                offset += (
-                    abs(len(variable_match.group(1)) - len(variable_name)) + 2
-                )  # we're also adding { and }
+                offset += abs(len(variable_match.group(1)) - len(variable_name)) + 2  # we're also adding { and }
                 args.append(f'{variable_name}: str')
 
             arguments = f', {", ".join(args)}'
@@ -86,9 +74,7 @@ def quick_fix_no_step_impl(
 def step_impl(context: Context{arguments}) -> None:
     raise NotImplementedError('no step implementation')
 '''.format(
-            step_impl_template=step_impl_template.format(
-                keyword=keyword_key, expression=expression
-            ),
+            step_impl_template=step_impl_template.format(keyword=keyword_key, expression=expression),
             arguments=arguments,
         )
 
@@ -112,17 +98,13 @@ def step_impl(context: Context{arguments}) -> None:
                 }
             ),
             diagnostics=[diagnostic],
-            command=lsp.Command(
-                'Rebuild step inventory', 'grizzly.server.inventory.rebuild'
-            ),
+            command=lsp.Command('Rebuild step inventory', 'grizzly.server.inventory.rebuild'),
         )
     except ValueError:
         return None
 
 
-def _code_action_lang_not_valid(
-    new_text: str, uri: str, range: lsp.Range
-) -> lsp.CodeAction:
+def _code_action_lang_not_valid(new_text: str, uri: str, range: lsp.Range) -> lsp.CodeAction:
     return lsp.CodeAction(
         title=f'Change language to "{new_text}"',
         kind=lsp.CodeActionKind.QuickFix,
@@ -136,23 +118,14 @@ def _code_action_lang_not_valid(
     )
 
 
-def quick_fix_lang_not_valid(
-    text_document: TextDocument, diagnostic: lsp.Diagnostic
-) -> Optional[List[lsp.CodeAction]]:
+def quick_fix_lang_not_valid(text_document: TextDocument, diagnostic: lsp.Diagnostic) -> Optional[List[lsp.CodeAction]]:
     actions: List[lsp.CodeAction] = []
     _, language, _ = diagnostic.message.split('"', 2)
 
     # check if typed language is a long version
     for lang, localization in languages.items():
-        if (
-            language.lower()
-            in localization.get('name', ['___12341234__asdf'])[0].lower()
-            or language.lower()
-            in localization.get('native', ['___12341234_asdf'])[0].lower()
-        ):
-            actions.append(
-                _code_action_lang_not_valid(lang, text_document.uri, diagnostic.range)
-            )
+        if language.lower() in localization.get('name', ['___12341234__asdf'])[0].lower() or language.lower() in localization.get('native', ['___12341234_asdf'])[0].lower():
+            actions.append(_code_action_lang_not_valid(lang, text_document.uri, diagnostic.range))
 
     # check if typed language has any close matches to available languages
     if len(actions) < 1:
@@ -161,24 +134,16 @@ def quick_fix_lang_not_valid(
         possible_langs = get_close_matches(language, langs, len(langs), 0.5)
 
         for possible_lang in possible_langs:
-            actions.append(
-                _code_action_lang_not_valid(
-                    possible_lang, text_document.uri, diagnostic.range
-                )
-            )
+            actions.append(_code_action_lang_not_valid(possible_lang, text_document.uri, diagnostic.range))
 
     # default to suggest to change to english
     if len(actions) < 1:
-        actions.append(
-            _code_action_lang_not_valid('en', text_document.uri, diagnostic.range)
-        )
+        actions.append(_code_action_lang_not_valid('en', text_document.uri, diagnostic.range))
 
     return actions
 
 
-def quick_fix_lang_wrong_line(
-    text_document: TextDocument, diagnostic: lsp.Diagnostic
-) -> Optional[lsp.CodeAction]:
+def quick_fix_lang_wrong_line(text_document: TextDocument, diagnostic: lsp.Diagnostic) -> Optional[lsp.CodeAction]:
     try:
         source_lines = text_document.source.splitlines()
         end_line = len(source_lines) - 1

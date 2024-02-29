@@ -104,9 +104,7 @@ def test_definition(lsp_fixture: LspFixture) -> None:
             start=lsp.Position(line=0, character=0),
             end=lsp.Position(line=0, character=0),
         )
-        assert (
-            actual_definition.target_selection_range == actual_definition.target_range
-        )
+        assert actual_definition.target_selection_range == actual_definition.target_range
         assert actual_definition.origin_selection_range is not None
         assert actual_definition.origin_selection_range == lsp.Range(
             start=lsp.Position(line=3, character=27),

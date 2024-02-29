@@ -138,7 +138,7 @@ reports = 'no'
 output-format = 'text'
 
 [tool.black]
-line-lenght = 180
+line-length = 180
 skip-string-normalization = true
 
 [tool.flake8]

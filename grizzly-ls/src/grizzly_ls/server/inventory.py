@@ -48,11 +48,7 @@ def create_step_normalizer() -> Normalizer:
     custom_type_permutations: Dict[str, NormalizeHolder] = {}
 
     for custom_type, func in ParseMatcher.custom_types.items():
-        func_code = [
-            line
-            for line in inspect.getsource(func).strip().split('\n')
-            if not line.strip().startswith('@classmethod')
-        ]
+        func_code = [line for line in inspect.getsource(func).strip().split('\n') if not line.strip().startswith('@classmethod')]
 
         if func_code[0].startswith('@parse.with_pattern'):
             match = re.match(r'@parse.with_pattern\(r\'\(?(.*?)\)?\'', func_code[0])
@@ -74,9 +70,7 @@ def create_step_normalizer() -> Normalizer:
                     }
                 )
             else:
-                raise ValueError(
-                    f'could not extract pattern from "{func_code[0]}" for custom type {custom_type}'
-                )
+                raise ValueError(f'could not extract pattern from "{func_code[0]}" for custom type {custom_type}')
         elif 'from_string(' in func_code[-1] or 'from_string(' in func_code[0]:
             enum_name: str
 
@@ -94,9 +88,7 @@ def create_step_normalizer() -> Normalizer:
                     enum_name = match.group(1)
                     module = inspect.getmodule(func)
                 else:
-                    raise ValueError(
-                        f'could not find the type that from_string method for custom type {custom_type} returns'
-                    )
+                    raise ValueError(f'could not find the type that from_string method for custom type {custom_type} returns')
 
             enum_class = getattr(module, enum_name)
             replacements = [value.name.lower() for value in enum_class]
@@ -121,17 +113,10 @@ def create_step_normalizer() -> Normalizer:
 
 
 def _match_path(path: Path, pattern: str) -> bool:
-    return any(
-        [
-            PurePath(sep.join(path.parts[: i + 2])).match(pattern)
-            for i in range(len(path.parts) - 1)
-        ]
-    )
+    return any([PurePath(sep.join(path.parts[: i + 2])).match(pattern) for i in range(len(path.parts) - 1)])
 
 
-def _filter_source_directories(
-    file_ignore_patterns: List[str], source_file_paths: Iterable[Path]
-) -> Set[Path]:
+def _filter_source_directories(file_ignore_patterns: List[str], source_file_paths: Iterable[Path]) -> Set[Path]:
     # Ignore [unix] hidden files, node_modules and bin by default
     if not file_ignore_patterns:
         file_ignore_patterns = [
@@ -140,17 +125,7 @@ def _filter_source_directories(
             '**/bin',
         ]
 
-    return set(
-        [
-            path.parent
-            for path in source_file_paths
-            if path.parent.is_dir()
-            and all(
-                not _match_path(path.parent, ignore_pattern)
-                for ignore_pattern in file_ignore_patterns
-            )
-        ]
-    )
+    return set([path.parent for path in source_file_paths if path.parent.is_dir() and all(not _match_path(path.parent, ignore_pattern) for ignore_pattern in file_ignore_patterns)])
 
 
 def compile_inventory(ls: GrizzlyLanguageServer, *, standalone: bool = False) -> None:
@@ -159,9 +134,7 @@ def compile_inventory(ls: GrizzlyLanguageServer, *, standalone: bool = False) ->
 
     try:
         ls.behave_steps.clear()
-        paths = _filter_source_directories(
-            ls.file_ignore_patterns, ls.root_path.rglob('*.py')
-        )
+        paths = _filter_source_directories(ls.file_ignore_patterns, ls.root_path.rglob('*.py'))
 
         logger.debug(f'loading steps from {paths}')
         # ignore paths that contains errors
@@ -196,9 +169,7 @@ def compile_inventory(ls: GrizzlyLanguageServer, *, standalone: bool = False) ->
 
     compile_keyword_inventory(ls)
 
-    ls.logger.info(
-        f'found {len(ls.keywords)} keywords and {total_steps} steps in "{project_name}"'
-    )
+    ls.logger.info(f'found {len(ls.keywords)} keywords and {total_steps} steps in "{project_name}"')
 
 
 def compile_step_inventory(ls: GrizzlyLanguageServer) -> None:

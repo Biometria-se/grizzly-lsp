@@ -58,9 +58,7 @@ SreParseTokens = Union[
 SreParseValueBranch = Tuple[Optional[Any], List[SubPattern]]
 SreParseValueMaxRepeat = Tuple[int, int, SubPattern]
 SreParseValueSubpattern = Tuple[int, int, int, SreParseTokens]
-SreParseValue = Union[
-    int, SreNamedIntConstant, SreParseValueMaxRepeat, SreParseValueBranch
-]
+SreParseValue = Union[int, SreNamedIntConstant, SreParseValueMaxRepeat, SreParseValueBranch]
 
 
 class regexp_handler:
@@ -78,9 +76,7 @@ class regexp_handler:
         return func
 
     @classmethod
-    def make_registry(
-        cls, instance: RegexPermutationResolver
-    ) -> Dict[SreNamedIntConstant, Callable[[SreParseValue], List[str]]]:
+    def make_registry(cls, instance: RegexPermutationResolver) -> Dict[SreNamedIntConstant, Callable[[SreParseValue], List[str]]]:
         registry: Dict[SreNamedIntConstant, Callable[[SreParseValue], List[str]]] = {}
         for name, func in inspect.getmembers(instance, predicate=inspect.ismethod):
             if name.startswith('_'):
@@ -116,9 +112,7 @@ class RegexPermutationResolver:
         return printables
 
     @regexp_handler(BRANCH)
-    def handle_branch(
-        self: RegexPermutationResolver, token_value: SreParseValue
-    ) -> List[str]:
+    def handle_branch(self: RegexPermutationResolver, token_value: SreParseValue) -> List[str]:
         token_value = cast(SreParseValueBranch, token_value)
         _, value = token_value
         options: Set[str] = set()
@@ -130,17 +124,13 @@ class RegexPermutationResolver:
         return list(options)
 
     @regexp_handler(LITERAL)
-    def handle_literal(
-        self: RegexPermutationResolver, value: SreParseValue
-    ) -> List[str]:
+    def handle_literal(self: RegexPermutationResolver, value: SreParseValue) -> List[str]:
         value = cast(int, value)
 
         return [chr(value)]
 
     @regexp_handler(MAX_REPEAT)
-    def handle_max_repeat(
-        self: RegexPermutationResolver, value: SreParseValue
-    ) -> List[str]:
+    def handle_max_repeat(self: RegexPermutationResolver, value: SreParseValue) -> List[str]:
         minimum, maximum, subpattern = cast(SreParseValueMaxRepeat, value)
 
         if maximum > 5000:
@@ -149,9 +139,7 @@ class RegexPermutationResolver:
         values: List[Generator[List[str], None, None]] = []
 
         for sub_token, sub_value in subpattern:  # type: ignore
-            options = self.handle_token(
-                cast(SreNamedIntConstant, sub_token), cast(SreParseValue, sub_value)
-            )
+            options = self.handle_token(cast(SreNamedIntConstant, sub_token), cast(SreParseValue, sub_value))
 
             for x in range(minimum, maximum + 1):
                 joined = self.cartesian_join([options] * x)
@@ -160,15 +148,11 @@ class RegexPermutationResolver:
         return [''.join(it) for it in itertools.chain(*values)]
 
     @regexp_handler(SUBPATTERN)
-    def handle_subpattern(
-        self: RegexPermutationResolver, value: SreParseValue
-    ) -> List[str]:
+    def handle_subpattern(self: RegexPermutationResolver, value: SreParseValue) -> List[str]:
         tokens = cast(SreParseValueSubpattern, value)[-1]
         return list(self.permute_tokens(tokens))
 
-    def handle_token(
-        self, token: SreNamedIntConstant, value: SreParseValue
-    ) -> List[str]:
+    def handle_token(self, token: SreNamedIntConstant, value: SreParseValue) -> List[str]:
         try:
             return self._handlers[token](value)
         except KeyError:
@@ -183,9 +167,7 @@ class RegexPermutationResolver:
 
         return output
 
-    def cartesian_join(
-        self, input: List[List[str]]
-    ) -> Generator[List[str], None, None]:
+    def cartesian_join(self, input: List[List[str]]) -> Generator[List[str], None, None]:
         def rloop(
             sequence: List[List[str]],
             combinations: List[str],
@@ -261,29 +243,17 @@ class Normalizer:
                 if holder is not None:
                     normalize.update({variable: holder})
                 elif len(variable_type) == 1:  # native types
-                    normalize.update(
-                        {
-                            variable: NormalizeHolder(
-                                permutations=Coordinate(), replacements=['']
-                            )
-                        }
-                    )
+                    normalize.update({variable: NormalizeHolder(permutations=Coordinate(), replacements=[''])})
 
             # replace variables that does not create any variations
-            normalize_no_variations = {
-                key: value
-                for key, value in normalize.items()
-                if not value.permutations.x and not value.permutations.y
-            }
+            normalize_no_variations = {key: value for key, value in normalize.items() if not value.permutations.x and not value.permutations.y}
             if len(normalize_no_variations) > 0:
                 for variable, holder in normalize_no_variations.items():
                     for replacement in holder.replacements:
                         pattern = pattern.replace(variable, replacement)
 
             # round 1, to create possible prenumtations
-            normalize_variations_y = {
-                key: value for key, value in normalize.items() if value.permutations.y
-            }
+            normalize_variations_y = {key: value for key, value in normalize.items() if value.permutations.y}
             variation_patterns: Set[str]
 
             if len(normalize_variations_y) > 0:
@@ -294,9 +264,7 @@ class Normalizer:
 
                 patterns = list(variation_patterns)
 
-            normalize_variations_x = {
-                key: value for key, value in normalize.items() if value.permutations.x
-            }
+            normalize_variations_x = {key: value for key, value in normalize.items() if value.permutations.x}
             if len(normalize_variations_x) > 0:
                 matrix_components: List[List[str]] = []
                 for holder in normalize_variations_x.values():
@@ -333,9 +301,7 @@ class Normalizer:
                 patterns = list(variation_patterns)
 
             # round 2, to normalize any additional unresolved prenumtations after normalizing x
-            normalize_variations_y = {
-                key: value for key, value in normalize.items() if value.permutations.y
-            }
+            normalize_variations_y = {key: value for key, value in normalize.items() if value.permutations.y}
             if len(normalize_variations_y) > 0:
                 repeat_round_2 = True
 
@@ -349,15 +315,10 @@ class Normalizer:
                                 continue
 
                             for replacement in holder.replacements:
-                                normalized_pattern = pattern.replace(
-                                    variable, replacement
-                                )
+                                normalized_pattern = pattern.replace(variable, replacement)
                                 variation_patterns.add(normalized_pattern)
                                 # are there any remaining replacements that should be resolved?
-                                if (
-                                    '{' in normalized_pattern
-                                    and '}' in normalized_pattern
-                                ):
+                                if '{' in normalized_pattern and '}' in normalized_pattern:
                                     repeat_round_2 = True
 
                     if len(variation_patterns) > 0:
@@ -450,11 +411,7 @@ def get_current_line(text_document: TextDocument, position: Position) -> str:
 
 
 def normalize_text(text: str) -> str:
-    text = (
-        unicodedata.normalize('NFKD', str(text))
-        .encode('ascii', 'ignore')
-        .decode('ascii')
-    )
+    text = unicodedata.normalize('NFKD', str(text)).encode('ascii', 'ignore').decode('ascii')
     text = re.sub(r'[^\w\s-]', '', text)
 
     return re.sub(r'[-\s]+', '-', text).strip('-_')

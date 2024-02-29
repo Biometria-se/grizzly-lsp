@@ -227,9 +227,7 @@ class TestRegexPermutationResolver:
 
     def test_resolve(self) -> None:
         assert RegexPermutationResolver.resolve('(world[s]?)') == ['world', 'worlds']
-        assert sorted(RegexPermutationResolver.resolve('(foo|bar)?')) == sorted(
-            ['', 'foo', 'bar']
-        )
+        assert sorted(RegexPermutationResolver.resolve('(foo|bar)?')) == sorted(['', 'foo', 'bar'])
 
 
 def test_get_step_parts() -> None:
@@ -256,14 +254,8 @@ def test_get_step_parts() -> None:
 
 
 def test__format_arg_line() -> None:
-    assert (
-        format_arg_line('hello_world (bool): foo bar description of argument')
-        == '* hello_world `bool`: foo bar description of argument'
-    )
-    assert (
-        format_arg_line('hello: strange stuff (bool)')
-        == '* hello: strange stuff (bool)'
-    )
+    assert format_arg_line('hello_world (bool): foo bar description of argument') == '* hello_world `bool`: foo bar description of argument'
+    assert format_arg_line('hello: strange stuff (bool)') == '* hello: strange stuff (bool)'
 
 
 def test_get_current_line() -> None:
@@ -276,28 +268,13 @@ def test_get_current_line() -> None:
 ''',
     )
 
-    assert (
-        get_current_line(text_document, Position(line=0, character=0)).strip()
-        == 'Feature:'
-    )
-    assert (
-        get_current_line(text_document, Position(line=1, character=543)).strip()
-        == 'Scenario: test'
-    )
-    assert (
-        get_current_line(text_document, Position(line=2, character=435)).strip()
-        == 'Then hello world!'
-    )
-    assert (
-        get_current_line(text_document, Position(line=3, character=534)).strip()
-        == 'But foo bar'
-    )
+    assert get_current_line(text_document, Position(line=0, character=0)).strip() == 'Feature:'
+    assert get_current_line(text_document, Position(line=1, character=543)).strip() == 'Scenario: test'
+    assert get_current_line(text_document, Position(line=2, character=435)).strip() == 'Then hello world!'
+    assert get_current_line(text_document, Position(line=3, character=534)).strip() == 'But foo bar'
 
     with pytest.raises(IndexError) as ie:
-        assert (
-            get_current_line(text_document, Position(line=10, character=10)).strip()
-            == 'Then hello world!'
-        )
+        assert get_current_line(text_document, Position(line=10, character=10)).strip() == 'Then hello world!'
     assert str(ie.value) == 'list index out of range'
 
 

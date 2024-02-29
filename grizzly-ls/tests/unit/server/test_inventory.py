@@ -60,13 +60,8 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
     with_pattern_and_vector = normalizer.custom_types.get('WithPatternAndVector', None)
 
     assert with_pattern_and_vector is not None
-    assert (
-        not with_pattern_and_vector.permutations.x
-        and with_pattern_and_vector.permutations.y
-    )
-    assert sorted(with_pattern_and_vector.replacements) == sorted(
-        ['bar', 'hello', 'foo', 'world']
-    )
+    assert not with_pattern_and_vector.permutations.x and with_pattern_and_vector.permutations.y
+    assert sorted(with_pattern_and_vector.replacements) == sorted(['bar', 'hello', 'foo', 'world'])
 
     with_pattern = normalizer.custom_types.get('WithPattern', None)
 
@@ -77,9 +72,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
     enum_indirect = normalizer.custom_types.get('EnumIndirect', None)
     assert enum_indirect is not None
     assert enum_indirect.permutations.x and enum_indirect.permutations.y
-    assert sorted(enum_indirect.replacements) == sorted(
-        ['client_server', 'server_client']
-    )
+    assert sorted(enum_indirect.replacements) == sorted(['client_server', 'server_client'])
 
     enum_direct = normalizer.custom_types.get('EnumDirect', None)
     assert enum_direct is not None
@@ -95,10 +88,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
 
     with pytest.raises(ValueError) as ve:
         create_step_normalizer()
-    assert (
-        str(ve.value)
-        == 'could not extract pattern from "@parse.with_pattern(\'\')" for custom type WithPattern'
-    )
+    assert str(ve.value) == 'could not extract pattern from "@parse.with_pattern(\'\')" for custom type WithPattern'
 
     mocker.patch(
         f'{namespace}.ParseMatcher.custom_types',
@@ -118,10 +108,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
 
     with pytest.raises(ValueError) as ve:
         create_step_normalizer()
-    assert (
-        str(ve.value)
-        == 'could not find the type that from_string method for custom type EnumError returns'
-    )
+    assert str(ve.value) == 'could not find the type that from_string method for custom type EnumError returns'
 
 
 def test__filter_source_paths(mocker: MockerFixture) -> None:
@@ -169,9 +156,7 @@ def test__filter_source_paths(mocker: MockerFixture) -> None:
     assert Path('/my/directory/bin') in filtered
 
 
-def test_compile_inventory(
-    lsp_fixture: LspFixture, caplog: LogCaptureFixture, mocker: MockerFixture
-) -> None:
+def test_compile_inventory(lsp_fixture: LspFixture, caplog: LogCaptureFixture, mocker: MockerFixture) -> None:
     ls = lsp_fixture.server
 
     ls.steps.clear()

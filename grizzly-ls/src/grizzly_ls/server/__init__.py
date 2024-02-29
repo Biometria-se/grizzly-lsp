@@ -63,9 +63,7 @@ from .inventory import compile_inventory, compile_keyword_inventory
 class GrizzlyLanguageServer(LanguageServer):
     logger: logging.Logger = logging.getLogger(__name__)
 
-    variable_pattern: re.Pattern[str] = re.compile(
-        r'(.*ask for value of variable "([^"]*)"$|.*value for variable "([^"]*)" is ".*?"$)'
-    )
+    variable_pattern: re.Pattern[str] = re.compile(r'(.*ask for value of variable "([^"]*)"$|.*value for variable "([^"]*)" is ".*?"$)')
 
     file_ignore_patterns: List[str]
     root_path: Path
@@ -150,9 +148,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
         raise ValueError(f'"{keyword}" is not a valid keyword for "{self.language}"')
 
-    def get_base_keyword(
-        self, position: lsp.Position, text_document: TextDocument
-    ) -> str:
+    def get_base_keyword(self, position: lsp.Position, text_document: TextDocument) -> str:
         lines = list(reversed(text_document.source.splitlines()[: position.line + 1]))
 
         current_line = lines[0]
@@ -205,9 +201,7 @@ class GrizzlyLanguageServer(LanguageServer):
 
         for steps in self.steps.values():
             for step in steps:
-                if step.expression.strip() == expression.strip() and (
-                    key == keyword or key == 'step'
-                ):
+                if step.expression.strip() == expression.strip() and (key == keyword or key == 'step'):
                     return step.help
                 elif step.expression.startswith(expression) and step.help is not None:
                     possible_help.update({step.expression: step.help})
@@ -257,9 +251,7 @@ def install(ls: GrizzlyLanguageServer, *args: Any) -> None:
 
             if not has_venv:
                 ls.logger.debug(f'creating virtual environment: {virtual_environment}')
-                ls.show_message(
-                    'creating virtual environment for language server, this could take a while'
-                )
+                ls.show_message('creating virtual environment for language server, this could take a while')
                 try:
                     progress.report('creating venv', 33)
                     venv_create(str(virtual_environment), with_pip=True)
@@ -286,10 +278,7 @@ def install(ls: GrizzlyLanguageServer, *args: Any) -> None:
 
             if ls.index_url is not None:
                 index_url_parsed = urlparse(ls.index_url)
-                if (
-                    index_url_parsed.username is None
-                    or index_url_parsed.password is None
-                ):
+                if index_url_parsed.username is None or index_url_parsed.password is None:
                     ls.show_message(
                         'global.index-url does not contain username and/or password, check your configuration!',
                         msg_type=lsp.MessageType.Error,
@@ -315,9 +304,7 @@ def install(ls: GrizzlyLanguageServer, *args: Any) -> None:
         # pip install (slow operation) if:
         # - age file does not exist
         # - requirements file has been modified since age file was last touched
-        if not project_age_file.exists() or (
-            requirements_file.lstat().st_mtime > project_age_file.lstat().st_mtime
-        ):
+        if not project_age_file.exists() or (requirements_file.lstat().st_mtime > project_age_file.lstat().st_mtime):
             action = 'install' if not project_age_file.exists() else 'upgrade'
 
             ls.logger.debug(f'{action} from {requirements_file}')
@@ -365,11 +352,7 @@ def install(ls: GrizzlyLanguageServer, *args: Any) -> None:
 
         if use_venv and virtual_environment is not None:
             # modify sys.path to use modules from virtual environment when compiling inventory
-            venv_sys_path = (
-                virtual_environment
-                / 'lib'
-                / f'python{sys.version_info.major}.{sys.version_info.minor}/site-packages'
-            )
+            venv_sys_path = virtual_environment / 'lib' / f'python{sys.version_info.major}.{sys.version_info.minor}/site-packages'
             sys.path.append(str(venv_sys_path))
 
         try:
@@ -406,18 +389,10 @@ def initialize(ls: GrizzlyLanguageServer, params: lsp.InitializeParams) -> None:
         )
         return
 
-    root_path = (
-        Path(unquote(url2pathname(urlparse(params.root_uri).path)))
-        if params.root_uri is not None
-        else Path(cast(str, params.root_path))
-    )
+    root_path = Path(unquote(url2pathname(urlparse(params.root_uri).path))) if params.root_uri is not None else Path(cast(str, params.root_path))
 
     # fugly as hell
-    if (
-        not root_path.exists()
-        and str(root_path)[0:1] == sep
-        and str(root_path)[2] == ':'
-    ):
+    if not root_path.exists() and str(root_path)[0:1] == sep and str(root_path)[2] == ':':
         root_path = Path(str(root_path)[1:])
 
     ls.root_path = root_path
@@ -463,9 +438,7 @@ def initialize(ls: GrizzlyLanguageServer, params: lsp.InitializeParams) -> None:
         for variable_pattern in variable_patterns:
             try:
                 original_variable_pattern = variable_pattern
-                if not variable_pattern.startswith(
-                    '.*'
-                ) and not variable_pattern.startswith('^'):
+                if not variable_pattern.startswith('.*') and not variable_pattern.startswith('^'):
                     variable_pattern = f'.*{variable_pattern}'
 
                 if not variable_pattern.startswith('^'):
@@ -477,9 +450,7 @@ def initialize(ls: GrizzlyLanguageServer, params: lsp.InitializeParams) -> None:
                 pattern = re.compile(variable_pattern)
 
                 if pattern.groups != 1:
-                    ls.show_message(
-                        f'variable pattern "{original_variable_pattern}" contains {pattern.groups} match groups, it must be exactly one'
-                    )
+                    ls.show_message(f'variable pattern "{original_variable_pattern}" contains {pattern.groups} match groups, it must be exactly one')
                     return
 
                 normalized_variable_patterns.add(variable_pattern)
@@ -508,9 +479,7 @@ def initialize(ls: GrizzlyLanguageServer, params: lsp.InitializeParams) -> None:
     step_impl_template = ls.client_settings['quick_fix'].get('step_impl_template', None)
     if step_impl_template is None or len(step_impl_template.strip()) == 0:
         step_impl_template = "@{keyword}(u'{expression}')"
-        ls.client_settings['quick_fix'].update(
-            {'step_impl_template': step_impl_template}
-        )
+        ls.client_settings['quick_fix'].update({'step_impl_template': step_impl_template})
     # // ->
 
 
@@ -545,9 +514,7 @@ def text_document_completion(
         partial_value = get_trigger(trigger, trigger_characters)
         if not isinstance(partial_value, bool):
             ls.logger.debug(f'{trigger_characters=}, {partial_value=}')
-            items = completion_func(
-                ls, line, text_document, params.position, partial=partial_value
-            )
+            items = completion_func(ls, line, text_document, params.position, partial=partial_value)
             break
 
     if len(items) < 1:
@@ -561,9 +528,7 @@ def text_document_completion(
 
                 ls.logger.debug(f'{keyword=}, {base_keyword=}, {text=}, {ls.keywords=}')
 
-                items = complete_step(
-                    ls, keyword, params.position, text, base_keyword=base_keyword
-                )
+                items = complete_step(ls, keyword, params.position, text, base_keyword=base_keyword)
             else:
                 ls.logger.debug(f'{keyword=}, {text=}, {ls.keywords=}')
                 items = complete_keyword(ls, keyword, params.position, text_document)
@@ -579,15 +544,11 @@ def workspace_did_change_configuration(
     ls: GrizzlyLanguageServer,
     params: lsp.DidChangeConfigurationParams,
 ) -> None:
-    ls.logger.debug(
-        f'{lsp.WORKSPACE_DID_CHANGE_CONFIGURATION}: {params=}'
-    )  # pragma: no cover
+    ls.logger.debug(f'{lsp.WORKSPACE_DID_CHANGE_CONFIGURATION}: {params=}')  # pragma: no cover
 
 
 @server.feature(lsp.TEXT_DOCUMENT_HOVER)
-def text_document_hover(
-    ls: GrizzlyLanguageServer, params: lsp.HoverParams
-) -> Optional[lsp.Hover]:
+def text_document_hover(ls: GrizzlyLanguageServer, params: lsp.HoverParams) -> Optional[lsp.Hover]:
     hover: Optional[lsp.Hover] = None
     help_text: Optional[str] = None
     text_document = ls.workspace.get_text_document(params.text_document.uri)
@@ -599,14 +560,7 @@ def text_document_hover(
     abort: bool = False
 
     try:
-        abort = (
-            step is None
-            or keyword is None
-            or (
-                ls.get_language_key(keyword) not in ls.steps
-                and keyword not in ls.keywords_any
-            )
-        )
+        abort = step is None or keyword is None or (ls.get_language_key(keyword) not in ls.steps and keyword not in ls.keywords_any)
     except:
         abort = True
 
@@ -623,9 +577,7 @@ def text_document_hover(
 
     if 'Args:' in help_text:
         pre, post = help_text.split('Args:', 1)
-        text = '\n'.join(
-            [format_arg_line(arg_line) for arg_line in post.strip().split('\n')]
-        )
+        text = '\n'.join([format_arg_line(arg_line) for arg_line in post.strip().split('\n')])
 
         help_text = f'{pre}Args:\n\n{text}\n'
 
@@ -640,9 +592,7 @@ def text_document_hover(
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DID_CHANGE)
-def text_document_did_change(
-    ls: GrizzlyLanguageServer, params: lsp.DidChangeTextDocumentParams
-) -> None:
+def text_document_did_change(ls: GrizzlyLanguageServer, params: lsp.DidChangeTextDocumentParams) -> None:
     text_document = ls.workspace.get_text_document(params.text_document.uri)
 
     try:
@@ -652,9 +602,7 @@ def text_document_did_change(
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DID_OPEN)
-def text_document_did_open(
-    ls: GrizzlyLanguageServer, params: lsp.DidOpenTextDocumentParams
-) -> None:
+def text_document_did_open(ls: GrizzlyLanguageServer, params: lsp.DidOpenTextDocumentParams) -> None:
     text_document = ls.workspace.get_text_document(params.text_document.uri)
 
     if text_document.language_id != LANGUAGE_ID:
@@ -672,17 +620,13 @@ def text_document_did_open(
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DID_CLOSE)
-def text_document_did_close(
-    ls: GrizzlyLanguageServer, params: lsp.DidCloseTextDocumentParams
-) -> None:
+def text_document_did_close(ls: GrizzlyLanguageServer, params: lsp.DidCloseTextDocumentParams) -> None:
     # always clear diagnostics when file is closed
     ls.publish_diagnostics(params.text_document.uri, None)  # type: ignore
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DID_SAVE)
-def text_document_did_save(
-    ls: GrizzlyLanguageServer, params: lsp.DidSaveTextDocumentParams
-) -> None:
+def text_document_did_save(ls: GrizzlyLanguageServer, params: lsp.DidSaveTextDocumentParams) -> None:
     text_document = ls.workspace.get_text_document(params.text_document.uri)
 
     if text_document.language_id != LANGUAGE_ID:

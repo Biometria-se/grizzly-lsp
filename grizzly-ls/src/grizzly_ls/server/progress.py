@@ -27,9 +27,7 @@ class Progress:
 
         self.progress.begin(
             self.token,
-            lsp.WorkDoneProgressBegin(
-                title=self.title, percentage=0, cancellable=False
-            ),
+            lsp.WorkDoneProgressBegin(title=self.title, percentage=0, cancellable=False),
         )
 
         return self
@@ -46,9 +44,7 @@ class Progress:
 
         return exc is None
 
-    def report(
-        self, message: Optional[str] = None, percentage: Optional[int] = None
-    ) -> None:
+    def report(self, message: Optional[str] = None, percentage: Optional[int] = None) -> None:
         self.progress.report(
             self.token,
             lsp.WorkDoneProgressReport(message=message, percentage=percentage),

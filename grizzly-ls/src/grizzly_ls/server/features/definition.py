@@ -17,9 +17,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from grizzly_ls.server import GrizzlyLanguageServer
 
 
-def get_step_definition(
-    ls: GrizzlyLanguageServer, params: lsp.DefinitionParams, current_line: str
-) -> Optional[lsp.LocationLink]:
+def get_step_definition(ls: GrizzlyLanguageServer, params: lsp.DefinitionParams, current_line: str) -> Optional[lsp.LocationLink]:
     step_definition: Optional[lsp.LocationLink] = None
 
     keyword, expression = get_step_parts(current_line)
@@ -33,8 +31,11 @@ def get_step_definition(
             if step.expression != expression:
                 continue
 
-            file_location = inspect.getfile(step.func)
-            _, lineno = inspect.getsourcelines(step.func)
+            # support projects that wraps the behave step decorators
+            step_func = getattr(step.func, '__wrapped__', step.func)
+
+            file_location = inspect.getfile(step_func)
+            _, lineno = inspect.getsourcelines(step_func)
 
             range = lsp.Range(
                 start=lsp.Position(line=lineno, character=0),

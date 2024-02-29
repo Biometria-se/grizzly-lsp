@@ -19,7 +19,7 @@
     {
       // Gets launched when clicking "Debug Test" in the Testing view
       "name": "Debug Unit Test",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "justMyCode": false,
       "program": "${file}",
