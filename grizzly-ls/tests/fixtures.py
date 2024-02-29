@@ -64,22 +64,14 @@ class LspFixture:
 
         self.server = server
         self.server.language = 'en'
-        self._server_thread = Thread(
-            target=start, args=(self.server, cstdio, sstdout), daemon=True
-        )
+        self._server_thread = Thread(target=start, args=(self.server, cstdio, sstdout), daemon=True)
         self._server_thread.start()
 
-        self.client = DummyClient(
-            loop=asyncio.new_event_loop(), name='dummy client', version='0.0.0'
-        )
-        self._client_thread = Thread(
-            target=start, args=(self.client, sstdio, cstdout), daemon=True
-        )
+        self.client = DummyClient(loop=asyncio.new_event_loop(), name='dummy client', version='0.0.0')
+        self._client_thread = Thread(target=start, args=(self.client, sstdio, cstdout), daemon=True)
         self._client_thread.start()
 
-        self.datadir = (
-            Path(__file__).parent / '..' / '..' / 'tests' / 'project'
-        ).resolve()
+        self.datadir = (Path(__file__).parent / '..' / '..' / 'tests' / 'project').resolve()
 
         return self
 

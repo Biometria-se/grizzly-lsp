@@ -16,20 +16,14 @@ def test_progress(lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
     assert isinstance(progress.token, str)
 
     report_spy = mocker.spy(progress, 'report')
-    progress_create_mock = mocker.patch.object(
-        progress.progress, 'create', return_value=None
-    )
-    progress_begin_mock = mocker.patch.object(
-        progress.progress, 'begin', return_value=None
-    )
+    progress_create_mock = mocker.patch.object(progress.progress, 'create', return_value=None)
+    progress_begin_mock = mocker.patch.object(progress.progress, 'begin', return_value=None)
     progress_end_mock = mocker.patch.object(
         progress.progress,
         'end',
         return_value=None,
     )
-    progress_report_mock = mocker.patch.object(
-        progress.progress, 'report', return_value=None
-    )
+    progress_report_mock = mocker.patch.object(progress.progress, 'report', return_value=None)
 
     with progress as p:
         p.report('first', 50)

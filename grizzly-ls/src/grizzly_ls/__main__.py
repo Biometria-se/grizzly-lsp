@@ -72,9 +72,7 @@ def setup_logging(args: argparse.Namespace) -> None:
     if not args.socket:
         if level < logging.INFO:
             file_handler = logging.FileHandler('grizzly-ls.log')
-            file_handler.setFormatter(
-                logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s')
-            )
+            file_handler.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s'))
             handlers.append(file_handler)
 
     stream_handler = logging.StreamHandler(sys.stderr)

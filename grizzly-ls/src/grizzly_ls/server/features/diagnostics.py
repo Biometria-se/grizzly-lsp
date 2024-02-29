@@ -34,14 +34,8 @@ class ArgumentPosition:
     end: int
 
 
-def _get_message_from_parse_error(
-    error: ParserError, *, line_map: Optional[Dict[str, str]] = None
-) -> Tuple[int, str]:
-    character = (
-        len(error.line_text) - len(error.line_text.strip())
-        if error.line_text is not None
-        else 0
-    )
+def _get_message_from_parse_error(error: ParserError, *, line_map: Optional[Dict[str, str]] = None) -> Tuple[int, str]:
+    character = len(error.line_text) - len(error.line_text.strip()) if error.line_text is not None else 0
     message = str(error)
 
     # Remove static strings composed by ParserError.__str__
@@ -54,9 +48,7 @@ def _get_message_from_parse_error(
     match = re.search(r'.*at line ([0-9]+).*', message, flags=re.MULTILINE)
     if match:
         lineno = int(match.group(1))
-        message = re.sub(
-            rf',? at line {lineno}', '', message, flags=re.MULTILINE
-        ).strip()
+        message = re.sub(rf',? at line {lineno}', '', message, flags=re.MULTILINE).strip()
 
         if error.line is None:
             error.line = lineno - 1
@@ -66,9 +58,7 @@ def _get_message_from_parse_error(
         if match:
             error.line_text = match.group(1)
 
-            message = re.sub(
-                rf': "{error.line_text}"', '', message, flags=re.MULTILINE
-            ).strip()
+            message = re.sub(rf': "{error.line_text}"', '', message, flags=re.MULTILINE).strip()
 
     # map with un-stripped text, so we get correct ranges in the document
     if error.line_text is not None and line_map is not None:
@@ -77,9 +67,7 @@ def _get_message_from_parse_error(
     return character, message.replace('REASON: ', '').strip()
 
 
-def validate_gherkin(
-    ls: GrizzlyLanguageServer, text_document: TextDocument
-) -> List[lsp.Diagnostic]:
+def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> List[lsp.Diagnostic]:
     diagnostics: List[lsp.Diagnostic] = []
     line_map: Dict[str, str] = {}
     included_feature_files: Dict[str, Feature] = {}
@@ -103,12 +91,8 @@ def validate_gherkin(
             diagnostics.append(
                 lsp.Diagnostic(
                     range=lsp.Range(
-                        start=lsp.Position(
-                            line=len(lines) - lineno - 1, character=position
-                        ),
-                        end=lsp.Position(
-                            line=len(lines) - lineno - 1, character=len(line)
-                        ),
+                        start=lsp.Position(line=len(lines) - lineno - 1, character=position),
+                        end=lsp.Position(line=len(lines) - lineno - 1, character=len(line)),
                     ),
                     message='Freetext marker is not closed',
                     severity=lsp.DiagnosticSeverity.Error,
@@ -125,14 +109,7 @@ def validate_gherkin(
         stripped_line = line.strip()
 
         # ignore lines that are plain comments, or tables
-        if (
-            len(stripped_line) < 1
-            or (
-                stripped_line[0] == '#'
-                and not stripped_line.startswith(MARKER_LANGUAGE)
-            )
-            or (stripped_line[0] == '|' and stripped_line[-1] == '|')
-        ):
+        if len(stripped_line) < 1 or (stripped_line[0] == '#' and not stripped_line.startswith(MARKER_LANGUAGE)) or (stripped_line[0] == '|' and stripped_line[-1] == '|'):
             continue
 
         # ignore any lines that comes between free text, or empty lines, or lines that could be a table
@@ -156,9 +133,7 @@ def validate_gherkin(
                     diagnostics.append(
                         lsp.Diagnostic(
                             range=lsp.Range(
-                                start=lsp.Position(
-                                    line=lineno, character=marker_position
-                                ),
+                                start=lsp.Position(line=lineno, character=marker_position),
                                 end=lsp.Position(
                                     line=lineno,
                                     character=marker_position + len(language),
@@ -196,9 +171,7 @@ def validate_gherkin(
             ls.logger.debug(stripped_line)
             # only tokenize the actual jinja2 expression, not the markers
             try:
-                tokens = list(
-                    tokenize(BytesIO(stripped_line[2:-2].strip().encode()).readline)
-                )
+                tokens = list(tokenize(BytesIO(stripped_line[2:-2].strip().encode()).readline))
             except TokenError:
                 continue
 
@@ -218,18 +191,14 @@ def validate_gherkin(
                 if arg_scenario is None:
                     if token.type == STRING:
                         value = token.string.strip('"\'')
-                        arg_scenario = ArgumentPosition(
-                            value, start=token.start[1] + 2, end=token.end[1]
-                        )
+                        arg_scenario = ArgumentPosition(value, start=token.start[1] + 2, end=token.end[1])
                     continue
 
                 # feature
                 if arg_feature is None:
                     if token.type == STRING:
                         value = token.string.strip('"\'')
-                        arg_feature = ArgumentPosition(
-                            value, start=token.start[1] + 2, end=token.end[1]
-                        )
+                        arg_feature = ArgumentPosition(value, start=token.start[1] + 2, end=token.end[1])
                         break
 
             # make sure arguments was found
@@ -264,10 +233,7 @@ def validate_gherkin(
                 continue
 
             # make sure that the specified scenario exists in the specified feature file
-            if (
-                arg_feature.value != ''
-                and arg_feature.value not in included_feature_files
-            ):
+            if arg_feature.value != '' and arg_feature.value not in included_feature_files:
                 base_path = Path(text_document.path).parent
                 if arg_feature.value[:2] == './':  # relative path
                     feature_file = base_path / arg_feature.value[2:]
@@ -331,14 +297,10 @@ def validate_gherkin(
                     diagnostics.append(
                         lsp.Diagnostic(
                             range=lsp.Range(
-                                start=lsp.Position(
-                                    line=pe.line or 0, character=character
-                                ),
+                                start=lsp.Position(line=pe.line or 0, character=character),
                                 end=lsp.Position(
                                     line=pe.line or 0,
-                                    character=len(pe.line_text) - 1
-                                    if pe.line_text is not None
-                                    else zero_line_length,
+                                    character=len(pe.line_text) - 1 if pe.line_text is not None else zero_line_length,
                                 ),
                             ),
                             message=message,
@@ -392,15 +354,7 @@ def validate_gherkin(
             feature = included_feature_files[arg_feature.value]
 
             try:
-                scenario = next(
-                    iter(
-                        [
-                            scenario
-                            for scenario in feature.scenarios
-                            if scenario.name == arg_scenario.value
-                        ]
-                    )
-                )
+                scenario = next(iter([scenario for scenario in feature.scenarios if scenario.name == arg_scenario.value]))
 
                 if len(scenario.steps) < 1:
                     diagnostics.append(
@@ -457,9 +411,7 @@ def validate_gherkin(
                     lsp.Diagnostic(
                         range=lsp.Range(
                             start=start_position,
-                            end=lsp.Position(
-                                line=lineno, character=position + len(keyword)
-                            ),
+                            end=lsp.Position(line=lineno, character=position + len(keyword)),
                         ),
                         message=f'"{keyword}" is not a valid keyword in {name}',
                         severity=lsp.DiagnosticSeverity.Error,
@@ -468,11 +420,7 @@ def validate_gherkin(
                 )
 
         # check if step expression exists
-        if (
-            lang_key is not None
-            and expression is not None
-            and keyword not in ls.keywords_headers
-        ):
+        if lang_key is not None and expression is not None and keyword not in ls.keywords_headers:
             found_step = False
             expression_shell = re.sub(r'"[^"]*"', '""', expression)
 
@@ -490,9 +438,7 @@ def validate_gherkin(
                 diagnostics.append(
                     lsp.Diagnostic(
                         range=lsp.Range(
-                            start=lsp.Position(
-                                line=lineno, character=len(line) - len(expression)
-                            ),
+                            start=lsp.Position(line=lineno, character=len(line) - len(expression)),
                             end=lsp.Position(line=lineno, character=len(line)),
                         ),
                         message=f'{MARKER_NO_STEP_IMPL}\n{stripped_line}',
@@ -527,9 +473,7 @@ def validate_gherkin(
                     start=lsp.Position(line=pe.line or 0, character=character),
                     end=lsp.Position(
                         line=pe.line or 0,
-                        character=len(pe.line_text) - 1
-                        if pe.line_text is not None
-                        else zero_line_length,
+                        character=len(pe.line_text) - 1 if pe.line_text is not None else zero_line_length,
                     ),
                 ),
                 message=message,

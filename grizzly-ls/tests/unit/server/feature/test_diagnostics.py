@@ -151,10 +151,7 @@ Feature:
         start=lsp.Position(line=6, character=14),
         end=lsp.Position(line=6, character=36),
     )
-    assert (
-        diagnostic.message
-        == 'No step implementation found\nGiven a step in the scenario'
-    )
+    assert diagnostic.message == 'No step implementation found\nGiven a step in the scenario'
     assert diagnostic.severity == lsp.DiagnosticSeverity.Warning
     assert diagnostic.code is None
     assert diagnostic.code_description is None
@@ -169,10 +166,7 @@ Feature:
         start=lsp.Position(line=7, character=12),
         end=lsp.Position(line=7, character=48),
     )
-    assert (
-        diagnostic.message
-        == 'No step implementation found\nAnd another expression with a "variable"'
-    )
+    assert diagnostic.message == 'No step implementation found\nAnd another expression with a "variable"'
     assert diagnostic.severity == lsp.DiagnosticSeverity.Warning
     assert diagnostic.code is None
     assert diagnostic.code_description is None
@@ -289,9 +283,7 @@ Egenskap: hello
 def test_validate_gherkin_scenario_tag(lsp_fixture: LspFixture) -> None:
     ls = lsp_fixture.server
 
-    feature_file = (
-        lsp_fixture.datadir / 'features' / 'test_validate_gherkin_scenario_tag.feature'
-    )
+    feature_file = lsp_fixture.datadir / 'features' / 'test_validate_gherkin_scenario_tag.feature'
 
     try:
         # <!-- jinja2 expression, not scenario tag -- ignored
@@ -321,18 +313,12 @@ def test_validate_gherkin_scenario_tag(lsp_fixture: LspFixture) -> None:
         diagnostics = validate_gherkin(ls, text_document)
         assert len(diagnostics) == 2
         diagnostic = diagnostics[0]
-        assert (
-            diagnostic.message
-            == 'Scenario tag is invalid, could not find scenario argument'
-        )
+        assert diagnostic.message == 'Scenario tag is invalid, could not find scenario argument'
         assert str(diagnostic.range) == '2:8-2:22'
         assert diagnostic.severity == lsp.DiagnosticSeverity.Error
 
         diagnostic = diagnostics[1]
-        assert (
-            diagnostic.message
-            == 'Scenario tag is invalid, could not find feature argument'
-        )
+        assert diagnostic.message == 'Scenario tag is invalid, could not find feature argument'
         assert str(diagnostic.range) == '2:8-2:22'
         assert diagnostic.severity == lsp.DiagnosticSeverity.Error
         # // -->
@@ -374,10 +360,7 @@ def test_validate_gherkin_scenario_tag(lsp_fixture: LspFixture) -> None:
             diagnostics = validate_gherkin(ls, text_document)
             assert len(diagnostics) == 1
             diagnostic = diagnostics[0]
-            assert (
-                diagnostic.message
-                == 'Scenario tag is invalid, could not find feature argument'
-            )
+            assert diagnostic.message == 'Scenario tag is invalid, could not find feature argument'
             end = len(argument) + 21 + 2
             assert str(diagnostic.range) == f'2:8-2:{end}'
             assert diagnostic.severity == lsp.DiagnosticSeverity.Error
@@ -412,16 +395,9 @@ def test_validate_gherkin_scenario_tag(lsp_fixture: LspFixture) -> None:
 
                 _, feature_file_name, _ = arg_feature.split('"', 3)
 
-                assert (
-                    diagnostic.message
-                    == f'Included feature file "{feature_file_name}" does not exist'
-                )
+                assert diagnostic.message == f'Included feature file "{feature_file_name}" does not exist'
 
-                included_feature_file = (
-                    lsp_fixture.datadir
-                    / 'features'
-                    / 'test_validate_gherkin_scenario_tag_include.feature'
-                )
+                included_feature_file = lsp_fixture.datadir / 'features' / 'test_validate_gherkin_scenario_tag_include.feature'
 
                 try:
                     included_feature_file.touch()
@@ -429,34 +405,21 @@ def test_validate_gherkin_scenario_tag(lsp_fixture: LspFixture) -> None:
                     diagnostics = validate_gherkin(ls, text_document)
                     diagnostic = next(iter(diagnostics))
 
-                    assert (
-                        diagnostic.message
-                        == f'Included feature file "{feature_file_name}" does not have any scenarios'
-                    )
+                    assert diagnostic.message == f'Included feature file "{feature_file_name}" does not have any scenarios'
 
-                    included_feature_file.write_text(
-                        '''Egenskap: test''', encoding='utf-8'
-                    )
+                    included_feature_file.write_text('''Egenskap: test''', encoding='utf-8')
 
                     diagnostics = validate_gherkin(ls, text_document)
                     diagnostic = next(iter(diagnostics))
 
-                    assert (
-                        diagnostic.message
-                        == 'Parser failure in state init\nNo feature found.'
-                    )
+                    assert diagnostic.message == 'Parser failure in state init\nNo feature found.'
 
-                    included_feature_file.write_text(
-                        '''Feature: test''', encoding='utf-8'
-                    )
+                    included_feature_file.write_text('''Feature: test''', encoding='utf-8')
 
                     diagnostics = validate_gherkin(ls, text_document)
                     diagnostic = next(iter(diagnostics))
 
-                    assert (
-                        diagnostic.message
-                        == f'Scenario "foo" does not exist in included feature "{feature_file_name}"'
-                    )
+                    assert diagnostic.message == f'Scenario "foo" does not exist in included feature "{feature_file_name}"'
 
                     included_feature_file.write_text(
                         '''Feature: test
@@ -467,10 +430,7 @@ def test_validate_gherkin_scenario_tag(lsp_fixture: LspFixture) -> None:
                     diagnostics = validate_gherkin(ls, text_document)
                     diagnostic = next(iter(diagnostics))
 
-                    assert (
-                        diagnostic.message
-                        == f'Scenario "foo" in "{feature_file_name}" does not have any steps'
-                    )
+                    assert diagnostic.message == f'Scenario "foo" in "{feature_file_name}" does not have any steps'
 
                     included_feature_file.write_text(
                         '''Feature: test

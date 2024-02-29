@@ -93,9 +93,7 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
 
         assert len(actual_definitions) == 1
         actual_definition = actual_definitions[0]
-        assert get_platform_uri(actual_definition.target_uri) == get_platform_uri(
-            test_file.as_uri()
-        )
+        assert get_platform_uri(actual_definition.target_uri) == get_platform_uri(test_file.as_uri())
         assert actual_definition.target_range == lsp.Range(
             start=lsp.Position(line=0, character=0),
             end=lsp.Position(line=0, character=0),
@@ -120,9 +118,7 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
 
         assert len(actual_definitions) == 1
         actual_definition = actual_definitions[0]
-        assert get_platform_uri(actual_definition.target_uri) == get_platform_uri(
-            test_file.as_uri()
-        )
+        assert get_platform_uri(actual_definition.target_uri) == get_platform_uri(test_file.as_uri())
         assert actual_definition.target_range == lsp.Range(
             start=lsp.Position(line=0, character=0),
             end=lsp.Position(line=0, character=0),
@@ -138,15 +134,11 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
 
         # classic (relative to grizzly requests directory)
         position.character = 16
-        actual_definitions = get_file_url_definition(
-            ls, params, 'Then send file "test.txt"'
-        )  # .character =                ^- 16   ^- 24
+        actual_definitions = get_file_url_definition(ls, params, 'Then send file "test.txt"')  # .character =                ^- 16   ^- 24
 
         assert len(actual_definitions) == 1
         actual_definition = actual_definitions[0]
-        assert get_platform_uri(actual_definition.target_uri) == get_platform_uri(
-            test_file.as_uri()
-        )
+        assert get_platform_uri(actual_definition.target_uri) == get_platform_uri(test_file.as_uri())
         assert actual_definition.target_range == lsp.Range(
             start=lsp.Position(line=0, character=0),
             end=lsp.Position(line=0, character=0),
@@ -164,14 +156,10 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
         position.character = 30
         for path in ['', './', f'{test_feature_file_included.parent.as_posix()}/']:
             feature_argument = f'{path}included.feature'
-            actual_definitions = get_file_url_definition(
-                ls, params, f'{{% scenario "hello", feature="{feature_argument}" %}}'
-            )
+            actual_definitions = get_file_url_definition(ls, params, f'{{% scenario "hello", feature="{feature_argument}" %}}')
             assert len(actual_definitions) == 1
             actual_definition = actual_definitions[0]
-            assert get_platform_uri(actual_definition.target_uri) == get_platform_uri(
-                test_feature_file_included.as_uri()
-            )
+            assert get_platform_uri(actual_definition.target_uri) == get_platform_uri(test_feature_file_included.as_uri())
 
             assert actual_definition.target_range == lsp.Range(
                 start=lsp.Position(line=0, character=0),
