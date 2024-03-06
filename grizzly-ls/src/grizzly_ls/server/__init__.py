@@ -512,8 +512,8 @@ def text_document_completion(
             continue
 
         partial_value = get_trigger(trigger, trigger_characters)
+        ls.logger.debug(f'{trigger_characters=}, {partial_value=}')
         if not isinstance(partial_value, bool):
-            ls.logger.debug(f'{trigger_characters=}, {partial_value=}')
             items = completion_func(ls, line, text_document, params.position, partial=partial_value)
             break
 

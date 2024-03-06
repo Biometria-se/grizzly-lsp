@@ -34,6 +34,9 @@ def get_step_definition(ls: GrizzlyLanguageServer, params: lsp.DefinitionParams,
             # support projects that wraps the behave step decorators
             step_func = getattr(step.func, '__wrapped__', step.func)
 
+            if isinstance(step_func, staticmethod):
+                step_func = step_func.__func__
+
             file_location = inspect.getfile(step_func)
             _, lineno = inspect.getsourcelines(step_func)
 

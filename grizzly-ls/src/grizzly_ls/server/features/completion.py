@@ -26,9 +26,7 @@ logger = logging.getLogger(__name__)
 def get_trigger(value: str, trigger: str) -> Union[bool, Optional[str]]:
     partial_value: Optional[str] = None
 
-    token_list = get_tokens(value)
-
-    tokens_reversed = list(reversed(token_list))
+    tokens_reversed = list(reversed(get_tokens(value)))
 
     for index, next_token in enumerate(tokens_reversed):
         if index == 0 and next_token.type == NAME:
@@ -202,6 +200,8 @@ def complete_variable_name(
     partial: Optional[str] = None,
 ) -> List[lsp.CompletionItem]:
     items: List[lsp.CompletionItem] = []
+
+    ls.logger.debug(f'{line=}, {position=}, {partial=}')
 
     # find `Scenario:` before current position
     lines = text_document.source.splitlines()
