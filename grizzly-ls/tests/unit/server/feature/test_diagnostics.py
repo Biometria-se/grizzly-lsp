@@ -199,7 +199,8 @@ Feature:
 
     # <!-- "complex" document with no errors
     feature_file = lsp_fixture.datadir / 'features' / 'test.feature'
-    included_feature_file = lsp_fixture.datadir / 'features' / 'hello.feature'
+    included_feature_file_1 = lsp_fixture.datadir / 'features' / 'hello.feature'
+    included_feature_file_2 = lsp_fixture.datadir / 'world.feature'
 
     feature_file.write_text(
         '''# language: sv
@@ -234,11 +235,17 @@ Feature:
 
         Scenario: inkluderat-4
             {%  scenario  scenario="bar" ,   "./hello.feature" %}
+
+        # Scenario: inactive
+        #   {% scenario "hello", feature="../world.feature" %}
+
+        Scenario: inkluderat-5
+            {% scenario "world", feature="../world.feature" %}
     ''',
         encoding='utf-8',
     )
 
-    included_feature_file.write_text(
+    included_feature_file_1.write_text(
         '''# language: sv
 Egenskap: hello
     Scenario: hello
@@ -255,6 +262,19 @@ Egenskap: hello
     ''',
         encoding='utf-8',
     )
+
+    included_feature_file_2.write_text(
+        '''# language: sv
+Egenskap: hello
+    Scenario: hello
+        Så producera ett dokument i formatet "xml"
+
+    Scenario: world
+        Så producera ett dokument i formatet "yaml"
+    ''',
+        encoding='utf-8',
+    )
+
     try:
         ls.language = 'sv'
         text_document = TextDocument(feature_file.as_uri())
@@ -276,7 +296,8 @@ Egenskap: hello
     finally:
         ls.language = 'en'
         feature_file.unlink()
-        included_feature_file.unlink()
+        included_feature_file_1.unlink()
+        included_feature_file_2.unlink()
     # // -->
 
 

@@ -137,7 +137,13 @@ describe('Should do completion on steps', () => {
             'save response payload "" in variable ""',
             'save response payload "" that matches "" in variable ""',
             'save response metadata "" that matches "" in variable ""',
+            'save optional response metadata "" in variable "" with default value ""',
+            'save optional response payload "" in variable "" with default value ""',
+            'save optional response payload "" that matches "" in variable "" with default value ""',
+            'save optional response metadata "" that matches "" in variable "" with default value ""',
             'get "" with name "" and save response payload in ""',
+            'get "" from keystore and save in variable ""',
+            'get "" from keystore and save in variable "", with default value ""',
             'parse date "" and save in variable ""',
             'parse "" as "undefined" and save value of "" in variable ""',
             'parse "" as "plain" and save value of "" in variable ""',
@@ -177,7 +183,7 @@ describe('Should do completion on steps', () => {
             expect(actualInsertText).to.contain(e);
         });
 
-        await acceptAndAssertSuggestion(position, '        Then save response metadata "" in variable ""');
+        await acceptAndAssertSuggestion(position, '        Then save optional response metadata "" in variable "" with default value ""');
     });
 
     it('Complete steps, keyword `Then` step `save response metadata "hello"`', async () => {

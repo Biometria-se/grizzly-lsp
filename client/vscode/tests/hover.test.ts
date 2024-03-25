@@ -77,6 +77,7 @@ Example:
 \`\`\`gherkin
 And restart scenario on failure
 \`\`\`
+
 `);
     });
 

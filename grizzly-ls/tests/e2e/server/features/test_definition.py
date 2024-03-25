@@ -69,7 +69,7 @@ def test_definition(lsp_fixture: LspFixture) -> None:
 
     from grizzly.steps.scenario.user import step_user_type
 
-    file_location = Path(inspect.getfile(step_user_type))
+    file_location = Path(inspect.getfile(getattr(step_user_type, '__wrapped__')))
     _, lineno = inspect.getsourcelines(step_user_type)
 
     assert actual_definition.target_uri == file_location.as_uri()
