@@ -1,7 +1,6 @@
 import sys
 import argparse
 import logging
-
 from typing import List, Optional
 
 
@@ -46,6 +45,30 @@ def parse_arguments() -> argparse.Namespace:
         type=str,
         default=None,
         help='name of loggers to disable',
+    )
+
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        required=False,
+        default=False,
+        help='run server in debug mode',
+    )
+
+    parser.add_argument(
+        '--debug-port',
+        type=int,
+        default=5678,
+        required=False,
+        help='port the language server should listen on for debugging',
+    )
+
+    parser.add_argument(
+        '--debug-wait',
+        action='store_true',
+        required=False,
+        default=False,
+        help='wait for debug client to connect',
     )
 
     subparsers = parser.add_subparsers(dest='command')
@@ -100,6 +123,20 @@ def setup_logging(args: argparse.Namespace) -> None:
         logger.setLevel(logging.ERROR)
 
 
+def setup_debugging(args: argparse.Namespace) -> None:
+    if args.debug:
+        try:
+            import debugpy
+
+            debugpy.listen(args.debug_port)
+            logging.info(f'Debugging enabled, listening on port {args.debug_port}')
+            if args.debug_wait:
+                logging.info('Waiting for debugger to attach')
+                debugpy.wait_for_client()
+        except ModuleNotFoundError:
+            logging.error('Debugging requires the debugpy package to be installed')
+
+
 def main() -> int:
     args = parse_arguments()
 
@@ -111,6 +148,7 @@ def main() -> int:
         return cli(server, args)
     else:
         setup_logging(args)
+        setup_debugging(args)
 
         if not args.socket:
             server.start_io(sys.stdin.buffer, sys.stdout.buffer)  # type: ignore
