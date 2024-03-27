@@ -95,7 +95,7 @@ def get_file_url_definition(
 
             file_parsed = urlparse(file_url)
 
-            # relativ or absolute?
+            # relative or absolute?
             if file_parsed.netloc == '.':  # relative!
                 relative_path = file_parsed.path
                 if relative_path.startswith('/'):
@@ -112,12 +112,11 @@ def get_file_url_definition(
             if is_expression:
                 ls.logger.debug(f'{variable_value=}')
                 base_path = Path(text_document.path).parent
-                if variable_value[:2] == './':  # relative path
-                    payload_file = base_path / variable_value[2:]
-                elif '/' not in variable_value:  # relative path
-                    payload_file = base_path / variable_value
-                else:  # absolute path
-                    payload_file = Path(variable_value).resolve()
+                variable_path = Path(variable_value)
+                if variable_path.is_absolute():
+                    payload_file = variable_path.resolve()
+                else:
+                    payload_file = (base_path / variable_path).resolve()
             else:
                 payload_file = ls.root_path / 'features' / 'requests' / variable_value
 

@@ -235,9 +235,11 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
             # make sure that the specified scenario exists in the specified feature file
             if arg_feature.value != '' and arg_feature.value not in included_feature_files:
                 base_path = Path(text_document.path).parent
-                feature_file = Path(arg_feature.value).resolve()
-                if not feature_file.exists():
-                    feature_file = base_path / arg_feature.value
+                feature_path = Path(arg_feature.value)
+                if feature_path.is_absolute():
+                    feature_file = feature_path.resolve()
+                else:
+                    feature_file = (base_path / feature_path).resolve()
 
                 if not feature_file.exists():
                     diagnostics.append(

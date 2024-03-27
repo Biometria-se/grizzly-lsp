@@ -71,6 +71,10 @@ dev = [
     'types-colorama'
 ]
 
+debug = [
+    'debugpy ==1.8.1'
+]
+
 ci = [
     'build',
     'twine >=3.8.0,<4.0.0'
