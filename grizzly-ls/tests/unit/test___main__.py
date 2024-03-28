@@ -179,7 +179,7 @@ def test_setup_logging(mocker: MockerFixture, capsys: CaptureFixture[str]) -> No
     assert capture.out == ''
 
 
-def test_setup_debugging(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
+def test_setup_debugging(mocker: MockerFixture) -> None:
     mocker.patch('grizzly_ls.__main__.logging.info')
 
     # enable debugging with missing debugpy module
@@ -197,10 +197,8 @@ def test_setup_debugging(mocker: MockerFixture, caplog: pytest.LogCaptureFixture
             debug_port=5678,
             debug_wait=False,
         )
-        with caplog.at_level(logging.ERROR):
-            err_msg = setup_debugging(arguments)
+        err_msg = setup_debugging(arguments)
         assert err_msg == 'Debugging requires the debugpy package to be installed'
-        assert caplog.messages == [err_msg]
     finally:
         sys.path = prev_path
 

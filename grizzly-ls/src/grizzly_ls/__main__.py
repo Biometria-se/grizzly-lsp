@@ -134,9 +134,7 @@ def setup_debugging(args: argparse.Namespace) -> Optional[str]:
                 logging.info('Waiting for debugger to attach')
                 debugpy.wait_for_client()
         except ModuleNotFoundError:
-            msg = 'Debugging requires the debugpy package to be installed'
-            logging.error(msg)
-            return msg
+            return 'Debugging requires the debugpy package to be installed'
     return None
 
 
