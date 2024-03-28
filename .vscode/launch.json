@@ -34,6 +34,19 @@
         // Needed for the debugger to play well with gevent
         "GEVENT_SUPPORT": "True"
       }
+    },
+    {
+      "name": "Python Debugger: Attach",
+      "type": "debugpy",
+      "request": "attach",
+      "port": 5678,
+      "host": "localhost",
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}",
+          "remoteRoot": "${workspaceFolder}"
+        }
+      ]
     }
   ]
 }

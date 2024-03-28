@@ -10,6 +10,7 @@ from os import environ
 from os.path import pathsep, sep
 from typing import (
     Any,
+    Deque,
     Tuple,
     Dict,
     List,
@@ -28,6 +29,7 @@ from urllib.request import url2pathname
 from pip._internal.configuration import Configuration as PipConfiguration
 from pip._internal.exceptions import ConfigurationError as PipConfigurationError
 from time import sleep
+from collections import deque
 
 from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
@@ -76,6 +78,7 @@ class GrizzlyLanguageServer(LanguageServer):
     keywords_headers: List[str] = []
     keywords_all: List[str] = []
     client_settings: Dict[str, Any]
+    startup_messages: Deque[Tuple[str, Optional[lsp.MessageType]]]
 
     _language: str
     localizations: Dict[str, List[str]]
@@ -83,6 +86,9 @@ class GrizzlyLanguageServer(LanguageServer):
     normalizer: Normalizer
 
     markup_kind: lsp.MarkupKind
+
+    def add_startup_error_message(self, message: str) -> None:
+        self.startup_messages.append((message, lsp.MessageType.Error))
 
     def show_message(
         self,
@@ -112,6 +118,7 @@ class GrizzlyLanguageServer(LanguageServer):
         self.markup_kind = lsp.MarkupKind.Markdown  # assume, until initialized request
         self.language = 'en'  # assumed default
         self.file_ignore_patterns = []
+        self.startup_messages = deque()
 
         # monkey patch functions to short-circuit them (causes problems in this context)
         try:
@@ -388,6 +395,10 @@ def initialize(ls: GrizzlyLanguageServer, params: lsp.InitializeParams) -> None:
             msg_type=lsp.MessageType.Error,
         )
         return
+
+    while ls.startup_messages:
+        msg, msg_type = ls.startup_messages.popleft()
+        ls.show_message(msg, msg_type)
 
     root_path = Path(unquote(url2pathname(urlparse(params.root_uri).path))) if params.root_uri is not None else Path(cast(str, params.root_path))
 

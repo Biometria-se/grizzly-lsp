@@ -8,7 +8,7 @@ import pytest
 from _pytest.capture import CaptureFixture
 from pytest_mock import MockerFixture
 
-from grizzly_ls.__main__ import parse_arguments, setup_logging, main
+from grizzly_ls.__main__ import parse_arguments, setup_logging, setup_debugging, main
 
 
 def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
@@ -23,6 +23,9 @@ def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
         version=False,
         no_verbose=None,
         command=None,
+        debug=False,
+        debug_port=5678,
+        debug_wait=False,
     )
 
     sys.argv = [
@@ -45,6 +48,9 @@ def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
         version=False,
         no_verbose=['pygls', 'behave'],
         command=None,
+        debug=False,
+        debug_port=5678,
+        debug_wait=False,
     )
 
     sys.argv = ['grizzly-ls', '--version']
@@ -76,6 +82,33 @@ def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
         no_verbose=None,
         command='lint',
         files=['.'],
+        debug=False,
+        debug_port=5678,
+        debug_wait=False,
+    )
+
+    sys.argv = [
+        'grizzly-ls',
+        '--debug',
+        '--debug-port=1234',
+        '--debug-wait',
+        'lint',
+        '.',
+    ]
+
+    args = parse_arguments()
+
+    assert args == Namespace(
+        socket=False,
+        socket_port=4444,
+        verbose=False,
+        version=False,
+        no_verbose=None,
+        command='lint',
+        files=['.'],
+        debug=True,
+        debug_port=1234,
+        debug_wait=True,
     )
 
 
@@ -146,8 +179,82 @@ def test_setup_logging(mocker: MockerFixture, capsys: CaptureFixture[str]) -> No
     assert capture.out == ''
 
 
+def test_setup_debugging(mocker: MockerFixture) -> None:
+    mocker.patch('grizzly_ls.__main__.logging.info')
+
+    # enable debugging with missing debugpy module
+    prev_path = sys.path
+    try:
+        if 'debugpy' in sys.modules:
+            del sys.modules['debugpy']
+        sys.path = []
+
+        arguments = Namespace(
+            socket=False,
+            verbose=False,
+            no_verbose=None,
+            debug=True,
+            debug_port=5678,
+            debug_wait=False,
+        )
+        err_msg = setup_debugging(arguments)
+        assert err_msg == 'Debugging requires the debugpy package to be installed'
+    finally:
+        sys.path = prev_path
+
+    debugpy_listen_mock = mocker.patch('debugpy.listen')
+    debugby_wait_for_client_mock = mocker.patch('debugpy.wait_for_client')
+
+    # <no args>
+    arguments = Namespace(
+        socket=False,
+        verbose=False,
+        no_verbose=None,
+        debug=False,
+        debug_port=5678,
+        debug_wait=False,
+    )
+
+    setup_debugging(arguments)
+    debugpy_listen_mock.assert_not_called()
+    debugby_wait_for_client_mock.assert_not_called()
+    debugpy_listen_mock.reset_mock()
+    debugby_wait_for_client_mock.reset_mock()
+
+    # debug enabled
+    arguments = Namespace(
+        socket=False,
+        verbose=False,
+        no_verbose=None,
+        debug=True,
+        debug_port=5678,
+        debug_wait=False,
+    )
+
+    setup_debugging(arguments)
+    debugpy_listen_mock.assert_called_once_with(5678)
+    debugby_wait_for_client_mock.assert_not_called()
+    debugpy_listen_mock.reset_mock()
+    debugby_wait_for_client_mock.reset_mock()
+
+    # debug enabled + wait for client
+    arguments = Namespace(
+        socket=False,
+        verbose=False,
+        no_verbose=None,
+        debug=True,
+        debug_port=6789,
+        debug_wait=True,
+    )
+
+    setup_debugging(arguments)
+    debugpy_listen_mock.assert_called_once_with(6789)
+    debugby_wait_for_client_mock.assert_called_once()
+
+
 def test_main(mocker: MockerFixture) -> None:
     mocker.patch('grizzly_ls.__main__.setup_logging', return_value=None)  # no logging in test
+    mocker.patch('grizzly_ls.__main__.setup_debugging', return_value=None)  # no debugging in test
 
     server_start_io_mock = mocker.patch('grizzly_ls.server.server.start_io', return_value=None)
     server_start_tcp = mocker.patch('grizzly_ls.server.server.start_tcp', return_value=None)
@@ -175,3 +282,12 @@ def test_main(mocker: MockerFixture) -> None:
     args, _ = server_start_tcp.call_args_list[-1]
     assert args[0] == '127.0.0.1'
     assert args[1] == 4444
+
+    # if start_debugging returns an error message, it should be added to the server
+    mocker.patch('grizzly_ls.__main__.setup_debugging', return_value='some error')
+    server_add_startup_error_message = mocker.patch('grizzly_ls.server.server.add_startup_error_message', return_value=None)
+    sys.argv = ['grizzly-ls', '--debug']
+
+    main()
+
+    server_add_startup_error_message.assert_called_once_with('some error')
