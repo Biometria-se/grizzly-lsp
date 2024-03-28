@@ -123,7 +123,7 @@ def setup_logging(args: argparse.Namespace) -> None:
         logger.setLevel(logging.ERROR)
 
 
-def setup_debugging(args: argparse.Namespace) -> None:
+def setup_debugging(args: argparse.Namespace) -> Optional[str]:
     if args.debug:
         try:
             import debugpy
@@ -134,7 +134,10 @@ def setup_debugging(args: argparse.Namespace) -> None:
                 logging.info('Waiting for debugger to attach')
                 debugpy.wait_for_client()
         except ModuleNotFoundError:
-            logging.error('Debugging requires the debugpy package to be installed')
+            msg = 'Debugging requires the debugpy package to be installed'
+            logging.error(msg)
+            return msg
+    return None
 
 
 def main() -> int:
@@ -148,7 +151,9 @@ def main() -> int:
         return cli(server, args)
     else:
         setup_logging(args)
-        setup_debugging(args)
+        err_msg = setup_debugging(args)
+        if err_msg:
+            server.add_startup_error_message(err_msg)
 
         if not args.socket:
             server.start_io(sys.stdin.buffer, sys.stdout.buffer)  # type: ignore

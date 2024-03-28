@@ -179,27 +179,30 @@ def test_setup_logging(mocker: MockerFixture, capsys: CaptureFixture[str]) -> No
     assert capture.out == ''
 
 
-def test_setup_debugging(mocker: MockerFixture, capsys: CaptureFixture[str]) -> None:
+def test_setup_debugging(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
     mocker.patch('grizzly_ls.__main__.logging.info')
-    logging_error_mock = mocker.patch('grizzly_ls.__main__.logging.error')
 
     # enable debugging with missing debugpy module
     prev_path = sys.path
-    if 'debugpy' in sys.modules:
-        del sys.modules['debugpy']
-    sys.path = []
+    try:
+        if 'debugpy' in sys.modules:
+            del sys.modules['debugpy']
+        sys.path = []
 
-    arguments = Namespace(
-        socket=False,
-        verbose=False,
-        no_verbose=None,
-        debug=True,
-        debug_port=5678,
-        debug_wait=False,
-    )
-    setup_debugging(arguments)
-    logging_error_mock.assert_called_once_with('Debugging requires the debugpy package to be installed')
-    sys.path = prev_path
+        arguments = Namespace(
+            socket=False,
+            verbose=False,
+            no_verbose=None,
+            debug=True,
+            debug_port=5678,
+            debug_wait=False,
+        )
+        with caplog.at_level(logging.ERROR):
+            err_msg = setup_debugging(arguments)
+        assert err_msg == 'Debugging requires the debugpy package to be installed'
+        assert caplog.messages == [err_msg]
+    finally:
+        sys.path = prev_path
 
     debugpy_listen_mock = mocker.patch('debugpy.listen')
     debugby_wait_for_client_mock = mocker.patch('debugpy.wait_for_client')
@@ -281,3 +284,12 @@ def test_main(mocker: MockerFixture) -> None:
     args, _ = server_start_tcp.call_args_list[-1]
     assert args[0] == '127.0.0.1'
     assert args[1] == 4444
+
+    # if start_debugging returns an error message, it should be added to the server
+    mocker.patch('grizzly_ls.__main__.setup_debugging', return_value='some error')
+    server_add_startup_error_message = mocker.patch('grizzly_ls.server.server.add_startup_error_message', return_value=None)
+    sys.argv = ['grizzly-ls', '--debug']
+
+    main()
+
+    server_add_startup_error_message.assert_called_once_with('some error')
