@@ -383,7 +383,8 @@ def install(ls: GrizzlyLanguageServer, *args: Any) -> None:
             continue
 
         diagnostics = validate_gherkin(ls, text_document)
-        ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
+        for uri, diagnostic in diagnostics.items():
+            ls.publish_diagnostics(uri, diagnostic)  # type: ignore
 
 
 @server.feature(lsp.INITIALIZE)
@@ -627,7 +628,8 @@ def text_document_did_open(ls: GrizzlyLanguageServer, params: lsp.DidOpenTextDoc
     # if only validating on save, we should definitely do it now
     if ls.client_settings.get('diagnostics_on_save_only', True):
         diagnostics = validate_gherkin(ls, text_document)
-        ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
+        for uri, diagnostic in diagnostics.items():
+            ls.publish_diagnostics(uri, diagnostic)  # type: ignore
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DID_CLOSE)
@@ -646,7 +648,8 @@ def text_document_did_save(ls: GrizzlyLanguageServer, params: lsp.DidSaveTextDoc
     # if only validating on save, we should definitely do it now
     if ls.client_settings.get('diagnostics_on_save_only', True):
         diagnostics = validate_gherkin(ls, text_document)
-        ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
+        for uri, diagnostic in diagnostics.items():
+            ls.publish_diagnostics(uri, diagnostic)  # type: ignore
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DEFINITION)
@@ -687,7 +690,8 @@ def text_document_diagnostic(
     items: List[lsp.Diagnostic] = []
     if not ls.client_settings.get('diagnostics_on_save_only', True):
         text_document = ls.workspace.get_text_document(params.text_document.uri)
-        items = validate_gherkin(ls, text_document)
+        diagnostics = validate_gherkin(ls, text_document)
+        items = diagnostics.get(text_document.uri, [])
 
     return lsp.RelatedFullDocumentDiagnosticReport(
         items=items,
@@ -708,7 +712,8 @@ def workspace_diagnostic(
         text_document = ls.workspace.get_text_document(first_text_document)
 
         if not ls.client_settings.get('diagnostics_on_save_only', True):
-            items = validate_gherkin(ls, text_document)
+            diagnostics = validate_gherkin(ls, text_document)
+            items = diagnostics.get(text_document.uri, [])
 
         report.items = [
             lsp.WorkspaceFullDocumentDiagnosticReport(
@@ -749,6 +754,7 @@ def command_rebuild_inventory(ls: GrizzlyLanguageServer, *args: Any) -> None:
                 continue
 
             diagnostics = validate_gherkin(ls, text_document)
-            ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
+            for uri, diagnostic in diagnostics.items():
+                ls.publish_diagnostics(uri, diagnostic)  # type: ignore
     except:
         pass

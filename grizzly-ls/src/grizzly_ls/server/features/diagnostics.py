@@ -54,21 +54,45 @@ def _get_message_from_parse_error(error: ParserError, *, line_map: Optional[Dict
             error.line = lineno - 1
 
     if error.line_text is None:
-        match = re.search(r': "([^"]*)"', message, flags=re.MULTILINE)
-        if match:
-            error.line_text = match.group(1)
+        if '{%' not in message and '%}' not in message:
+            match = re.search(r': "([^"]*)"', message, flags=re.MULTILINE)
+            if match:
+                error.line_text = match.group(1)
 
-            message = re.sub(rf': "{error.line_text}"', '', message, flags=re.MULTILINE).strip()
+                message = re.sub(rf': "{error.line_text}"', '', message, flags=re.MULTILINE).strip()
+        else:
+            message, _ = message.split(':', 1)
 
     # map with un-stripped text, so we get correct ranges in the document
     if error.line_text is not None and line_map is not None:
         error.line_text = line_map.get(error.line_text, error.line_text)
 
-    return character, message.replace('REASON: ', '').strip()
+    message = message.replace('REASON: ', '').strip()
+
+    return character, message
 
 
-def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> List[lsp.Diagnostic]:
-    diagnostics: List[lsp.Diagnostic] = []
+def _remove_scenario_tags(source: str) -> str:
+    # remove any expressions from source, since they messes up behave
+    # feature parsing
+    original_source = source
+    if '{%' in original_source:
+        buffer: List[str] = []
+        for original_line in original_source.splitlines():
+            stripped_line = original_line.lstrip()
+            if stripped_line.startswith('{%'):
+                continue
+            buffer.append(original_line)
+
+        source = '\n'.join(buffer)
+    else:
+        source = original_source
+
+    return source
+
+
+def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> Dict[str, List[lsp.Diagnostic]]:
+    diagnostics: Dict[str, List[lsp.Diagnostic]] = {text_document.uri: []}
     line_map: Dict[str, str] = {}
     included_feature_files: Dict[str, Feature] = {}
 
@@ -88,7 +112,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
 
             position = len(line) - len(stripped_line)
 
-            diagnostics.append(
+            diagnostics[text_document.uri].append(
                 lsp.Diagnostic(
                     range=lsp.Range(
                         start=lsp.Position(line=len(lines) - lineno - 1, character=position),
@@ -130,7 +154,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                 # does not exist
                 if len(language.strip()) > 0 and language.strip() not in languages:
                     marker_position = len(marker) + 2
-                    diagnostics.append(
+                    diagnostics[text_document.uri].append(
                         lsp.Diagnostic(
                             range=lsp.Range(
                                 start=lsp.Position(line=lineno, character=marker_position),
@@ -149,7 +173,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
 
             # wrong line
             if lineno != 0:
-                diagnostics.append(
+                diagnostics[text_document.uri].append(
                     lsp.Diagnostic(
                         range=lsp.Range(
                             start=lsp.Position(line=lineno, character=position),
@@ -168,7 +192,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
 
         # handle jinja2 expressions
         if stripped_line[:2] == '{%' and stripped_line[-2:] == '%}':
-            ls.logger.debug(stripped_line)
+            ls.logger.debug(f'handle jinja2 expression: {stripped_line}')
             # only tokenize the actual jinja2 expression, not the markers
             try:
                 tokens = list(tokenize(BytesIO(stripped_line[2:-2].strip().encode()).readline))
@@ -203,7 +227,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
 
             # make sure arguments was found
             if arg_scenario is None:
-                diagnostics.append(
+                diagnostics[text_document.uri].append(
                     lsp.Diagnostic(
                         range=lsp.Range(
                             start=lsp.Position(line=lineno, character=position),
@@ -216,7 +240,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                 )
 
             if arg_feature is None:
-                diagnostics.append(
+                diagnostics[text_document.uri].append(
                     lsp.Diagnostic(
                         range=lsp.Range(
                             start=lsp.Position(line=lineno, character=position),
@@ -242,7 +266,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                     feature_file = (base_path / feature_path).resolve()
 
                 if not feature_file.exists():
-                    diagnostics.append(
+                    diagnostics[text_document.uri].append(
                         lsp.Diagnostic(
                             range=lsp.Range(
                                 start=lsp.Position(
@@ -262,15 +286,17 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                     continue
 
                 try:
+                    source = _remove_scenario_tags(feature_file.read_text(encoding='utf-8'))
                     feature = parse_feature(
-                        feature_file.read_text(encoding='utf-8'),
+                        source,
                         language=None,
                         filename=feature_file.as_posix(),
                     )
+                    ls.logger.debug(f'included feature: {feature_file.as_uri()}')
 
                     # it was possible to parse the feature file, but it didn't contain any scenarios
                     if feature is None:
-                        diagnostics.append(
+                        diagnostics[text_document.uri].append(
                             lsp.Diagnostic(
                                 range=lsp.Range(
                                     start=lsp.Position(
@@ -292,15 +318,31 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                     included_feature_files.update({arg_feature.value: feature})
                 except ParserError as pe:
                     character, message = _get_message_from_parse_error(pe)
+                    character = character or (len(line) - len(stripped_line))
 
-                    diagnostics.append(
+                    diagnostics[text_document.uri].append(
                         lsp.Diagnostic(
                             range=lsp.Range(
                                 start=lsp.Position(line=pe.line or 0, character=character),
                                 end=lsp.Position(
                                     line=pe.line or 0,
-                                    character=len(pe.line_text) - 1 if pe.line_text is not None else zero_line_length,
+                                    character=len(pe.line_text) - 1 if pe.line_text is not None else len(line),
                                 ),
+                            ),
+                            message=message,
+                            severity=lsp.DiagnosticSeverity.Information,
+                            source=ls.__class__.__name__,
+                        )
+                    )
+
+                    if feature_file.as_uri() not in diagnostics:
+                        diagnostics.update({feature_file.as_uri(): []})
+
+                    diagnostics[feature_file.as_uri()].append(
+                        lsp.Diagnostic(
+                            range=lsp.Range(
+                                start=lsp.Position(line=0, character=0),
+                                end=lsp.Position(line=0, character=1000),
                             ),
                             message=message,
                             severity=lsp.DiagnosticSeverity.Error,
@@ -311,7 +353,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
 
             if arg_feature.value == '' or arg_scenario.value == '':
                 if arg_feature.value == '':
-                    diagnostics.append(
+                    diagnostics[text_document.uri].append(
                         lsp.Diagnostic(
                             range=lsp.Range(
                                 start=lsp.Position(
@@ -330,7 +372,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                     )
 
                 if arg_scenario.value == '':
-                    diagnostics.append(
+                    diagnostics[text_document.uri].append(
                         lsp.Diagnostic(
                             range=lsp.Range(
                                 start=lsp.Position(
@@ -356,7 +398,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                 scenario = next(iter([scenario for scenario in feature.scenarios if scenario.name == arg_scenario.value]))
 
                 if len(scenario.steps) < 1:
-                    diagnostics.append(
+                    diagnostics[text_document.uri].append(
                         lsp.Diagnostic(
                             range=lsp.Range(
                                 start=lsp.Position(
@@ -374,7 +416,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                         )
                     )
             except StopIteration:
-                diagnostics.append(
+                diagnostics[text_document.uri].append(
                     lsp.Diagnostic(
                         range=lsp.Range(
                             start=lsp.Position(
@@ -391,7 +433,6 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                         source=ls.__class__.__name__,
                     )
                 )
-
             continue
 
         # check if keywords are valid in the specified language
@@ -406,7 +447,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
             except ValueError:
                 name = ls.localizations.get('name', ['unknown'])[0]
 
-                diagnostics.append(
+                diagnostics[text_document.uri].append(
                     lsp.Diagnostic(
                         range=lsp.Range(
                             start=start_position,
@@ -434,7 +475,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                         break
 
             if not found_step:
-                diagnostics.append(
+                diagnostics[text_document.uri].append(
                     lsp.Diagnostic(
                         range=lsp.Range(
                             start=lsp.Position(line=lineno, character=len(line) - len(expression)),
@@ -450,23 +491,13 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
     try:
         # remove any expressions from source, since they messes up behave
         # feature parsing
-        original_source = text_document.source
-        if '{%' in original_source:
-            buffer: List[str] = []
-            for line in original_source.splitlines():
-                stripped_line = line.lstrip()
-                if stripped_line.startswith('{%'):
-                    continue
-                buffer.append(line)
-
-            source = '\n'.join(buffer)
-        else:
-            source = original_source
+        source = _remove_scenario_tags(text_document.source)
 
         parse_feature(source, language=language, filename=text_document.filename)
     except ParserError as pe:
+        ls.logger.debug(str(pe))
         character, message = _get_message_from_parse_error(pe, line_map=line_map)
-        diagnostics.append(
+        diagnostics[text_document.uri].append(
             lsp.Diagnostic(
                 range=lsp.Range(
                     start=lsp.Position(line=pe.line or 0, character=character),
