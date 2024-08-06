@@ -363,8 +363,49 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                     # check if variables used has been declared
                     matches = re.finditer(r'^\s+.*\{\$ ([^\$]+) \$\}.*$', source, re.MULTILINE)
                     for match in matches:
-                        if match.group(1) not in declared_variables:
-                            ls.logger.debug(f'{match=}')
+                        variable_name = match.group(1)
+                        if variable_name not in declared_variables:
+                            start, end = match.span(0)
+                            pre_text = source.rstrip()[0 : start + end].splitlines()  # rstrip to remove empty lines in the end
+                            match_lineno = len(pre_text[:-1])
+                            current_line = pre_text[-1]
+                            try:
+                                match_start = current_line.index(variable_name)
+                            except ValueError:
+                                continue
+
+                            match_end = match_start + len(variable_name) + len(' $}')
+                            match_start -= len('{$ ')
+
+                            start = len(line) - len(stripped_line)
+                            end = len(line)
+
+                            if feature_file.as_uri() not in diagnostics:
+                                diagnostics.update({feature_file.as_uri(): []})
+
+                            diagnostics[feature_file.as_uri()].append(
+                                lsp.Diagnostic(
+                                    range=lsp.Range(
+                                        start=lsp.Position(line=match_lineno, character=match_start),
+                                        end=lsp.Position(line=match_lineno, character=match_end),
+                                    ),
+                                    message=f'Variable "{variable_name}" has not been declared in scenario tag',
+                                    severity=lsp.DiagnosticSeverity.Error,
+                                    source=ls.__class__.__name__,
+                                )
+                            )
+
+                            diagnostics[text_document.uri].append(
+                                lsp.Diagnostic(
+                                    range=lsp.Range(
+                                        start=lsp.Position(line=lineno, character=start),
+                                        end=lsp.Position(line=lineno, character=end),
+                                    ),
+                                    message=f'Scenario tag is missing variable "{variable_name}"',
+                                    severity=lsp.DiagnosticSeverity.Warning,
+                                    source=ls.__class__.__name__,
+                                )
+                            )
 
                     included_feature_files.update({arg_feature.value: feature})
                 except ParserError as pe:

@@ -40,7 +40,7 @@ from grizzly_ls import __version__
 from grizzly_ls.text import Normalizer, get_step_parts
 from grizzly_ls.utils import run_command
 from grizzly_ls.model import Step
-from grizzly_ls.constants import FEATURE_INSTALL, COMMAND_REBUILD_INVENTORY, LANGUAGE_ID
+from grizzly_ls.constants import FEATURE_INSTALL, COMMAND_REBUILD_INVENTORY, COMMAND_RUN_DIAGNOSTICS, LANGUAGE_ID
 from grizzly_ls.text import (
     format_arg_line,
     find_language,
@@ -758,3 +758,20 @@ def command_rebuild_inventory(ls: GrizzlyLanguageServer, *args: Any) -> None:
                 ls.publish_diagnostics(uri, diagnostic)  # type: ignore
     except:
         pass
+
+
+@server.command(COMMAND_RUN_DIAGNOSTICS)
+def command_run_diagnostics(ls: GrizzlyLanguageServer, *args: Any) -> None:
+    uri = '<unknown>'
+    try:
+        arg = args[0][0]
+        uri = arg.get('uri', {}).get('external', None)
+
+        text_document = ls.workspace.get_text_document(uri)
+
+        diagnostics = validate_gherkin(ls, text_document)
+        for uri, diagnostic in diagnostics.items():
+            ls.publish_diagnostics(uri, diagnostic)  # type: ignore
+    except Exception as e:
+        ls.show_message(f'failed to run diagnostics on {uri}', lsp.MessageType.Error)
+        ls.logger.error(str(e))

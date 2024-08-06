@@ -489,7 +489,7 @@ def test_validate_gherkin_scenario_tag(lsp_fixture: LspFixture) -> None:
         included_feature_file_1.write_text(
             """Feature:
     Scenario: include
-        Give a step expression
+        Given a step expression
     """,
             encoding='utf-8',
         )
@@ -497,8 +497,65 @@ def test_validate_gherkin_scenario_tag(lsp_fixture: LspFixture) -> None:
 
         diagnostics = validate_gherkin(ls, text_document)
 
-        assert 0
+        assert len(diagnostics) == 1
+        assert len(diagnostics[text_document.uri]) == 2
 
+        diagnostic = diagnostics[text_document.uri][0]
+        assert diagnostic.message == 'Declared variable "foo" is not used in included feature file'
+        assert str(diagnostic.range) == '2:95-2:104'
+        assert diagnostic.severity == lsp.DiagnosticSeverity.Error
+
+        diagnostic = diagnostics[text_document.uri][1]
+        assert diagnostic.message == 'Declared variable "bar" is not used in included feature file'
+        assert str(diagnostic.range) == '2:106-2:115'
+        assert diagnostic.severity == lsp.DiagnosticSeverity.Error
+
+        included_feature_file_1.write_text(
+            """Feature:
+    Scenario: include
+        Given a step expression named "{$ foo $}"
+        And a step expression named "{$ baz $}"
+
+""",
+            encoding='utf-8',
+        )
+        text_document = TextDocument(feature_file.as_posix())
+
+        diagnostics = validate_gherkin(ls, text_document)
+
+        assert len(diagnostics) == 2
+        assert len(diagnostics[text_document.uri]) == 2
+
+        diagnostic = diagnostics[text_document.uri][0]
+        assert diagnostic.message == 'Declared variable "bar" is not used in included feature file'
+        assert str(diagnostic.range) == '2:106-2:115'
+        assert diagnostic.severity == lsp.DiagnosticSeverity.Error
+
+        diagnostic = diagnostics[text_document.uri][1]
+        assert diagnostic.message == 'Scenario tag is missing variable "baz"'
+        assert str(diagnostic.range) == '2:8-2:118'
+        assert diagnostic.severity == lsp.DiagnosticSeverity.Warning
+
+        assert len(diagnostics[included_feature_file_1.as_uri()]) == 1
+        diagnostic = diagnostics[included_feature_file_1.as_uri()][0]
+
+        assert diagnostic.message == 'Variable "baz" has not been declared in scenario tag'
+        assert str(diagnostic.range) == '3:37-3:46'
+        assert diagnostic.severity == lsp.DiagnosticSeverity.Error
+
+        included_feature_file_1.write_text(
+            """Feature:
+    Scenario: include
+        Given a step expression named "{$ foo $}"
+        And a step expression named "{$ bar $}"
+
+""",
+            encoding='utf-8',
+        )
+        text_document = TextDocument(feature_file.as_posix())
+
+        diagnostics = validate_gherkin(ls, text_document)
+        assert diagnostics == {text_document.uri: []}
         # // -->
     finally:
         feature_file.unlink()

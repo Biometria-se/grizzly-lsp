@@ -1,6 +1,7 @@
 FEATURE_INSTALL: str = 'grizzly-ls/install'
 
 COMMAND_REBUILD_INVENTORY: str = 'grizzly-ls/rebuild-inventory'
+COMMAND_RUN_DIAGNOSTICS: str = 'grizzly-ls/run-diagnostics'
 
 MARKER_LANGUAGE: str = '# language:'
 MARKER_NO_STEP_IMPL: str = 'No step implementation found'

@@ -26,7 +26,7 @@ export function run(): Promise<void> {
                 }
             });
 
-            mocha.slow(150);
+            mocha.slow(175);
 
             try {
                 // Run the mocha test

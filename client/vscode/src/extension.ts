@@ -221,20 +221,45 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 
     context.subscriptions.push(
         vscode.commands.registerCommand('grizzly.server.restart', async () => {
-            if (status.isActivated()) {
-                logger.info('Restarting language server');
-                await startLanguageServer();
-            }
+            const message = (status.isActivated()) ? 'Restarting language server' : 'Starting language server';
+            logger.info(message);
+
+            await startLanguageServer();
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('grizzly.server.inventory.rebuild', async () => {
             if (client) {
+                await vscode.window.showInformationMessage('Saving all open files before rebuilding step inventory');
                 vscode.workspace.textDocuments.forEach(async (textDocument: vscode.TextDocument) => {
                     await textDocument.save();
                 });
                 await vscode.commands.executeCommand('grizzly-ls/rebuild-inventory');
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('grizzly.server.diagnostics.run', async () => {
+            const textEditor = vscode.window.activeTextEditor;
+            const textDocument = textEditor.document;
+
+            if (textDocument.languageId === 'grizzly-gherkin') {
+                await vscode.commands.executeCommand('grizzly-ls/run-diagnostics', textDocument);
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(async (textEditor: vscode.TextEditor | undefined) => {
+            if (textEditor === undefined || !client || client.state !== State.Running) {
+                return;
+            }
+
+            const textDocument = textEditor.document;
+            if (textDocument.languageId === 'grizzly-gherkin') {
+                await vscode.commands.executeCommand('grizzly-ls/run-diagnostics', textDocument);
             }
         })
     );
