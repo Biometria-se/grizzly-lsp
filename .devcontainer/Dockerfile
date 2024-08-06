@@ -1,8 +1,8 @@
 # See here for image contents: https://github.com/microsoft/vscode-dev-containers/tree/v0.183.0/containers/python-3/.devcontainer/base.Dockerfile
 
 # [Choice] Python version: 3, 3.9, 3.8, 3.7, 3.6
-ARG VARIANT="3.9"
-FROM mcr.microsoft.com/vscode/devcontainers/python:0-${VARIANT}
+ARG VARIANT="3.12"
+FROM mcr.microsoft.com/vscode/devcontainers/python:1-${VARIANT}
 
 RUN rm  -rf /etc/apt/sources.list.d/yarn.list || true && \
     apt-get update
