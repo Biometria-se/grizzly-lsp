@@ -416,6 +416,9 @@ def test_validate_gherkin_scenario_tag(lsp_fixture: LspFixture) -> None:
                 )
                 text_document = TextDocument(feature_file.as_posix())
 
+                included_feature_file = lsp_fixture.datadir / 'features' / 'test_validate_gherkin_scenario_tag_include.feature'
+                included_feature_file.unlink(missing_ok=True)
+
                 diagnostics = validate_gherkin(ls, text_document)
 
                 assert len(diagnostics) == 1
@@ -426,8 +429,6 @@ def test_validate_gherkin_scenario_tag(lsp_fixture: LspFixture) -> None:
                 _, feature_file_name, _ = arg_feature.split('"', 3)
 
                 assert diagnostic.message == f'Included feature file "{feature_file_name}" does not exist'
-
-                included_feature_file = lsp_fixture.datadir / 'features' / 'test_validate_gherkin_scenario_tag_include.feature'
 
                 try:
                     included_feature_file.touch()
@@ -473,6 +474,31 @@ def test_validate_gherkin_scenario_tag(lsp_fixture: LspFixture) -> None:
                     assert diagnostics == {text_document.uri: []}
                 finally:
                     included_feature_file.unlink()
+        # // -->
+
+        # <!-- scenario tag values argument
+        feature_file.write_text(
+            """Feature: test scenario tag
+    Scenario: included
+        {% scenario "include", feature="./test_validate_gherkin_scenario_tag_include.feature", foo="bar", bar="foo" %}
+    """,
+            encoding='utf-8',
+        )
+
+        included_feature_file_1 = lsp_fixture.datadir / 'features' / 'test_validate_gherkin_scenario_tag_include.feature'
+        included_feature_file_1.write_text(
+            """Feature:
+    Scenario: include
+        Give a step expression
+    """,
+            encoding='utf-8',
+        )
+        text_document = TextDocument(feature_file.as_posix())
+
+        diagnostics = validate_gherkin(ls, text_document)
+
+        assert 0
+
         # // -->
     finally:
         feature_file.unlink()

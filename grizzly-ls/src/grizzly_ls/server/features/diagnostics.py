@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import re
 
-from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
-from tokenize import tokenize, TokenError, NAME, ENCODING, STRING
+from typing import Dict, List, Optional, Tuple, Set, TYPE_CHECKING
+from tokenize import tokenize, TokenError, NAME, ENCODING, STRING, OP
 from io import BytesIO
 from pathlib import Path
 from dataclasses import dataclass
+from contextlib import suppress
 
 from pygls.workspace import TextDocument
 from lsprotocol import types as lsp
@@ -208,9 +209,10 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
 
             arg_scenario: Optional[ArgumentPosition] = None
             arg_feature: Optional[ArgumentPosition] = None
+            arg_variables: List[Tuple[ArgumentPosition, ArgumentPosition]] = []
 
             # check for scenario and feature arguments, can be both positional and named
-            for token in tokens[1:]:
+            for index, token in enumerate(tokens[1:], start=1):
                 # scenario
                 if arg_scenario is None:
                     if token.type == STRING:
@@ -223,7 +225,23 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                     if token.type == STRING:
                         value = token.string.strip('"\'')
                         arg_feature = ArgumentPosition(value, start=token.start[1] + 2, end=token.end[1])
-                        break
+                    continue
+
+                with suppress(IndexError):
+                    if list(map(lambda t: t.type, tokens[index : index + 3])) != [NAME, OP, STRING]:
+                        continue
+
+                    value_token = tokens[index + 2]
+
+                    variable_name = token.string
+                    variable_value = value_token.string.strip('"\'')
+                    offset = len(line) - len(stripped_line) + 3
+                    arg_variables.append(
+                        (
+                            ArgumentPosition(variable_name, start=token.start[1] + offset, end=token.end[1] + offset),
+                            ArgumentPosition(variable_value, start=value_token.start[1] + offset, end=value_token.end[1] + offset),
+                        )
+                    )
 
             # make sure arguments was found
             if arg_scenario is None:
@@ -314,6 +332,39 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                             )
                         )
                         continue
+
+                    # check if declared variables is used
+                    declared_variables: Set[str] = set()
+                    for arg_variable_name, arg_variable_value in arg_variables:
+                        variable_template = f'\\{{\\$ {arg_variable_name.value} \\$\\}}'
+                        matches = re.finditer(rf'^\s+.*{variable_template}.*$', source, re.MULTILINE)
+                        found_variable = False
+                        declared_variables.add(arg_variable_name.value)
+
+                        for match in matches:
+                            if match.group(0).strip()[0] == '#':
+                                continue
+
+                            found_variable = True
+
+                        if not found_variable:
+                            diagnostics[text_document.uri].append(
+                                lsp.Diagnostic(
+                                    range=lsp.Range(
+                                        start=lsp.Position(line=lineno, character=arg_variable_name.start),
+                                        end=lsp.Position(line=lineno, character=arg_variable_value.end),
+                                    ),
+                                    message=f'Declared variable "{arg_variable_name.value}" is not used in included feature file',
+                                    severity=lsp.DiagnosticSeverity.Error,
+                                    source=ls.__class__.__name__,
+                                )
+                            )
+
+                    # check if variables used has been declared
+                    matches = re.finditer(r'^\s+.*\{\$ ([^\$]+) \$\}.*$', source, re.MULTILINE)
+                    for match in matches:
+                        if match.group(1) not in declared_variables:
+                            ls.logger.debug(f'{match=}')
 
                     included_feature_files.update({arg_feature.value: feature})
                 except ParserError as pe:
