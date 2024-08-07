@@ -1,54 +1,34 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { Utils } from 'vscode-uri';
+import { integer } from 'vscode-languageclient';
 
 export interface GherkinPreviewOptions {
     document?: vscode.TextDocument;
     content?: string;
 }
 
+
 export class GherkinPreview {
-    constructor(private readonly context: vscode.ExtensionContext, private readonly logger: vscode.LogOutputChannel) {}
+    public panels: Map<vscode.Uri, vscode.WebviewPanel>;
 
-    private createPreviewPanel(uri: vscode.Uri) {
-        const displayColumn = {
-            viewColumn: vscode.ViewColumn.Beside,
-            preserveFocus: true,
-        };
+    private theme: {font: {size: integer, family: string}, style: string, backgroundColor: string};
 
-        // @TODO: base name of uri.path
-        const basename = path.basename(uri.path);
+    private displayColumn = {
+        viewColumn: vscode.ViewColumn.Beside,
+        preserveFocus: true,
+    };
 
-        return vscode.window.createWebviewPanel('grizzly.gherkin.preview', `Preview: ${basename}`, displayColumn, {
-            enableFindWidget: false,
-            enableScripts: true,
-            retainContextWhenHidden: true,
-        });
-    }
+    constructor(private readonly context: vscode.ExtensionContext, private readonly logger: vscode.LogOutputChannel) {
+        this.panels = new Map();
 
-    public async createPreview(textDocument: vscode.TextDocument): Promise<vscode.WebviewPanel> {
-        const panel = this.createPreviewPanel(textDocument.uri);
-
-        if (!panel) {
-            return;
-        }
-
-        // @TODO: add some listeners
-
-        const rendered = await vscode.commands.executeCommand('grizzly-ls/render-gherkin', {content: textDocument.getText(), uri: textDocument.uri.path});
-
-        this.logger.info(`rendered=${rendered}`);
-
-        const content = (rendered) ? rendered : 'Failed to render, check output log';
-
-        const colorTheme = vscode.window.activeColorTheme;
+        const colorThemeKind = vscode.window.activeColorTheme.kind;
         const configuration = vscode.workspace.getConfiguration('editor');
-        const fontSize = +configuration.get('fontSize');
-        const fontFamily = configuration.get('fontFamily');
 
         let style: string;
         let backgroundColor: string;
 
-        switch (colorTheme.kind) {
+        switch (colorThemeKind) {
             case vscode.ColorThemeKind.HighContrastLight:
             case vscode.ColorThemeKind.Light:
                 style = 'github';
@@ -61,16 +41,42 @@ export class GherkinPreview {
                 break;
         }
 
-        this.logger.info(`colorTheme=${colorTheme.kind}, fontSize=${fontSize}, fontFamily=${fontFamily}`);
+        this.theme = {
+            font: {
+                size: +configuration.get('fontSize'),
+                family: configuration.get('fontFamily'),
+            },
+            style,
+            backgroundColor,
+        };
+    }
 
-        panel.webview.html = `<!doctype html>
+    private create(uri: vscode.Uri) {
+        const basename = path.basename(uri.path);
+
+        const panel = vscode.window.createWebviewPanel('grizzly.gherkin.preview', `Preview: ${basename}`, this.displayColumn, {
+            enableFindWidget: false,
+            enableScripts: true,
+            retainContextWhenHidden: true,
+            localResourceRoots: [
+                Utils.joinPath(this.context.extensionUri, 'images'),
+            ]
+        });
+
+        panel.iconPath = Utils.joinPath(this.context.extensionUri, 'images', 'icon.png');
+
+        return panel;
+    }
+
+    private generateHtml(content: string): string {
+        return `<!doctype html>
 <html class="no-js" lang="en">
 
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${style}.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${this.theme.style}.min.css">
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/gherkin.min.js"></script>
@@ -78,12 +84,11 @@ export class GherkinPreview {
 
   <style>
   body {
-    background-color: ${backgroundColor};
+    background-color: ${this.theme.backgroundColor};
   }
   pre > code {
-    font-size: ${fontSize}px;
-    font-family: ${fontFamily};
-    width: 100%;
+    font-size: ${this.theme.font.size}px;
+    font-family: ${this.theme.font.family};
   }
   </style>
 
@@ -96,6 +101,61 @@ export class GherkinPreview {
 
 </html>`;
 
-        return panel;
+    }
+
+    public async update(textDocument: vscode.TextDocument, panel?: vscode.WebviewPanel): Promise<void> {
+        if (!panel) {
+            panel = this.panels.get(textDocument.uri);
+            if (!panel) return;
+        }
+
+        let content = textDocument.getText();
+        const rendered: string | undefined = await vscode.commands.executeCommand('grizzly-ls/render-gherkin', {content, uri: textDocument.uri.path});
+        content = (rendered) ? rendered : 'Failed to render, check output log';
+
+        panel.webview.html = this.generateHtml(content);
+
+        return;
+    }
+
+    public close(textDocument: vscode.TextDocument): boolean {
+        const panel = this.panels.get(textDocument.uri);
+
+        if (panel) {
+            panel.dispose();
+            return this.panels.delete(textDocument.uri);
+        }
+
+        return false;
+    }
+
+    public async preview(textDocument: vscode.TextDocument): Promise<void> {
+        let panel = this.panels.get(textDocument.uri);
+
+        if (!panel) {
+            const content = textDocument.getText();
+            if (!content.includes('{% scenario')) {
+                const basename = path.basename(textDocument.uri.path);
+                await vscode.window.showInformationMessage(`WYSIWYG: ${basename} does not need to be previewed`);
+                return;
+            }
+
+            panel = this.create(textDocument.uri);
+
+            if (!panel) {
+                return;
+            }
+
+            this.panels.set(textDocument.uri, panel);
+
+            panel.onDidChangeViewState(() => this.update(textDocument));
+            panel.onDidDispose(() => {
+                return this.close(textDocument), undefined, this.context.subscriptions;
+            });
+        } else {
+            panel.reveal(this.displayColumn.viewColumn, this.displayColumn.preserveFocus);
+        }
+
+        this.update(textDocument, panel);
     }
 }

@@ -263,8 +263,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
             }
 
             const textDocument = textEditor.document;
+            const previewOpen = (previewer.panels.size > 0);
             if (textDocument.languageId === 'grizzly-gherkin') {
                 await vscode.commands.executeCommand('grizzly-ls/run-diagnostics', textDocument);
+
+                // any preview open? open for this document as well
+                if (previewOpen) {
+                    previewer.preview(textDocument);
+                }
             }
         })
     );
@@ -309,6 +315,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
         })
     );
 
+    // close preview if file closes
+    context.subscriptions.push(
+        vscode.workspace.onDidCloseTextDocument(async (textDocument: vscode.TextDocument) => {
+            previewer.close(textDocument);
+        })
+    );
+
+    // update preview if text document changes
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeTextDocument(async (event: vscode.TextDocumentChangeEvent) => {
+            const textDocument = event.document;
+            await previewer.update(textDocument);
+        })
+    );
 
     // start if there are any open `grizzly-gherkin` files open
     vscode.workspace.textDocuments.forEach(async (textDocument: vscode.TextDocument) => {
@@ -335,8 +355,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
             }
 
             const execute = (opts: GherkinPreviewOptions) => {
-                previewer.createPreview(opts.document).then((panel: vscode.WebviewPanel) => {
-                    logger.debug(`preview panel "${panel.title}" created for ${opts.document?.uri}`);
+                previewer.preview(opts.document).then(() => {
+                    logger.debug(`preview panel created for ${opts.document?.uri}`);
                 });
             };
 
