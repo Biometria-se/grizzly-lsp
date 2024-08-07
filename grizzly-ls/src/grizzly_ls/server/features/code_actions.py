@@ -61,7 +61,7 @@ def quick_fix_no_step_impl(ls: GrizzlyLanguageServer, diagnostic: lsp.Diagnostic
                 if not variable_name.isidentifier():
                     variable_name = generator.get_random_word().lower()
 
-                expression = f'{expression[0:variable_match.start()+offset]}"{{{variable_name}}}"{expression[variable_match.end()+offset:]}'
+                expression = f'{expression[0:variable_match.start() + offset]}"{{{variable_name}}}"{expression[variable_match.end() + offset:]}'
                 offset += abs(len(variable_match.group(1)) - len(variable_name)) + 2  # we're also adding { and }
                 args.append(f'{variable_name}: str')
 

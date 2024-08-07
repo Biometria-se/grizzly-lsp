@@ -103,7 +103,7 @@ class GrizzlyLanguageServer(LanguageServer):
         elif msg_type == lsp.MessageType.Warning:
             log_method = self.logger.logger.warning
         else:
-            log_method = self.logger.debug
+            log_method = self.logger.logger.debug
 
         log_method(message, **kwargs)
         super().show_message(message, msg_type=msg_type)  # type: ignore
@@ -789,7 +789,7 @@ def command_render_gherkin(ls: GrizzlyLanguageServer, *args: Any) -> Optional[st
 
     if content is None or uri is None:
         ls.show_message('no content to preview', lsp.MessageType.Error)
-        return
+        return None
 
     OnlyScenarioTag.logger = ls.logger
 
@@ -804,3 +804,4 @@ def command_render_gherkin(ls: GrizzlyLanguageServer, *args: Any) -> Optional[st
     except Exception:
         ls.show_message(f'failed to render {uri}')
         ls.logger.logger.exception(f'failed to render {uri}')
+        return None

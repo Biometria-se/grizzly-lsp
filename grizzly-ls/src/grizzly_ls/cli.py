@@ -37,7 +37,7 @@ def diagnostic_to_text(filename: str, diagnostic: Diagnostic) -> str:
 
     return '\t'.join(
         [
-            f'{filename}:{diagnostic.range.start.line+1}:{diagnostic.range.start.character+1}',
+            f'{filename}:{diagnostic.range.start.line + 1}:{diagnostic.range.start.character + 1}',
             f'{color}{severity.lower()}{Fore.RESET}',
             message,
         ]
@@ -52,8 +52,8 @@ def cli(ls: GrizzlyLanguageServer, args: Arguments) -> int:
 
     # init language server
     ls.root_path = Path.cwd()
-    ls.logger.handlers = []
-    ls.logger.propagate = False
+    ls.logger.logger.handlers = []
+    ls.logger.logger.propagate = False
     compile_inventory(ls, standalone=True)
 
     if args.files == ['.']:
@@ -83,7 +83,7 @@ def cli(ls: GrizzlyLanguageServer, args: Arguments) -> int:
 
         filename = file.as_posix().replace(Path.cwd().as_posix(), '').lstrip('/\\')
 
-        for diagnostic in diagnostics:
+        for diagnostic in diagnostics[text_document.uri]:
             print(diagnostic_to_text(filename, diagnostic))
 
     return rc

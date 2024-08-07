@@ -305,7 +305,7 @@ def complete_step(
         if input_matches and output_matches:
             offset = 0
             for input_match, output_match in zip(input_matches, output_matches):
-                matched_step = f'{matched_step[0:output_match.start()+offset]}"{input_match.group(1)}"{matched_step[output_match.end()+offset:]}'
+                matched_step = f'{matched_step[0:output_match.start() + offset]}"{input_match.group(1)}"{matched_step[output_match.end() + offset:]}'
                 offset += len(input_match.group(1))
 
         start = lsp.Position(line=position.line, character=position.character)
@@ -346,7 +346,7 @@ def complete_step(
             offset = 0
             for index, snippet_match in enumerate(snippet_matches, start=1):
                 snippet_placeholder = f'${index}'
-                new_text = f'{new_text[0:snippet_match.start()+offset]}"{snippet_placeholder}"{new_text[snippet_match.end()+offset:]}'
+                new_text = f'{new_text[0:snippet_match.start() + offset]}"{snippet_placeholder}"{new_text[snippet_match.end() + offset:]}'
                 offset += len(snippet_placeholder)
 
             insert_text_format = lsp.InsertTextFormat.Snippet
