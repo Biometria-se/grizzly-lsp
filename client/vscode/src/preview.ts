@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { Utils } from 'vscode-uri';
-import { integer } from 'vscode-languageclient';
 
 export interface GherkinPreviewOptions {
     document?: vscode.TextDocument;
@@ -12,7 +11,7 @@ export interface GherkinPreviewOptions {
 export class GherkinPreview {
     public panels: Map<vscode.Uri, vscode.WebviewPanel>;
 
-    private theme: {font: {size: integer, family: string}, style: string, backgroundColor: string};
+    private style: string;
 
     private displayColumn = {
         viewColumn: vscode.ViewColumn.Beside,
@@ -23,32 +22,17 @@ export class GherkinPreview {
         this.panels = new Map();
 
         const colorThemeKind = vscode.window.activeColorTheme.kind;
-        const configuration = vscode.workspace.getConfiguration('editor');
-
-        let style: string;
-        let backgroundColor: string;
 
         switch (colorThemeKind) {
             case vscode.ColorThemeKind.HighContrastLight:
             case vscode.ColorThemeKind.Light:
-                style = 'github';
-                backgroundColor = '#fff';
+                this.style = 'github';
                 break;
             case vscode.ColorThemeKind.HighContrast:
             case vscode.ColorThemeKind.Dark: // dark
-                style = 'github-dark';
-                backgroundColor = '#0d1117';
+                this.style = 'github-dark';
                 break;
         }
-
-        this.theme = {
-            font: {
-                size: +configuration.get('fontSize'),
-                family: configuration.get('fontFamily'),
-            },
-            style,
-            backgroundColor,
-        };
     }
 
     private create(uri: vscode.Uri) {
@@ -76,19 +60,20 @@ export class GherkinPreview {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${this.theme.style}.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${this.style}.min.css">
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/gherkin.min.js"></script>
   <script>hljs.highlightAll();</script>
 
   <style>
-  body {
-    background-color: ${this.theme.backgroundColor};
+  body .hljs {
+    background: var(--vscode-editor-background);
   }
+
   pre > code {
-    font-size: ${this.theme.font.size}px;
-    font-family: ${this.theme.font.family};
+    font-size: var(--vscode-editor-font-size);
+    font-family: var(--vscode-editor-font-family);
   }
   </style>
 
@@ -100,7 +85,6 @@ export class GherkinPreview {
 </body>
 
 </html>`;
-
     }
 
     public async update(textDocument: vscode.TextDocument, panel?: vscode.WebviewPanel): Promise<void> {

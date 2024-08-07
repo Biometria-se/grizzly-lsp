@@ -22,6 +22,7 @@ let serverUri: vscode.Uri;
 
 let starting = false;
 let activated = false;
+let notifiedAboutWaiting = false;
 
 const status: ExtensionStatus = {
     isActivated: () => {
@@ -346,6 +347,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
     // add preview capabilities
     context.subscriptions.push(
         vscode.commands.registerCommand('grizzly.gherkin.preview.beside', (options: GherkinPreviewOptions) => {
+            if (!client) {
+                if (!notifiedAboutWaiting) {
+                    vscode.window.showWarningMessage('Wait until language server has started');
+                    notifiedAboutWaiting = true;
+                }
+                return;
+            }
+
             if (!options.content
                 && !options.document
                 && vscode.window.activeTextEditor?.document
