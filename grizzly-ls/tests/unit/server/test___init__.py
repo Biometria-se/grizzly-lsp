@@ -21,6 +21,7 @@ from tests.conftest import GRIZZLY_PROJECT
 from grizzly_ls import __version__
 from grizzly_ls.server import Step
 from grizzly_ls.server.inventory import compile_inventory
+from grizzly_ls.utils import LogOutputChannelLogger
 
 
 class TestGrizzlyLanguageServer:
@@ -93,8 +94,8 @@ class TestGrizzlyLanguageServer:
             assert sorted(ls.keywords_any) == sorted(words.get('keywords_any', []))
             assert sorted(ls.keywords_once) == sorted(words.get('keywords_once', []))
 
-            assert isinstance(ls.logger, logging.Logger)
-            assert ls.logger.name == 'grizzly_ls.server'
+            assert isinstance(ls.logger, LogOutputChannelLogger)
+            assert ls.logger.logger.name == 'GrizzlyLanguageServer'
         finally:
             ls.language = 'en'
 
@@ -106,7 +107,7 @@ class TestGrizzlyLanguageServer:
     ) -> None:
         ls = lsp_fixture.server
         show_message_mock = mocker.patch('pygls.server.LanguageServer.show_message', return_value=None)
-        logger_error_mock = mocker.spy(ls.logger, 'error')
+        logger_error_mock = mocker.spy(ls.logger.logger, 'error')
 
         message = 'implicit INFO level'
         with caplog.at_level(logging.INFO):

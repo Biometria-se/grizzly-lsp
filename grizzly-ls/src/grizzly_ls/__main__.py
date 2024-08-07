@@ -2,6 +2,7 @@ import sys
 import argparse
 import logging
 from typing import List, Optional
+from os import environ
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -45,6 +46,14 @@ def parse_arguments() -> argparse.Namespace:
         type=str,
         default=None,
         help='name of loggers to disable',
+    )
+
+    parser.add_argument(
+        '--embedded',
+        action='store_true',
+        default=False,
+        required=False,
+        help='controlls logging, added when started by editor',
     )
 
     parser.add_argument(
@@ -98,9 +107,10 @@ def setup_logging(args: argparse.Namespace) -> None:
             file_handler.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s'))
             handlers.append(file_handler)
 
-    stream_handler = logging.StreamHandler(sys.stderr)
-    stream_handler.setFormatter(logging.Formatter('server/%(levelname)s: %(message)s'))
-    handlers.append(stream_handler)
+    if not args.embedded:
+        stream_handler = logging.StreamHandler(sys.stderr)
+        stream_handler.setFormatter(logging.Formatter('server/%(levelname)s: %(message)s'))
+        handlers.append(stream_handler)
 
     logging.basicConfig(
         level=level,
@@ -140,6 +150,9 @@ def setup_debugging(args: argparse.Namespace) -> Optional[str]:
 
 def main() -> int:
     args = parse_arguments()
+
+    if args.embedded:
+        environ.update({'GRIZZLY_RUN_EMBEDDED': 'true'})
 
     from grizzly_ls.server import server
 

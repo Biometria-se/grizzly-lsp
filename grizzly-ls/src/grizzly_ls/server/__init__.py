@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import platform
 import signal
 import re
@@ -35,12 +34,13 @@ from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
 from pygls.capabilities import get_capability
 from lsprotocol import types as lsp
+from jinja2 import Environment
 
 from grizzly_ls import __version__
 from grizzly_ls.text import Normalizer, get_step_parts
-from grizzly_ls.utils import run_command
+from grizzly_ls.utils import run_command, OnlyScenarioTag, LogOutputChannelLogger
 from grizzly_ls.model import Step
-from grizzly_ls.constants import FEATURE_INSTALL, COMMAND_REBUILD_INVENTORY, COMMAND_RUN_DIAGNOSTICS, LANGUAGE_ID
+from grizzly_ls.constants import FEATURE_INSTALL, COMMAND_REBUILD_INVENTORY, COMMAND_RUN_DIAGNOSTICS, COMMAND_RENDER_GHERKIN, LANGUAGE_ID
 from grizzly_ls.text import (
     format_arg_line,
     find_language,
@@ -63,7 +63,7 @@ from .inventory import compile_inventory, compile_keyword_inventory
 
 
 class GrizzlyLanguageServer(LanguageServer):
-    logger: logging.Logger = logging.getLogger(__name__)
+    logger: LogOutputChannelLogger
 
     variable_pattern: re.Pattern[str] = re.compile(r'(.*ask for value of variable "([^"]*)"$|.*value for variable "([^"]*)" is ".*?"$)')
 
@@ -97,11 +97,11 @@ class GrizzlyLanguageServer(LanguageServer):
         **kwargs: Any,
     ) -> None:
         if msg_type == lsp.MessageType.Info:
-            log_method = self.logger.info
+            log_method = self.logger.logger.info
         elif msg_type == lsp.MessageType.Error:
-            log_method = self.logger.error
+            log_method = self.logger.logger.error
         elif msg_type == lsp.MessageType.Warning:
-            log_method = self.logger.warning
+            log_method = self.logger.logger.warning
         else:
             log_method = self.logger.debug
 
@@ -110,6 +110,8 @@ class GrizzlyLanguageServer(LanguageServer):
 
     def __init__(self, *args: Tuple[Any, ...], **kwargs: Dict[str, Any]) -> None:
         super().__init__(name='grizzly-ls', version=__version__, *args, **kwargs)  # type: ignore
+
+        self.logger = LogOutputChannelLogger(self)
 
         self.index_url = environ.get('PIP_EXTRA_INDEX_URL', None)
         self.behave_steps = {}
@@ -389,7 +391,9 @@ def install(ls: GrizzlyLanguageServer, *args: Any) -> None:
 
 @server.feature(lsp.INITIALIZE)
 def initialize(ls: GrizzlyLanguageServer, params: lsp.InitializeParams) -> None:
-    ls.logger.info(f'initializing language server {__version__}')
+    run_mode = 'embedded' if environ.get('GRIZZLY_RUN_EMBEDDED', 'false') == 'true' else 'standalone'
+    ls.logger.info(f'initializing language server {__version__} ({run_mode})')
+
     if params.root_path is None and params.root_uri is None:
         ls.show_message(
             'neither root_path or root uri was received from client',
@@ -775,3 +779,28 @@ def command_run_diagnostics(ls: GrizzlyLanguageServer, *args: Any) -> None:
     except Exception as e:
         ls.show_message(f'failed to run diagnostics on {uri}', lsp.MessageType.Error)
         ls.logger.error(str(e))
+
+
+@server.command(COMMAND_RENDER_GHERKIN)
+def command_render_gherkin(ls: GrizzlyLanguageServer, *args: Any) -> Optional[str]:
+    options = cast(Dict[str, str], args[0][0])
+    content = options.get('content', None)
+    uri = options.get('uri', None)
+
+    if content is None or uri is None:
+        ls.show_message('no content to preview', lsp.MessageType.Error)
+        return
+
+    OnlyScenarioTag.logger = ls.logger
+
+    feature_file = Path(uri)
+
+    environment = Environment(autoescape=False, extensions=[OnlyScenarioTag])
+    environment.extend(feature_file=feature_file)
+
+    try:
+        template = environment.from_string(content)
+        return template.render()
+    except Exception:
+        ls.show_message(f'failed to render {uri}')
+        ls.logger.logger.exception(f'failed to render {uri}')

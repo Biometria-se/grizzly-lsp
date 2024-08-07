@@ -101,8 +101,6 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
     language: str = 'en'
     zero_line_length = 0
 
-    ls.logger.debug(f'diagnostics for {text_document.uri}')
-
     lines = text_document.source.splitlines()
 
     if text_document.source.count('"""') % 2 != 0:
@@ -193,7 +191,6 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
 
         # handle jinja2 expressions
         if stripped_line[:2] == '{%' and stripped_line[-2:] == '%}':
-            ls.logger.debug(f'handle jinja2 expression: {stripped_line}')
             # only tokenize the actual jinja2 expression, not the markers
             try:
                 tokens = list(tokenize(BytesIO(stripped_line[2:-2].strip().encode()).readline))

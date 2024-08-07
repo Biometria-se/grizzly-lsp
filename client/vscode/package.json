@@ -75,8 +75,29 @@
         "command": "grizzly.server.diagnostics.run",
         "title": "Run diagnostics",
         "category": "Grizzly"
+      },
+      {
+        "command": "grizzly.gherkin.preview.beside",
+        "title": "Gherkin Preview",
+        "category": "Grizzly"
       }
     ],
+    "menus": {
+      "editor/title/context": [
+        {
+          "command": "grizzly.gherkin.preview.beside",
+          "group": "gherkin",
+          "when": "resourceLangId == grizzly-gherkin"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "grizzly.gherkin.preview.beside",
+          "group": "navigation@-99",
+          "when": "resourceLangId == grizzly-gherkin"
+        }
+      ]
+    },
     "configuration": {
       "type": "object",
       "title": "Grizzly",
