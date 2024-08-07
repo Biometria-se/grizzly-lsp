@@ -10,6 +10,7 @@ import { LanguageClient, LanguageClientOptions, ServerOptions, State } from 'vsc
 import { PythonExtension } from '@vscode/python-extension';
 
 import { Settings, ExtensionStatus } from './model';
+import { GherkinPreview, GherkinPreviewOptions } from './preview';
 
 const exec = util.promisify(child_process.exec);
 
@@ -21,6 +22,7 @@ let serverUri: vscode.Uri;
 
 let starting = false;
 let activated = false;
+let notifiedAboutWaiting = false;
 
 const status: ExtensionStatus = {
     isActivated: () => {
@@ -46,13 +48,12 @@ async function createStdioLanguageServer(
         serverUri = vscode.Uri.file(path.dirname(stdout.trim()));
         logger.debug(`serverUri = "${serverUri}"`);
     } catch (error) {
-        console.error(`command = "${command}", error = "${error}"`);
         logger.error(command);
         logger.error(`Failed ^ to get module path for ${module}: ${error}`);
         logger.error('Hot-reload of language server will not work');
     }
 
-    args = ['-m', module, ...args];
+    args = ['-m', module, '--embedded', ...args];
 
     if (process.env.VERBOSE && !args.includes('--verbose')) {
         args = [...args, '--verbose'];
@@ -214,23 +215,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
     logger = vscode.window.createOutputChannel('Grizzly Language Server', {log: true});
     logger.show();
 
+    const previewer = new GherkinPreview(context, logger);
+
     await getPythonExtension();
     if (!python) {
         return;
     }
 
+    // <!-- register custom commands
     context.subscriptions.push(
         vscode.commands.registerCommand('grizzly.server.restart', async () => {
-            if (status.isActivated()) {
-                logger.info('Restarting language server');
-                await startLanguageServer();
-            }
+            const message = (status.isActivated()) ? 'Restarting language server' : 'Starting language server';
+            logger.info(message);
+
+            await startLanguageServer();
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('grizzly.server.inventory.rebuild', async () => {
             if (client) {
+                await vscode.window.showInformationMessage('Saving all open files before rebuilding step inventory');
                 vscode.workspace.textDocuments.forEach(async (textDocument: vscode.TextDocument) => {
                     await textDocument.save();
                 });
@@ -240,6 +245,39 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
     );
 
     context.subscriptions.push(
+        vscode.commands.registerCommand('grizzly.server.diagnostics.run', async () => {
+            const textEditor = vscode.window.activeTextEditor;
+            const textDocument = textEditor.document;
+
+            if (textDocument.languageId === 'grizzly-gherkin') {
+                await vscode.commands.executeCommand('grizzly-ls/run-diagnostics', textDocument);
+            }
+        })
+    );
+    // -->
+
+    // when active texteditor is changed, run diagnostics on the new active document in the texteditor
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(async (textEditor: vscode.TextEditor | undefined) => {
+            if (textEditor === undefined || !client || client.state !== State.Running) {
+                return;
+            }
+
+            const textDocument = textEditor.document;
+            const previewOpen = (previewer.panels.size > 0);
+            if (textDocument.languageId === 'grizzly-gherkin') {
+                await vscode.commands.executeCommand('grizzly-ls/run-diagnostics', textDocument);
+
+                // any preview open? open for this document as well
+                if (previewOpen) {
+                    previewer.preview(textDocument);
+                }
+            }
+        })
+    );
+
+    // restart if any changes to the python environment was made
+    context.subscriptions.push(
         python.environments.onDidChangeActiveEnvironmentPath(async () => {
             if (client) {
                 logger.info('Python environment modified, restarting server');
@@ -248,6 +286,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
         })
     );
 
+    // restart if any related configuration changes has been made
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (event) => {
             if (event.affectsConfiguration('grizzly') && status.isActivated()) {
@@ -257,16 +296,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
         })
     );
 
-    context.subscriptions.push(
-        vscode.workspace.onDidOpenTextDocument(async (textDocument: vscode.TextDocument) => {
-            if (!client && textDocument.languageId === 'grizzly-gherkin') {
-                documentUri = textDocument.uri;
-                await startLanguageServer();
-            }
-        })
-    );
-
-    // hot reload
+    // hot reload if a change to its source was made
     context.subscriptions.push(
         vscode.workspace.onDidSaveTextDocument(async (textDocument: vscode.TextDocument) => {
             if (serverUri !== undefined && textDocument.uri.path.startsWith(serverUri.path)) {
@@ -276,7 +306,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
         })
     );
 
-    // all open files
+    // start if it's not already started, and a `grizzly-gherkin` document is opened
+    context.subscriptions.push(
+        vscode.workspace.onDidOpenTextDocument(async (textDocument: vscode.TextDocument) => {
+            if (!client && textDocument.languageId === 'grizzly-gherkin') {
+                documentUri = textDocument.uri;
+                await startLanguageServer();
+            }
+        })
+    );
+
+    // close preview if file closes
+    context.subscriptions.push(
+        vscode.workspace.onDidCloseTextDocument(async (textDocument: vscode.TextDocument) => {
+            previewer.close(textDocument);
+        })
+    );
+
+    // update preview if text document changes
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeTextDocument(async (event: vscode.TextDocumentChangeEvent) => {
+            const textDocument = event.document;
+            await previewer.update(textDocument);
+        })
+    );
+
+    // start if there are any open `grizzly-gherkin` files open
     vscode.workspace.textDocuments.forEach(async (textDocument: vscode.TextDocument) => {
         if (!client && textDocument.languageId === 'grizzly-gherkin') {
             documentUri = textDocument.uri;
@@ -288,6 +343,35 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
     // https://github.com/microsoft/vscode/blob/f1f645f4ccbee9d56d091b819a81d34af31be17f/src/vs/editor/contrib/links/links.ts#L310-L330
     const configuration = vscode.workspace.getConfiguration('', {languageId: 'grizzly-gherkin'});
     configuration.update('editor.links', false, false, true);
+
+    // add preview capabilities
+    context.subscriptions.push(
+        vscode.commands.registerCommand('grizzly.gherkin.preview.beside', (options: GherkinPreviewOptions) => {
+            if (!client) {
+                if (!notifiedAboutWaiting) {
+                    vscode.window.showWarningMessage('Wait until language server has started');
+                    notifiedAboutWaiting = true;
+                }
+                return;
+            }
+
+            if (!options.content
+                && !options.document
+                && vscode.window.activeTextEditor?.document
+                && vscode.window.activeTextEditor?.document.languageId === 'grizzly-gherkin'
+            ) {
+                options.document = vscode.window.activeTextEditor.document;
+            }
+
+            const execute = (opts: GherkinPreviewOptions) => {
+                previewer.preview(opts.document).then(() => {
+                    logger.debug(`preview panel created for ${opts.document?.uri}`);
+                });
+            };
+
+            execute(options);
+        })
+    );
 
     return status;
 }

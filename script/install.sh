@@ -13,7 +13,7 @@ main() {
         if [[ -n "${*}" && "${*}" == *"+e"* ]]; then
             args=""
         fi
-        python -m pip install $args .[dev,debug] || { exit 1; }
+        python -m pip install --upgrade $args .[dev,debug] || { exit 1; }
         popd &> /dev/null
     fi
 

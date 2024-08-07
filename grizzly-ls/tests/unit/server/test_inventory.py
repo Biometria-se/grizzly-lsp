@@ -165,7 +165,7 @@ def test_compile_inventory(lsp_fixture: LspFixture, caplog: LogCaptureFixture, m
 
     ls.root_path = GRIZZLY_PROJECT
 
-    with caplog.at_level(logging.INFO, 'grizzly_ls.server'):
+    with caplog.at_level(logging.INFO, 'GrizzlyLanguageServer'):
         compile_inventory(ls)
 
     assert len(caplog.messages) == 1

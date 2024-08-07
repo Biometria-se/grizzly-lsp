@@ -26,6 +26,7 @@ def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
         debug=False,
         debug_port=5678,
         debug_wait=False,
+        embedded=False,
     )
 
     sys.argv = [
@@ -51,6 +52,7 @@ def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
         debug=False,
         debug_port=5678,
         debug_wait=False,
+        embedded=False,
     )
 
     sys.argv = ['grizzly-ls', '--version']
@@ -85,6 +87,7 @@ def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
         debug=False,
         debug_port=5678,
         debug_wait=False,
+        embedded=False,
     )
 
     sys.argv = [
@@ -92,6 +95,7 @@ def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
         '--debug',
         '--debug-port=1234',
         '--debug-wait',
+        '--embedded',
         'lint',
         '.',
     ]
@@ -109,6 +113,7 @@ def test_parse_arguments(capsys: CaptureFixture[str]) -> None:
         debug=True,
         debug_port=1234,
         debug_wait=True,
+        embedded=True,
     )
 
 
@@ -118,7 +123,7 @@ def test_setup_logging(mocker: MockerFixture, capsys: CaptureFixture[str]) -> No
     logging_StreamHandler_mock = mocker.patch('grizzly_ls.__main__.logging.StreamHandler', spec_set=logging.StreamHandler)
 
     # <no args>
-    arguments = Namespace(socket=False, verbose=False, no_verbose=None)
+    arguments = Namespace(socket=False, verbose=False, no_verbose=None, embedded=False)
 
     setup_logging(arguments)
 
@@ -137,7 +142,7 @@ def test_setup_logging(mocker: MockerFixture, capsys: CaptureFixture[str]) -> No
     logging_StreamHandler_mock.reset_mock()
 
     # --verbose, --no-verbose pygls behave
-    arguments = Namespace(socket=False, verbose=True, no_verbose=['pygls', 'behave'])
+    arguments = Namespace(socket=False, verbose=True, no_verbose=['pygls', 'behave'], embedded=False)
 
     setup_logging(arguments)
 
@@ -160,7 +165,7 @@ def test_setup_logging(mocker: MockerFixture, capsys: CaptureFixture[str]) -> No
     logging_StreamHandler_mock.reset_mock()
 
     # --socket
-    arguments = Namespace(socket=True, verbose=False, no_verbose=None)
+    arguments = Namespace(socket=True, verbose=False, no_verbose=None, embedded=False)
 
     setup_logging(arguments)
 
@@ -177,6 +182,19 @@ def test_setup_logging(mocker: MockerFixture, capsys: CaptureFixture[str]) -> No
     capture = capsys.readouterr()
     assert capture.err == ''
     assert capture.out == ''
+
+    # --embedded
+    arguments = Namespace(socket=True, verbose=False, no_verbose=None, embedded=True)
+
+    setup_logging(arguments)
+
+    assert logging_basicConfig_mock.call_count == 4
+    _, kwargs = logging_basicConfig_mock.call_args_list[-1]
+    assert kwargs.get('level', None) == logging.INFO
+    assert kwargs.get('format', None) is None
+    handlers = kwargs.get('handlers', None)
+    assert len(handlers) == 0  # no Stream or File handler
+    assert logging_StreamHandler_mock.call_count == 1
 
 
 def test_setup_debugging(mocker: MockerFixture) -> None:

@@ -31,7 +31,7 @@
   "qna": "false",
   "engines": {
     "node": ">=18.12.1",
-    "vscode": "^1.85.0"
+    "vscode": "^1.92.0"
   },
   "extensionDependencies": [
     "ms-python.python"
@@ -70,8 +70,34 @@
         "command": "grizzly.server.inventory.rebuild",
         "title": "Rebuild step inventory",
         "category": "Grizzly"
+      },
+      {
+        "command": "grizzly.server.diagnostics.run",
+        "title": "Run diagnostics",
+        "category": "Grizzly"
+      },
+      {
+        "command": "grizzly.gherkin.preview.beside",
+        "title": "Gherkin Preview",
+        "category": "Grizzly"
       }
     ],
+    "menus": {
+      "editor/title/context": [
+        {
+          "command": "grizzly.gherkin.preview.beside",
+          "group": "gherkin",
+          "when": "resourceLangId == grizzly-gherkin"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "grizzly.gherkin.preview.beside",
+          "group": "navigation@-99",
+          "when": "resourceLangId == grizzly-gherkin"
+        }
+      ]
+    },
     "configuration": {
       "type": "object",
       "title": "Grizzly",
@@ -164,27 +190,32 @@
     "licenses": "npm-license-crawler --json"
   },
   "dependencies": {
+    "@vscode/python-extension": "^1.0.5",
     "vscode-languageclient": "^9.0.1",
-    "@vscode/python-extension": "^1.0.5"
+    "vscode-uri": "^3.0.8"
   },
   "devDependencies": {
-    "@types/chai": "^4.3.11",
+    "@types/chai": "^4.3.17",
     "@types/glob": "^8.1.0",
-    "@types/mocha": "^10.0.6",
-    "@types/node": "^20.10.5",
-    "@types/vscode": "^1.85.0",
-    "@typescript-eslint/eslint-plugin": "^6.15.0",
-    "@typescript-eslint/parser": "^6.15.0",
-    "@vscode/test-electron": "^2.3.8",
-    "chai": "^4.3.10",
-    "esbuild": "^0.19.10",
-    "eslint": "^8.56.0",
-    "eslint-config-standard-with-typescript": "^39.1.1",
+    "@types/mocha": "^10.0.7",
+    "@types/node": "^22.1.0",
+    "@types/vscode": "^1.92.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "@vscode/test-electron": "^2.4.1",
+    "chai": "^4.5.0",
+    "esbuild": "^0.23.0",
+    "eslint": "^8.57.0",
+    "eslint-config-love": "^62.0.0",
     "eslint-plugin-import": "^2.29.1",
-    "eslint-plugin-n": "^16.5.0",
-    "eslint-plugin-promise": "^6.1.1",
-    "mocha": "^10.2.0",
+    "eslint-plugin-n": "^17.10.2",
+    "eslint-plugin-promise": "^7.1.0",
+    "mocha": "^10.7.0",
     "npm-license-crawler": "^0.2.1",
-    "typescript": "^5.3.3"
+    "typescript": "^5.5.4"
+  },
+  "overrides": {
+    "minimatch": "5.1.2",
+    "glob": "8.1.0"
   }
 }

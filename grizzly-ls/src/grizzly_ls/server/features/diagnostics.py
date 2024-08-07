@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import re
 
-from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
-from tokenize import tokenize, TokenError, NAME, ENCODING, STRING
+from typing import Dict, List, Optional, Tuple, Set, TYPE_CHECKING
+from tokenize import tokenize, TokenError, NAME, ENCODING, STRING, OP
 from io import BytesIO
 from pathlib import Path
 from dataclasses import dataclass
+from contextlib import suppress
 
 from pygls.workspace import TextDocument
 from lsprotocol import types as lsp
@@ -54,29 +55,51 @@ def _get_message_from_parse_error(error: ParserError, *, line_map: Optional[Dict
             error.line = lineno - 1
 
     if error.line_text is None:
-        match = re.search(r': "([^"]*)"', message, flags=re.MULTILINE)
-        if match:
-            error.line_text = match.group(1)
+        if '{%' not in message and '%}' not in message:
+            match = re.search(r': "([^"]*)"', message, flags=re.MULTILINE)
+            if match:
+                error.line_text = match.group(1)
 
-            message = re.sub(rf': "{error.line_text}"', '', message, flags=re.MULTILINE).strip()
+                message = re.sub(rf': "{error.line_text}"', '', message, flags=re.MULTILINE).strip()
+        else:
+            message, _ = message.split(':', 1)
 
     # map with un-stripped text, so we get correct ranges in the document
     if error.line_text is not None and line_map is not None:
         error.line_text = line_map.get(error.line_text, error.line_text)
 
-    return character, message.replace('REASON: ', '').strip()
+    message = message.replace('REASON: ', '').strip()
+
+    return character, message
 
 
-def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> List[lsp.Diagnostic]:
-    diagnostics: List[lsp.Diagnostic] = []
+def _remove_scenario_tags(source: str) -> str:
+    # remove any expressions from source, since they messes up behave
+    # feature parsing
+    original_source = source
+    if '{%' in original_source:
+        buffer: List[str] = []
+        for original_line in original_source.splitlines():
+            stripped_line = original_line.lstrip()
+            if stripped_line.startswith('{%'):
+                continue
+            buffer.append(original_line)
+
+        source = '\n'.join(buffer)
+    else:
+        source = original_source
+
+    return source
+
+
+def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> Dict[str, List[lsp.Diagnostic]]:
+    diagnostics: Dict[str, List[lsp.Diagnostic]] = {text_document.uri: []}
     line_map: Dict[str, str] = {}
     included_feature_files: Dict[str, Feature] = {}
 
     ignoring: bool = False
     language: str = 'en'
     zero_line_length = 0
-
-    ls.logger.debug(f'diagnostics for {text_document.uri}')
 
     lines = text_document.source.splitlines()
 
@@ -88,7 +111,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
 
             position = len(line) - len(stripped_line)
 
-            diagnostics.append(
+            diagnostics[text_document.uri].append(
                 lsp.Diagnostic(
                     range=lsp.Range(
                         start=lsp.Position(line=len(lines) - lineno - 1, character=position),
@@ -130,7 +153,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                 # does not exist
                 if len(language.strip()) > 0 and language.strip() not in languages:
                     marker_position = len(marker) + 2
-                    diagnostics.append(
+                    diagnostics[text_document.uri].append(
                         lsp.Diagnostic(
                             range=lsp.Range(
                                 start=lsp.Position(line=lineno, character=marker_position),
@@ -149,7 +172,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
 
             # wrong line
             if lineno != 0:
-                diagnostics.append(
+                diagnostics[text_document.uri].append(
                     lsp.Diagnostic(
                         range=lsp.Range(
                             start=lsp.Position(line=lineno, character=position),
@@ -168,7 +191,6 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
 
         # handle jinja2 expressions
         if stripped_line[:2] == '{%' and stripped_line[-2:] == '%}':
-            ls.logger.debug(stripped_line)
             # only tokenize the actual jinja2 expression, not the markers
             try:
                 tokens = list(tokenize(BytesIO(stripped_line[2:-2].strip().encode()).readline))
@@ -184,9 +206,10 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
 
             arg_scenario: Optional[ArgumentPosition] = None
             arg_feature: Optional[ArgumentPosition] = None
+            arg_variables: List[Tuple[ArgumentPosition, ArgumentPosition]] = []
 
             # check for scenario and feature arguments, can be both positional and named
-            for token in tokens[1:]:
+            for index, token in enumerate(tokens[1:], start=1):
                 # scenario
                 if arg_scenario is None:
                     if token.type == STRING:
@@ -199,11 +222,27 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                     if token.type == STRING:
                         value = token.string.strip('"\'')
                         arg_feature = ArgumentPosition(value, start=token.start[1] + 2, end=token.end[1])
-                        break
+                    continue
+
+                with suppress(IndexError):
+                    if list(map(lambda t: t.type, tokens[index : index + 3])) != [NAME, OP, STRING]:
+                        continue
+
+                    value_token = tokens[index + 2]
+
+                    variable_name = token.string
+                    variable_value = value_token.string.strip('"\'')
+                    offset = len(line) - len(stripped_line) + 3
+                    arg_variables.append(
+                        (
+                            ArgumentPosition(variable_name, start=token.start[1] + offset, end=token.end[1] + offset),
+                            ArgumentPosition(variable_value, start=value_token.start[1] + offset, end=value_token.end[1] + offset),
+                        )
+                    )
 
             # make sure arguments was found
             if arg_scenario is None:
-                diagnostics.append(
+                diagnostics[text_document.uri].append(
                     lsp.Diagnostic(
                         range=lsp.Range(
                             start=lsp.Position(line=lineno, character=position),
@@ -216,7 +255,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                 )
 
             if arg_feature is None:
-                diagnostics.append(
+                diagnostics[text_document.uri].append(
                     lsp.Diagnostic(
                         range=lsp.Range(
                             start=lsp.Position(line=lineno, character=position),
@@ -242,7 +281,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                     feature_file = (base_path / feature_path).resolve()
 
                 if not feature_file.exists():
-                    diagnostics.append(
+                    diagnostics[text_document.uri].append(
                         lsp.Diagnostic(
                             range=lsp.Range(
                                 start=lsp.Position(
@@ -262,15 +301,17 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                     continue
 
                 try:
+                    source = _remove_scenario_tags(feature_file.read_text(encoding='utf-8'))
                     feature = parse_feature(
-                        feature_file.read_text(encoding='utf-8'),
+                        source,
                         language=None,
                         filename=feature_file.as_posix(),
                     )
+                    ls.logger.debug(f'included feature: {feature_file.as_uri()}')
 
                     # it was possible to parse the feature file, but it didn't contain any scenarios
                     if feature is None:
-                        diagnostics.append(
+                        diagnostics[text_document.uri].append(
                             lsp.Diagnostic(
                                 range=lsp.Range(
                                     start=lsp.Position(
@@ -289,18 +330,108 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                         )
                         continue
 
+                    # check if declared variables is used
+                    declared_variables: Set[str] = set()
+                    for arg_variable_name, arg_variable_value in arg_variables:
+                        variable_template = f'\\{{\\$ {arg_variable_name.value} \\$\\}}'
+                        matches = re.finditer(rf'^\s+.*{variable_template}.*$', source, re.MULTILINE)
+                        found_variable = False
+                        declared_variables.add(arg_variable_name.value)
+
+                        for match in matches:
+                            if match.group(0).strip()[0] == '#':
+                                continue
+
+                            found_variable = True
+
+                        if not found_variable:
+                            diagnostics[text_document.uri].append(
+                                lsp.Diagnostic(
+                                    range=lsp.Range(
+                                        start=lsp.Position(line=lineno, character=arg_variable_name.start),
+                                        end=lsp.Position(line=lineno, character=arg_variable_value.end),
+                                    ),
+                                    message=f'Declared variable "{arg_variable_name.value}" is not used in included feature file',
+                                    severity=lsp.DiagnosticSeverity.Error,
+                                    source=ls.__class__.__name__,
+                                )
+                            )
+
+                    # check if variables used has been declared
+                    matches = re.finditer(r'^\s+.*\{\$ ([^\$]+) \$\}.*$', source, re.MULTILINE)
+                    for match in matches:
+                        variable_name = match.group(1)
+                        if variable_name not in declared_variables:
+                            start, end = match.span(0)
+                            pre_text = source.rstrip()[0 : start + end].splitlines()  # rstrip to remove empty lines in the end
+                            match_lineno = len(pre_text[:-1])
+                            current_line = pre_text[-1]
+                            try:
+                                match_start = current_line.index(variable_name)
+                            except ValueError:
+                                continue
+
+                            match_end = match_start + len(variable_name) + len(' $}')
+                            match_start -= len('{$ ')
+
+                            start = len(line) - len(stripped_line)
+                            end = len(line)
+
+                            if feature_file.as_uri() not in diagnostics:
+                                diagnostics.update({feature_file.as_uri(): []})
+
+                            diagnostics[feature_file.as_uri()].append(
+                                lsp.Diagnostic(
+                                    range=lsp.Range(
+                                        start=lsp.Position(line=match_lineno, character=match_start),
+                                        end=lsp.Position(line=match_lineno, character=match_end),
+                                    ),
+                                    message=f'Variable "{variable_name}" has not been declared in scenario tag',
+                                    severity=lsp.DiagnosticSeverity.Error,
+                                    source=ls.__class__.__name__,
+                                )
+                            )
+
+                            diagnostics[text_document.uri].append(
+                                lsp.Diagnostic(
+                                    range=lsp.Range(
+                                        start=lsp.Position(line=lineno, character=start),
+                                        end=lsp.Position(line=lineno, character=end),
+                                    ),
+                                    message=f'Scenario tag is missing variable "{variable_name}"',
+                                    severity=lsp.DiagnosticSeverity.Warning,
+                                    source=ls.__class__.__name__,
+                                )
+                            )
+
                     included_feature_files.update({arg_feature.value: feature})
                 except ParserError as pe:
                     character, message = _get_message_from_parse_error(pe)
+                    character = character or (len(line) - len(stripped_line))
 
-                    diagnostics.append(
+                    diagnostics[text_document.uri].append(
                         lsp.Diagnostic(
                             range=lsp.Range(
                                 start=lsp.Position(line=pe.line or 0, character=character),
                                 end=lsp.Position(
                                     line=pe.line or 0,
-                                    character=len(pe.line_text) - 1 if pe.line_text is not None else zero_line_length,
+                                    character=len(pe.line_text) - 1 if pe.line_text is not None else len(line),
                                 ),
+                            ),
+                            message=message,
+                            severity=lsp.DiagnosticSeverity.Information,
+                            source=ls.__class__.__name__,
+                        )
+                    )
+
+                    if feature_file.as_uri() not in diagnostics:
+                        diagnostics.update({feature_file.as_uri(): []})
+
+                    diagnostics[feature_file.as_uri()].append(
+                        lsp.Diagnostic(
+                            range=lsp.Range(
+                                start=lsp.Position(line=0, character=0),
+                                end=lsp.Position(line=0, character=1000),
                             ),
                             message=message,
                             severity=lsp.DiagnosticSeverity.Error,
@@ -311,7 +442,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
 
             if arg_feature.value == '' or arg_scenario.value == '':
                 if arg_feature.value == '':
-                    diagnostics.append(
+                    diagnostics[text_document.uri].append(
                         lsp.Diagnostic(
                             range=lsp.Range(
                                 start=lsp.Position(
@@ -330,7 +461,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                     )
 
                 if arg_scenario.value == '':
-                    diagnostics.append(
+                    diagnostics[text_document.uri].append(
                         lsp.Diagnostic(
                             range=lsp.Range(
                                 start=lsp.Position(
@@ -356,7 +487,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                 scenario = next(iter([scenario for scenario in feature.scenarios if scenario.name == arg_scenario.value]))
 
                 if len(scenario.steps) < 1:
-                    diagnostics.append(
+                    diagnostics[text_document.uri].append(
                         lsp.Diagnostic(
                             range=lsp.Range(
                                 start=lsp.Position(
@@ -374,7 +505,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                         )
                     )
             except StopIteration:
-                diagnostics.append(
+                diagnostics[text_document.uri].append(
                     lsp.Diagnostic(
                         range=lsp.Range(
                             start=lsp.Position(
@@ -391,7 +522,6 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                         source=ls.__class__.__name__,
                     )
                 )
-
             continue
 
         # check if keywords are valid in the specified language
@@ -406,7 +536,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
             except ValueError:
                 name = ls.localizations.get('name', ['unknown'])[0]
 
-                diagnostics.append(
+                diagnostics[text_document.uri].append(
                     lsp.Diagnostic(
                         range=lsp.Range(
                             start=start_position,
@@ -434,7 +564,7 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                         break
 
             if not found_step:
-                diagnostics.append(
+                diagnostics[text_document.uri].append(
                     lsp.Diagnostic(
                         range=lsp.Range(
                             start=lsp.Position(line=lineno, character=len(line) - len(expression)),
@@ -450,23 +580,13 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
     try:
         # remove any expressions from source, since they messes up behave
         # feature parsing
-        original_source = text_document.source
-        if '{%' in original_source:
-            buffer: List[str] = []
-            for line in original_source.splitlines():
-                stripped_line = line.lstrip()
-                if stripped_line.startswith('{%'):
-                    continue
-                buffer.append(line)
-
-            source = '\n'.join(buffer)
-        else:
-            source = original_source
+        source = _remove_scenario_tags(text_document.source)
 
         parse_feature(source, language=language, filename=text_document.filename)
     except ParserError as pe:
+        ls.logger.debug(str(pe))
         character, message = _get_message_from_parse_error(pe, line_map=line_map)
-        diagnostics.append(
+        diagnostics[text_document.uri].append(
             lsp.Diagnostic(
                 range=lsp.Range(
                     start=lsp.Position(line=pe.line or 0, character=character),
