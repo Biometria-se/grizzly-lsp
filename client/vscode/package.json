@@ -78,8 +78,9 @@
       },
       {
         "command": "grizzly.gherkin.preview.beside",
-        "title": "Gherkin Preview",
-        "category": "Grizzly"
+        "title": "Preview",
+        "category": "Grizzly",
+        "icon": "$(preview)"
       }
     ],
     "menus": {

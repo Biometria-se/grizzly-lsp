@@ -2,8 +2,10 @@ import os
 import subprocess
 import logging
 import re
+import sys
+import traceback
 
-from typing import Dict, List, Optional, Tuple, Set, Union, Iterable
+from typing import Dict, List, Optional, Tuple, Union, Iterable
 from pathlib import Path
 
 from jinja2.lexer import Token, TokenStream
@@ -90,23 +92,40 @@ class LogOutputChannelLogger:
 
         return lsp.MessageType.Log
 
-    def log(self, level: int, message: str) -> None:
+    def get_current_exception(self) -> Optional[str]:
+        _, _, trace = sys.exc_info()
+
+        if trace is None:
+            return trace
+
+        return f'Stack trace:\n{"".join(traceback.format_tb(trace))}'
+
+    def log(self, level: int, message: str, *, exc_info: bool, notify: bool) -> None:
+        msg_type = self.py2lsp_level(level)
         if not self.embedded:
-            self.logger.log(level, message)
+            self.logger.log(level, message, exc_info=exc_info)
         else:
-            self.ls.show_message_log(message, msg_type=self.py2lsp_level(level))  # type: ignore
+            if exc_info:
+                message = f'{message}\n{self.get_current_exception()}'
+            self.ls.show_message_log(message, msg_type=msg_type)  # type: ignore
 
-    def info(self, message: str) -> None:
-        self.log(logging.INFO, message)
+        if notify:
+            self.ls.show_message(message, msg_type=msg_type)  # type: ignore
 
-    def error(self, message: str) -> None:
-        self.log(logging.ERROR, message)
+    def info(self, message: str, *, notify: bool = False) -> None:
+        self.log(logging.INFO, message, exc_info=False, notify=notify)
 
-    def debug(self, message: str) -> None:
-        self.log(logging.DEBUG, message)
+    def error(self, message: str, *, notify: bool = False) -> None:
+        self.log(logging.ERROR, message, exc_info=False, notify=notify)
 
-    def warning(self, message: str) -> None:
-        self.log(logging.WARNING, message)
+    def debug(self, message: str, *, notify: bool = False) -> None:
+        self.log(logging.DEBUG, message, exc_info=False, notify=notify)
+
+    def warning(self, message: str, *, notify: bool = False) -> None:
+        self.log(logging.WARNING, message, exc_info=False, notify=notify)
+
+    def exception(self, message: str, *, notify: bool = False) -> None:
+        self.log(logging.ERROR, message, exc_info=True, notify=notify)
 
 
 class OnlyScenarioTag(StandaloneTag):
@@ -141,42 +160,14 @@ class OnlyScenarioTag(StandaloneTag):
             feature_file = (self.environment.feature_file.parent / feature).resolve()
 
         feature_content = feature_file.read_text()
-        # <!-- sub-render included scenario
-        errors_unused: Set[str] = set()
-        errors_undeclared: Set[str] = set()
-
         # tag has specified variables, so lets "render"
         if len(variables) > 0:
             for name, value in variables.items():
                 variable_template = f'{{$ {name} $}}'
                 if variable_template not in feature_content:
-                    errors_unused.add(name)
                     continue
 
                 feature_content = feature_content.replace(variable_template, value)
-
-        # look for sub-variables that has not been rendered
-        if '{$' in feature_content and '$}' in feature_content:
-            matches = re.finditer(r'\{\$ ([^$]+) \$\}', feature_content, re.MULTILINE)
-
-            for match in matches:
-                errors_undeclared.add(match.group(1))
-
-        if len(errors_undeclared) + len(errors_unused) > 0:
-            scenario_identifier = f'{feature}#{scenario}'
-            buffer_error: List[str] = []
-            if len(errors_unused) > 0:
-                errors_unused_message = "\n  ".join(errors_unused)
-                buffer_error.append(f'the following variables has been declared in scenario tag but not used in {scenario_identifier}:\n  {errors_unused_message}')
-                buffer_error.append('')
-
-            if len(errors_undeclared) > 0:
-                errors_undeclared_message = "\n  ".join(errors_undeclared)
-                buffer_error.append(f'the following variables was used in {scenario_identifier} but was not declared in scenario tag:\n  {errors_undeclared_message}')
-                buffer_error.append('')
-
-            message = '\n'.join(buffer_error)
-            raise ValueError(message)
 
         # check if we have nested `{% scenario .. %}` tags, and render
         if '{% scenario' in feature_content:

@@ -361,18 +361,19 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                     matches = re.finditer(r'^\s+.*\{\$ ([^\$]+) \$\}.*$', source, re.MULTILINE)
                     for match in matches:
                         variable_name = match.group(1)
+                        variable_template = f'{{$ {variable_name} $}}'
+                        ls.logger.debug(f'{variable_name=}, {declared_variables=}, {match=}')
                         if variable_name not in declared_variables:
                             start, end = match.span(0)
-                            pre_text = source.rstrip()[0 : start + end].splitlines()  # rstrip to remove empty lines in the end
+                            pre_text = source[0:end].rstrip().splitlines()  # rstrip to remove empty lines in the end
                             match_lineno = len(pre_text[:-1])
                             current_line = pre_text[-1]
                             try:
-                                match_start = current_line.index(variable_name)
+                                match_start = current_line.index(variable_template)
+                                match_end = match_start + len(variable_template)
                             except ValueError:
+                                ls.logger.exception(f'unable to find {variable_template} in:\n{current_line}')
                                 continue
-
-                            match_end = match_start + len(variable_name) + len(' $}')
-                            match_start -= len('{$ ')
 
                             start = len(line) - len(stripped_line)
                             end = len(line)

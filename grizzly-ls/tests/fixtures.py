@@ -6,6 +6,7 @@ from typing import Literal, Optional, Type, Any
 from threading import Thread
 from pathlib import Path
 from importlib import reload as reload_module
+from logging import DEBUG
 
 from pygls.server import LanguageServer
 from lsprotocol.types import EXIT
@@ -55,6 +56,8 @@ class LspFixture:
                 pass
 
         from grizzly_ls.server import server
+
+        server.logger.logger.setLevel(DEBUG)
 
         server.loop.close()
         server._owns_loop = False
