@@ -52,7 +52,9 @@ export class GherkinPreview {
         return panel;
     }
 
-    private generateHtml(content: string): string {
+    private generateHtml(content: string, success: boolean): string {
+        const language = success ? 'gherkin' : 'python';
+
         return `<!doctype html>
 <html class="no-js" lang="en">
 
@@ -63,7 +65,7 @@ export class GherkinPreview {
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${this.style}.min.css">
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/gherkin.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/${language}.min.js"></script>
   <script>hljs.highlightAll();</script>
 
   <style>
@@ -81,23 +83,29 @@ export class GherkinPreview {
 </head>
 
 <body>
-    <pre><code class="language-gherkin">${content}</code></pre>
+    <pre><code class="language-${language}">${content}</code></pre>
 </body>
 
 </html>`;
     }
 
-    public async update(textDocument: vscode.TextDocument, panel?: vscode.WebviewPanel): Promise<void> {
+    public async update(textDocument: vscode.TextDocument, panel?: vscode.WebviewPanel, on_the_fly: boolean = false): Promise<void> {
         if (!panel) {
             panel = this.panels.get(textDocument.uri);
             if (!panel) return;
         }
 
-        let content = textDocument.getText();
-        const rendered: string | undefined = await vscode.commands.executeCommand('grizzly-ls/render-gherkin', {content, uri: textDocument.uri.path});
-        content = (rendered) ? rendered : 'Failed to render, check output log';
+        const [success, content]: [boolean, string | undefined] = await vscode.commands.executeCommand(
+            'grizzly-ls/render-gherkin', {
+                content: textDocument.getText(),
+                uri: textDocument.uri.path,
+                on_the_fly,
+            }
+        );
 
-        panel.webview.html = this.generateHtml(content);
+        if (content) {
+            panel.webview.html = this.generateHtml(content, success);
+        }
 
         return;
     }
@@ -113,10 +121,12 @@ export class GherkinPreview {
         return false;
     }
 
-    public async preview(textDocument: vscode.TextDocument): Promise<void> {
+    public async preview(textDocument: vscode.TextDocument, only_reveal: boolean = false): Promise<void> {
         let panel = this.panels.get(textDocument.uri);
 
         if (!panel) {
+            if (only_reveal) return;
+
             const content = textDocument.getText();
             if (!content.includes('{% scenario')) {
                 const basename = path.basename(textDocument.uri.path);

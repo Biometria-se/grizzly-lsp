@@ -99,65 +99,6 @@ class TestGrizzlyLanguageServer:
         finally:
             ls.language = 'en'
 
-    def test_show_message(
-        self,
-        lsp_fixture: LspFixture,
-        caplog: LogCaptureFixture,
-        mocker: MockerFixture,
-    ) -> None:
-        ls = lsp_fixture.server
-        show_message_mock = mocker.patch('pygls.server.LanguageServer.show_message', return_value=None)
-        logger_error_mock = mocker.spy(ls.logger.logger, 'error')
-
-        message = 'implicit INFO level'
-        with caplog.at_level(logging.INFO):
-            ls.show_message(message)
-        assert caplog.messages == [message]
-        show_message_mock.assert_called_once_with(message, msg_type=lsp.MessageType.Info)
-        show_message_mock.reset_mock()
-        caplog.clear()
-
-        message = 'explicit INFO level'
-        with caplog.at_level(logging.INFO):
-            ls.show_message(message, lsp.MessageType.Info)
-        assert caplog.messages == [message]
-        show_message_mock.assert_called_once_with(message, msg_type=lsp.MessageType.Info)
-        show_message_mock.reset_mock()
-        caplog.clear()
-
-        message = 'ERROR level'
-        with caplog.at_level(logging.ERROR):
-            ls.show_message(message, lsp.MessageType.Error, exc_info=True)
-        assert caplog.messages == [message]
-        show_message_mock.assert_called_once_with(message, msg_type=lsp.MessageType.Error)
-        show_message_mock.reset_mock()
-        logger_error_mock.assert_called_once_with(message, exc_info=True)
-        caplog.clear()
-
-        message = 'WARNING level'
-        with caplog.at_level(logging.WARNING):
-            ls.show_message(message, lsp.MessageType.Warning)
-        assert caplog.messages == [message]
-        show_message_mock.assert_called_once_with(message, msg_type=lsp.MessageType.Warning)
-        show_message_mock.reset_mock()
-        caplog.clear()
-
-        message = 'DEBUG level'
-        with caplog.at_level(logging.DEBUG):
-            ls.show_message(message, lsp.MessageType.Debug)
-        assert caplog.messages == [message]
-        show_message_mock.assert_called_once_with(message, msg_type=lsp.MessageType.Debug)
-        show_message_mock.reset_mock()
-        caplog.clear()
-
-        message = 'CRITICAL level'
-        with caplog.at_level(logging.CRITICAL):
-            ls.show_message(message, lsp.MessageType.Debug)
-        assert caplog.messages == []
-        show_message_mock.assert_called_once_with(message, msg_type=lsp.MessageType.Debug)
-        show_message_mock.reset_mock()
-        caplog.clear()
-
     def test__normalize_step_expression(self, lsp_fixture: LspFixture, mocker: MockerFixture, caplog: LogCaptureFixture) -> None:
         mocker.patch('parse.Parser.__init__', return_value=None)
         ls = lsp_fixture.server

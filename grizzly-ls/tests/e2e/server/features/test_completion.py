@@ -1,5 +1,3 @@
-import logging
-
 from typing import Optional, Dict, List, Any, cast
 from pathlib import Path
 
@@ -44,13 +42,7 @@ def completion(
         work_done_token=None,
     )
 
-    logger = logging.getLogger()
-    level = logger.getEffectiveLevel()
-    try:
-        logger.setLevel(logging.DEBUG)
-        response = client.lsp.send_request(lsp.TEXT_DOCUMENT_COMPLETION, params).result(timeout=3)  # type: ignore
-    finally:
-        logger.setLevel(level)
+    response = client.lsp.send_request(lsp.TEXT_DOCUMENT_COMPLETION, params).result(timeout=3)  # type: ignore
 
     assert response is None or isinstance(response, lsp.CompletionList)
 

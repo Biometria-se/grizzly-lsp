@@ -264,14 +264,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
             }
 
             const textDocument = textEditor.document;
-            const previewOpen = (previewer.panels.size > 0);
             if (textDocument.languageId === 'grizzly-gherkin') {
                 await vscode.commands.executeCommand('grizzly-ls/run-diagnostics', textDocument);
-
-                // any preview open? open for this document as well
-                if (previewOpen) {
-                    previewer.preview(textDocument);
-                }
+                previewer.preview(textDocument, true);
             }
         })
     );
@@ -303,6 +298,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
                 logger.info(`Hot-reloading server: ${textDocument.uri.toString()} modified`);
                 await startLanguageServer();
             }
+
+            await previewer.update(textDocument);
         })
     );
 
@@ -327,7 +324,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
     context.subscriptions.push(
         vscode.workspace.onDidChangeTextDocument(async (event: vscode.TextDocumentChangeEvent) => {
             const textDocument = event.document;
-            await previewer.update(textDocument);
+            await previewer.update(textDocument, undefined, true);
         })
     );
 
