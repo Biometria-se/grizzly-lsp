@@ -60,8 +60,7 @@ async function installExtension(vscodeExecutablePath: string, extensionId: strin
 
         return extensionDevelopmentPathExtra;
     }
-
-    throw new Error(`could not find extension ${extensionId}`);
+    console.warn(`could not find extension ${extensionId}, could cause problems`);
 }
 
 async function main() {
