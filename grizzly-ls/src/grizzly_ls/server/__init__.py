@@ -760,6 +760,7 @@ def text_document_code_action(
             return generate_quick_fixes(ls, text_document, diagnostics)
     except:
         ls.logger.exception('failed to generate quick fixes', notify=True)
+        return None
 
 
 @server.command(COMMAND_REBUILD_INVENTORY)
@@ -819,6 +820,18 @@ def command_render_gherkin(ls: GrizzlyLanguageServer, *args: Any) -> Tuple[bool,
     try:
         template = environment.from_string(content)
         content = template.render()
+        buffer: List[str] = []
+        # <!-- sanatize content
+        for line in content.splitlines():
+            # make any html tag characters in comments are replaced with respective html entity code
+            if line.lstrip()[0] == '#':
+                line = line.replace('<', '&lt;')
+                line = line.replace('>', '&gt;')
+            buffer.append(line)
+        # // -->
+
+        content = '\n'.join(buffer)
+
         return True, content
     except Exception:
         if not on_the_fly:

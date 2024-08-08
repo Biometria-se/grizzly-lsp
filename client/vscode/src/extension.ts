@@ -266,6 +266,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
             const textDocument = textEditor.document;
             if (textDocument.languageId === 'grizzly-gherkin') {
                 await vscode.commands.executeCommand('grizzly-ls/run-diagnostics', textDocument);
+                previewer.preview(textDocument, true);
             }
         })
     );

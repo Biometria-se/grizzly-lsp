@@ -12,7 +12,6 @@ from importlib import import_module
 from pathlib import Path, PurePath
 from contextlib import suppress
 
-from lsprotocol.types import MessageType
 from behave.matchers import ParseMatcher
 from behave.runner_util import load_step_modules as behave_load_step_modules
 from behave.i18n import languages
@@ -145,10 +144,9 @@ def compile_inventory(ls: GrizzlyLanguageServer, *, standalone: bool = False) ->
                 ls.behave_steps.update(load_step_registry([path]))
     except Exception as e:
         if not standalone:
-            ls.show_message(
+            ls.logger.exception(
                 f'unable to load behave step expressions:\n{str(e)}',
-                msg_type=MessageType.Error,
-                exc_info=True,
+                notify=True,
             )
             return
 
@@ -158,7 +156,7 @@ def compile_inventory(ls: GrizzlyLanguageServer, *, standalone: bool = False) ->
         ls.normalizer = create_step_normalizer()
     except ValueError as e:
         if not standalone:
-            ls.show_message(str(e), msg_type=MessageType.Error)
+            ls.logger.exception('unable to normalize step expression', notify=True)
             return
 
         raise e

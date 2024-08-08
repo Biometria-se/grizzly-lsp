@@ -54,6 +54,7 @@ export class GherkinPreview {
 
     private generateHtml(content: string, success: boolean): string {
         const language = success ? 'gherkin' : 'python';
+
         return `<!doctype html>
 <html class="no-js" lang="en">
 
@@ -120,10 +121,12 @@ export class GherkinPreview {
         return false;
     }
 
-    public async preview(textDocument: vscode.TextDocument): Promise<void> {
+    public async preview(textDocument: vscode.TextDocument, only_reveal: boolean = false): Promise<void> {
         let panel = this.panels.get(textDocument.uri);
 
         if (!panel) {
+            if (only_reveal) return;
+
             const content = textDocument.getText();
             if (!content.includes('{% scenario')) {
                 const basename = path.basename(textDocument.uri.path);
