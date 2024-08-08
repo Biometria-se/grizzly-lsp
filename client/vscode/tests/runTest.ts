@@ -3,7 +3,7 @@ import * as cp from 'child_process';
 import * as fs from 'fs/promises';
 
 import { homedir, tmpdir } from 'os';
-import { runTests, downloadAndUnzipVSCode, resolveCliArgsFromVSCodeExecutablePath } from '@vscode/test-electron';
+import { runTests, downloadAndUnzipVSCode, resolveCliArgsFromVSCodeExecutablePath, runVSCodeCommand } from '@vscode/test-electron';
 
 async function installExtension(vscodeExecutablePath: string, extensionId: string): Promise<string> {
     const home = homedir();
@@ -60,13 +60,16 @@ async function installExtension(vscodeExecutablePath: string, extensionId: strin
 
         return extensionDevelopmentPathExtra;
     }
-    console.warn(`could not find extension ${extensionId}, could cause problems`);
+
+    throw Error(`could not find extension ${extensionId}`);
 }
 
 async function main() {
     try {
 
         const vscodeExecutablePath = await downloadAndUnzipVSCode();
+        await runVSCodeCommand(['--install-extension', 'ms-python.python', '--force']);
+
         const extensionDevelopmentPathExtra = await installExtension(vscodeExecutablePath, 'ms-python.python');
 
         // The folder containing the Extension Manifest package.json

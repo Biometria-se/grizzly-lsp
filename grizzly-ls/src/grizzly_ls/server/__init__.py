@@ -30,6 +30,7 @@ from pip._internal.exceptions import ConfigurationError as PipConfigurationError
 from time import sleep
 from collections import deque
 from logging import ERROR
+from contextlib import suppress
 
 from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
@@ -824,9 +825,11 @@ def command_render_gherkin(ls: GrizzlyLanguageServer, *args: Any) -> Tuple[bool,
         # <!-- sanatize content
         for line in content.splitlines():
             # make any html tag characters in comments are replaced with respective html entity code
-            if line.lstrip()[0] == '#':
-                line = line.replace('<', '&lt;')
-                line = line.replace('>', '&gt;')
+            with suppress(Exception):
+                if line.lstrip()[0] == '#':
+                    line = line.replace('<', '&lt;')
+                    line = line.replace('>', '&gt;')
+
             buffer.append(line)
         # // -->
 
