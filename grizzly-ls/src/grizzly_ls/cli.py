@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List, Optional, Dict
 from argparse import Namespace as Arguments
 from pathlib import Path
 
@@ -30,18 +30,21 @@ def _get_severity_color(severity: Optional[DiagnosticSeverity]) -> str:
     return Fore.RESET
 
 
-def diagnostic_to_text(filename: str, diagnostic: Diagnostic) -> str:
+def diagnostic_to_text(filename: str, diagnostic: Diagnostic, max_length: int) -> str:
     color = _get_severity_color(diagnostic.severity)
-    severity = diagnostic.severity.name if diagnostic.severity is not None else 'UNKNOWN'
+    severity = diagnostic.severity.name if diagnostic.severity is not None else 'unknown'
     message = ': '.join(diagnostic.message.split('\n'))
 
-    return '\t'.join(
-        [
-            f'{filename}:{diagnostic.range.start.line + 1}:{diagnostic.range.start.character + 1}',
-            f'{color}{severity.lower()}{Fore.RESET}',
-            message,
-        ]
-    )
+    message_file = f'{filename}:{diagnostic.range.start.line + 1}:{diagnostic.range.start.character + 1}'
+    message_severity = f'{color}{severity.lower()}{Fore.RESET}'
+
+    # take line number into consideration, max 9999:9999
+    max_length += 9
+
+    # color and reset codes makes the string 10 bytes longer than the actual text length -+
+    #                                                                                     |
+    #                                                        v----------------------------+
+    return f'{message_file:<{max_length}} {message_severity:<17} {message}'
 
 
 def cli(ls: GrizzlyLanguageServer, args: Arguments) -> int:
@@ -71,19 +74,31 @@ def cli(ls: GrizzlyLanguageServer, args: Arguments) -> int:
                 files.append(file)
 
     rc: int = 0
+    grouped_diagnostics: Dict[str, List[Diagnostic]] = {}
+    max_length = 0
+
     for file in files:
         text_document = TextDocument(file.resolve().as_uri())
         ls.language = find_language(text_document.source)
         diagnostics = validate_gherkin(ls, text_document)
 
-        if len(diagnostics) < 1:
-            continue
+        for uri, _diagnostics in diagnostics.items():
+            if len(_diagnostics) < 1:
+                continue
 
+            file = Path(uri.replace('file://', ''))
+            filename = file.as_posix().replace(Path.cwd().as_posix(), '').lstrip('/\\')
+            max_length = max(max_length, len(filename))
+
+            if filename not in grouped_diagnostics:
+                grouped_diagnostics.update({filename: []})
+
+            grouped_diagnostics[filename].extend(_diagnostics)
+
+    if len(grouped_diagnostics) > 0:
         rc = 1
 
-        filename = file.as_posix().replace(Path.cwd().as_posix(), '').lstrip('/\\')
-
-        for diagnostic in diagnostics[text_document.uri]:
-            print(diagnostic_to_text(filename, diagnostic))
+    for filename, _diagnostics in grouped_diagnostics.items():
+        print('\n'.join(diagnostic_to_text(filename, diagnostic, max_length) for diagnostic in _diagnostics))
 
     return rc
