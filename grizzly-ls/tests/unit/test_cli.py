@@ -23,4 +23,4 @@ def test_diagnostic_to_text() -> None:
         source='test_diagnostic_to_text',
     )
 
-    assert diagnostic_to_text('foobar.feature', diagnostic) == '\t'.join(['foobar.feature:10:11', f'{Fore.YELLOW}warning{Fore.RESET}', 'foobar'])
+    assert diagnostic_to_text('foobar.feature', diagnostic, max_length=14) == f'foobar.feature:10:11    {Fore.YELLOW}warning{Fore.RESET} foobar'

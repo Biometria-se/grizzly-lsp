@@ -30,17 +30,15 @@ from pip._internal.exceptions import ConfigurationError as PipConfigurationError
 from time import sleep
 from collections import deque
 from logging import ERROR
-from contextlib import suppress
 
 from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
 from pygls.capabilities import get_capability
 from lsprotocol import types as lsp
-from jinja2 import Environment
 
 from grizzly_ls import __version__
 from grizzly_ls.text import Normalizer, get_step_parts
-from grizzly_ls.utils import run_command, OnlyScenarioTag, LogOutputChannelLogger
+from grizzly_ls.utils import run_command, LogOutputChannelLogger
 from grizzly_ls.model import Step
 from grizzly_ls.constants import FEATURE_INSTALL, COMMAND_REBUILD_INVENTORY, COMMAND_RUN_DIAGNOSTICS, COMMAND_RENDER_GHERKIN, LANGUAGE_ID
 from grizzly_ls.text import (
@@ -62,6 +60,7 @@ from .features.definition import get_step_definition, get_file_url_definition
 from .features.diagnostics import validate_gherkin
 from .features.code_actions import generate_quick_fixes
 from .inventory import compile_inventory, compile_keyword_inventory
+from .commands import render_gherkin
 
 
 class GrizzlyLanguageServer(LanguageServer):
@@ -803,41 +802,18 @@ def command_render_gherkin(ls: GrizzlyLanguageServer, *args: Any) -> Tuple[bool,
     options = cast(Dict[str, str], args[0][0])
 
     content = options.get('content', None)
-    uri = options.get('uri', None)
+    path = options.get('path', None)
     on_the_fly = options.get('on_the_fly', False)
 
-    if content is None or uri is None:
+    if content is None or path is None:
         content = 'no content to preview'
         ls.logger.error(content, notify=True)
         return False, content
 
-    OnlyScenarioTag.logger = ls.logger
-
-    feature_file = Path(uri)
-
-    environment = Environment(autoescape=False, extensions=[OnlyScenarioTag])
-    environment.extend(feature_file=feature_file)
-
     try:
-        template = environment.from_string(content)
-        content = template.render()
-        buffer: List[str] = []
-        # <!-- sanatize content
-        for line in content.splitlines():
-            # make any html tag characters in comments are replaced with respective html entity code
-            with suppress(Exception):
-                if line.lstrip()[0] == '#':
-                    line = line.replace('<', '&lt;')
-                    line = line.replace('>', '&gt;')
-
-            buffer.append(line)
-        # // -->
-
-        content = '\n'.join(buffer)
-
-        return True, content
+        return True, render_gherkin(path, content, ls.logger.logger)
     except Exception:
         if not on_the_fly:
-            ls.logger.exception(f'failed to render {uri}', notify=True)
+            ls.logger.exception(f'failed to render {path}', notify=True)
             return False, f'Failed to render\n{ls.logger.get_current_exception()}'
         return False, None

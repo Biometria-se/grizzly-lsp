@@ -46,8 +46,6 @@
         "python.testing.pytestArgs": [
           "-c",
           "./pyproject.toml",
-          "-o",
-          "testpaths=tests",
           "--cov-reset",
           "--cov=./src/grizzly_ls",
           "--cov-report=xml:./.coverage.xml",
@@ -61,7 +59,7 @@
         ],
         "coverage-gutters.ignoredPathGlobs": "**/{node_modules,venv,.venv,vendor,tests}/**",
         "editor.codeActionsOnSave": {
-          "source.fixAll.eslint": true
+          "source.fixAll.eslint": "always"
         },
         "eslint.validate": [
           "typescript"

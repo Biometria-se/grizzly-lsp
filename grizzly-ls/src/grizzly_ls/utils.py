@@ -7,6 +7,7 @@ import traceback
 
 from typing import Dict, List, Optional, Tuple, Union, Iterable
 from pathlib import Path
+from logging import Logger
 
 from jinja2.lexer import Token, TokenStream
 from jinja2_simple_tags import StandaloneTag
@@ -130,7 +131,7 @@ class LogOutputChannelLogger:
 
 class OnlyScenarioTag(StandaloneTag):
     tags = {'scenario'}
-    logger: LogOutputChannelLogger
+    logger: Logger
 
     def preprocess(self, source: str, name: Optional[str], filename: Optional[str] = None) -> str:
         self._source = source
