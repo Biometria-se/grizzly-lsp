@@ -811,7 +811,7 @@ def command_render_gherkin(ls: GrizzlyLanguageServer, *args: Any) -> Tuple[bool,
         return False, content
 
     try:
-        return True, render_gherkin(path, content, ls.logger.logger)
+        return True, render_gherkin(path, content)
     except Exception:
         if not on_the_fly:
             ls.logger.exception(f'failed to render {path}', notify=True)

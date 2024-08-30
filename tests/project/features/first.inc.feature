@@ -6,4 +6,4 @@ Feature:
       hello
       world
       """
-    {% scenario "second", feature="./second.inc.feature", bar="foo" %}
+    {% scenario "second", feature="./second.inc.feature", bar="foo", condition=True %}

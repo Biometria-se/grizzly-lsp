@@ -170,7 +170,6 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
         for expected_step in [
             'set context variable "" to ""',
             'ask for value of variable ""',
-            'set global context variable "" to ""',
             'set alias "" for variable ""',
             'value for variable "" is ""',
         ]:

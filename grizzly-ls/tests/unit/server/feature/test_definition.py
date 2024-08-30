@@ -1,4 +1,5 @@
 import sys
+import logging
 
 from pathlib import Path
 from shutil import rmtree
@@ -6,6 +7,8 @@ from inspect import getsourcelines
 
 from lsprotocol import types as lsp
 from pygls.workspace import Workspace
+
+from _pytest.logging import LogCaptureFixture
 
 from grizzly_ls.server.features.definition import (
     get_step_definition,
@@ -50,7 +53,7 @@ def test_get_step_definition(lsp_fixture: LspFixture) -> None:
     )
 
 
-def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
+def test_get_file_url_definition(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> None:
     ls = lsp_fixture.server
     ls.root_path = GRIZZLY_PROJECT
     ls.lsp._workspace = Workspace(ls.root_path.as_uri())
@@ -61,7 +64,20 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
     test_file.touch()
 
     test_feature_file_included = ls.root_path / 'features' / 'included.feature'
-    test_feature_file_included.touch()
+    test_feature_file_included.write_text(
+        """Feature: test feature
+    Background: common steps
+
+    Scenario: world
+        Then log message "boo"
+
+    Scenario: hello
+        Then log message "yay"
+
+    Scenario: foo
+        Then log messge "bar"
+"""
+    )
 
     def get_platform_uri(uri: str) -> str:
         # windows is case-insensitive, and drive letter can be different case...
@@ -156,18 +172,22 @@ def test_get_file_url_definition(lsp_fixture: LspFixture) -> None:
         position.character = 30
         for path in ['', './', f'{test_feature_file_included.parent.as_posix()}/']:
             feature_argument = f'{path}included.feature'
-            actual_definitions = get_file_url_definition(ls, params, f'{{% scenario "hello", feature="{feature_argument}" %}}')
+            position = lsp.Position(line=0, character=32)
+            params = lsp.DefinitionParams(text_document, position)
+            with caplog.at_level(logging.DEBUG):
+                actual_definitions = get_file_url_definition(ls, params, f'{{% scenario "hello", feature="{feature_argument}" %}}')
+
             assert len(actual_definitions) == 1
             actual_definition = actual_definitions[0]
             assert get_platform_uri(actual_definition.target_uri) == get_platform_uri(test_feature_file_included.as_uri())
 
             assert actual_definition.target_range == lsp.Range(
-                start=lsp.Position(line=0, character=0),
-                end=lsp.Position(line=0, character=0),
+                start=lsp.Position(line=6, character=19),
+                end=lsp.Position(line=6, character=19),
             )
             assert actual_definition.target_selection_range == lsp.Range(
-                start=lsp.Position(line=0, character=0),
-                end=lsp.Position(line=0, character=0),
+                start=lsp.Position(line=6, character=19),
+                end=lsp.Position(line=6, character=19),
             )
             assert actual_definition.origin_selection_range == lsp.Range(
                 start=lsp.Position(line=0, character=30),

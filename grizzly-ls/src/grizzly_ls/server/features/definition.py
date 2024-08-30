@@ -79,8 +79,14 @@ def get_file_url_definition(
     stripped_line = current_line.strip()
     is_expression = stripped_line[:2] == '{%' and stripped_line[-2:] == '%}'
 
+    line_variables: List[str] = []
+
     for variable_match in matches:
         variable_value = variable_match.group(1)
+
+        target_line = 0
+        target_char_start = 0
+        target_char_end = 0
 
         if 'file://' in variable_value:
             file_match = re.search(r'.*(file:\/\/)([^\$]*)', variable_value)
@@ -110,13 +116,28 @@ def get_file_url_definition(
         else:
             # this is quite grizzly specific...
             if is_expression:
-                ls.logger.debug(f'{variable_value=}')
                 base_path = Path(text_document.path).parent
                 variable_path = Path(variable_value)
                 if variable_path.is_absolute():
                     payload_file = variable_path.resolve()
                 else:
                     payload_file = (base_path / variable_path).resolve()
+
+                # scenario name is the argument before the feature file
+                if len(line_variables) == 1 and payload_file.exists():
+                    scenario_name = line_variables[0]
+
+                    payload_text = payload_file.read_text()
+                    marker = f'Scenario: {scenario_name}'
+                    scenario_pos = payload_text.index(marker) + len(marker)
+                    payload_text_suffix = payload_text[:scenario_pos].split('\n')
+
+                    target_line = len(payload_text_suffix) - 1
+                    target_char_start = target_char_end = len(payload_text_suffix[-1])
+
+                    ls.logger.debug(f'scenario {scenario_name} found at line {target_line} in {payload_file.as_posix()}')
+
+                line_variables.append(variable_value)
             else:
                 payload_file = ls.root_path / 'features' / 'requests' / variable_value
 
@@ -133,8 +154,8 @@ def get_file_url_definition(
         # don't add link definition if cursor is out side of range for that link
         if params.position.character >= start and params.position.character <= end:
             range = lsp.Range(
-                start=lsp.Position(line=0, character=0),
-                end=lsp.Position(line=0, character=0),
+                start=lsp.Position(line=target_line, character=target_char_start),
+                end=lsp.Position(line=target_line, character=target_char_end),
             )
 
             definitions.append(

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 from grizzly_ls.server.commands import render_gherkin
@@ -27,7 +26,7 @@ def test_render_gherkin() -> None:
     )
 
     assert (
-        render_gherkin(feature_file.as_posix(), content, logging.getLogger())
+        render_gherkin(feature_file.as_posix(), content)
         == """Feature: Template feature file
   Scenario: Template scenario
     # &lt;!-- hello
@@ -43,5 +42,9 @@ def test_render_gherkin() -> None:
       \"\"\"
     Then log message "foo=foo"
       | foo | bar |
-      | bar | foo |"""
+      | bar | foo |
+
+    # &lt;!-- conditional steps --&gt;
+    Then log message "foobar"
+""".rstrip()
     )
