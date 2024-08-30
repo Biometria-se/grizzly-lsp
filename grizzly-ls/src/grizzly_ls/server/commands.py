@@ -6,7 +6,7 @@ from contextlib import suppress
 
 from jinja2 import Environment
 
-from grizzly_ls.utils import OnlyScenarioTag
+from grizzly_ls.utils import ScenarioTag
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -14,8 +14,7 @@ if TYPE_CHECKING:
 
 def render_gherkin(path: str, content: str, logger: Logger) -> str:
     feature_file = Path(path)
-    OnlyScenarioTag.logger = logger
-    environment = Environment(autoescape=False, extensions=[OnlyScenarioTag])
+    environment = Environment(autoescape=False, extensions=[ScenarioTag])
     environment.extend(feature_file=feature_file)
     template = environment.from_string(content)
     content = template.render()
