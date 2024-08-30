@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, TYPE_CHECKING
+from typing import List
 from pathlib import Path
 from contextlib import suppress
 
@@ -8,11 +8,8 @@ from jinja2 import Environment
 
 from grizzly_ls.utils import ScenarioTag
 
-if TYPE_CHECKING:
-    from logging import Logger
 
-
-def render_gherkin(path: str, content: str, logger: Logger) -> str:
+def render_gherkin(path: str, content: str) -> str:
     feature_file = Path(path)
     environment = Environment(autoescape=False, extensions=[ScenarioTag])
     environment.extend(feature_file=feature_file)
