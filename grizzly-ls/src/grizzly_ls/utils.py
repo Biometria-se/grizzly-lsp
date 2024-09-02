@@ -5,7 +5,7 @@ import re
 import sys
 import traceback
 
-from typing import Dict, List, Optional, Tuple, Union, Iterable, Set
+from typing import Dict, List, Optional, Tuple, Union, Iterable, Set, Any
 from pathlib import Path
 from contextlib import suppress
 from textwrap import dedent
@@ -70,6 +70,20 @@ def run_command(
     process.wait()
 
     return process.returncode, output
+
+
+class MissingScenario(Exception):
+    scenario: str
+    feature: str
+
+    def __init__(self, *args: Any, scenario: str, feature: str, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+
+        self.scenario = scenario
+        self.feature = feature
+
+    def __str__(self) -> str:
+        return f'Scenario "{self.scenario}" does not exist in included feature "{self.feature}"'
 
 
 class LogOutputChannelLogger:
@@ -139,6 +153,64 @@ class ScenarioTag(StandaloneTag):
 
         return super().preprocess(source, name, filename)
 
+    @classmethod
+    def get_scenario_text(cls, name: str, file: Path) -> str:
+        content = file.read_text()
+
+        content_skel = re.sub(r'\{%.*%\}', '', content)
+        content_skel = re.sub(r'\{\$.*\$\}', '', content_skel)
+
+        assert len(content.splitlines()) == len(content_skel.splitlines()), 'oops, there is not a 1:1 match between lines!'
+
+        feature = parse_feature(content_skel, filename=file.as_posix())
+        if feature is None:
+            raise ValueError(f'{file.as_posix()} does not have any scenarios')
+
+        lines = content.splitlines()
+
+        scenario_index: int = -1
+        target_scenario: Optional[Scenario] = None
+
+        for scenario_index, scenario in enumerate(feature.scenarios):
+            if scenario.name == name:
+                target_scenario = scenario
+                break
+
+        if target_scenario is None:
+            raise MissingScenario(scenario=name, feature=file.as_posix())
+
+        # check if there are scenarios after our scenario in the source
+        next_scenario: Optional[Scenario] = None
+        with suppress(IndexError):
+            next_scenario = feature.scenarios[scenario_index + 1]
+
+        if next_scenario is None:  # last scenario, take everything until the end
+            scenario_lines = lines[target_scenario.line :]
+        else:  # take everything up until where the next scenario starts
+            scenario_lines = lines[target_scenario.line : next_scenario.line - 1]
+            if scenario_lines[-1] == '':  # if last line is an empty line, lets remove it
+                scenario_lines.pop()
+
+        # remove any scenario text/comments
+        if len(scenario_lines) > 0:
+            offset = 0
+
+            if scenario_lines[0].strip() == '"""':
+                try:
+                    offset = scenario_lines[1:].index(scenario_lines[0]) + 1 + 1
+                except:
+                    offset = 0
+            elif scenario_lines[0].strip().startswith('"""') and scenario_lines[0].strip().endswith('"""'):
+                offset = 1
+
+            if offset > 0:
+                scenario_lines = scenario_lines[offset:]
+
+            # first line can have incorrect indentation
+            scenario_lines[0] = dedent(scenario_lines[0])
+
+        return '\n'.join(scenario_lines)
+
     def render(self, scenario: str, feature: str, **variables: str) -> str:
         feature_file = Path(feature)
 
@@ -146,7 +218,10 @@ class ScenarioTag(StandaloneTag):
         if not feature_file.exists():
             feature_file = (self.environment.feature_file.parent / feature).resolve()
 
-        feature_content = feature_file.read_text()
+        scenario_content = self.get_scenario_text(scenario, feature_file)
+
+        ignore_errors = getattr(self.environment, 'ignore_errors', False)
+
         # <!-- sub-render included scenario
         errors_unused: Set[str] = set()
         errors_undeclared: Set[str] = set()
@@ -154,76 +229,45 @@ class ScenarioTag(StandaloneTag):
         # tag has specified variables, so lets "render"
         for name, value in variables.items():
             variable_template = f'{{$ {name} $}}'
-            if variable_template not in feature_content:
+            if variable_template not in scenario_content:
                 errors_unused.add(name)
                 continue
 
-            feature_content = feature_content.replace(variable_template, str(value))
+            scenario_content = scenario_content.replace(variable_template, str(value))
 
         # look for sub-variables that has not been rendered
-        if '{$' in feature_content and '$}' in feature_content:
-            matches = re.finditer(r'\{\$ ([^$]+) \$\}', feature_content, re.MULTILINE)
+        if not ignore_errors:
+            if '{$' in scenario_content and '$}' in scenario_content:
+                matches = re.finditer(r'\{\$ ([^$]+) \$\}', scenario_content, re.MULTILINE)
 
-            for match in matches:
-                errors_undeclared.add(match.group(1))
+                for match in matches:
+                    errors_undeclared.add(match.group(1))
 
-        if len(errors_undeclared) + len(errors_unused) > 0:
-            scenario_identifier = f'{feature}#{scenario}'
-            buffer_error: List[str] = []
-            if len(errors_unused) > 0:
-                errors_unused_message = "\n  ".join(errors_unused)
-                buffer_error.append(f'the following variables has been declared in scenario tag but not used in {scenario_identifier}:\n  {errors_unused_message}')
-                buffer_error.append('')
+            if len(errors_undeclared) + len(errors_unused) > 0:
+                scenario_identifier = f'{feature}#{scenario}'
+                buffer_error: List[str] = []
+                if len(errors_unused) > 0:
+                    errors_unused_message = "\n  ".join(errors_unused)
+                    buffer_error.append(f'the following variables has been declared in scenario tag but not used in {scenario_identifier}:\n  {errors_unused_message}')
+                    buffer_error.append('')
 
-            if len(errors_undeclared) > 0:
-                errors_undeclared_message = "\n  ".join(errors_undeclared)
-                buffer_error.append(f'the following variables was used in {scenario_identifier} but was not declared in scenario tag:\n  {errors_undeclared_message}')
-                buffer_error.append('')
+                if len(errors_undeclared) > 0:
+                    errors_undeclared_message = "\n  ".join(errors_undeclared)
+                    buffer_error.append(f'the following variables was used in {scenario_identifier} but was not declared in scenario tag:\n  {errors_undeclared_message}')
+                    buffer_error.append('')
 
-            message = '\n'.join(buffer_error)
-            raise ValueError(message)
+                message = '\n'.join(buffer_error)
+                raise ValueError(message)
 
-        # check if we have nested `{% scenario .. %}` tags, and render
-        if '{%' in feature_content and '%}' in feature_content:
+        # check if we have nested statements (`{% .. %}`), and render again if that is the case
+        if '{%' in scenario_content and '%}' in scenario_content:
             environment = self.environment.overlay()
-            environment.extend(feature_file=feature_file)
-            template = environment.from_string(feature_content)
-            feature_content = template.render()
+            setattr(environment, 'feature_file', feature_file)
+            template = environment.from_string(scenario_content)
+            scenario_content = template.render()
         # // -->
 
-        source_lines = feature_content.splitlines()
-
-        parsed_feature = parse_feature(feature_content, filename=feature_file.as_posix())
-        if parsed_feature is None:
-            raise ValueError(f'unable to parse {feature_file.as_posix()}')
-
-        parsed_scenarios = parsed_feature.scenarios
-        parsed_scenario: Optional[Scenario] = None
-        scenario_index: int = -1
-
-        for scenario_index, parsed_scenario in enumerate(parsed_scenarios):
-            if parsed_scenario.name == scenario:
-                break
-
-        if parsed_scenario is None:
-            raise ValueError(f'could not find {scenario} in {feature_file.as_posix()}')
-
-        # check if there are scenarios after our scenario in the source
-        next_scenario: Optional[Scenario] = None
-        with suppress(IndexError):
-            next_scenario = parsed_scenarios[scenario_index + 1]
-
-        if next_scenario is None:  # last scenario, take everything until the end
-            target_lines = source_lines[parsed_scenario.line :]
-        else:  # take everything up until where the next scenario starts
-            target_lines = source_lines[parsed_scenario.line : next_scenario.line - 1]
-            if target_lines[-1] == '':  # if last line is an empty line, lets remove it
-                target_lines.pop()
-
-        # first line can have incorrect indentation
-        target_lines[0] = dedent(target_lines[0])
-
-        return '\n'.join(target_lines)
+        return scenario_content
 
     def filter_stream(self, stream: TokenStream) -> Union[TokenStream, Iterable[Token]]:  # type: ignore[return]
         """Everything outside of `{% scenario ... %}` (and `{% if ... %}...{% endif %}`) should be treated as "data", e.g. plain text.
@@ -234,6 +278,7 @@ class ScenarioTag(StandaloneTag):
         in_scenario = False
         in_block_comment = False
         in_condition = False
+        in_variable = False
 
         variable_begin_pos = -1
         variable_end_pos = 0
@@ -248,7 +293,7 @@ class ScenarioTag(StandaloneTag):
                     current_line = source_lines[token.lineno - 1].lstrip()
                     in_block_comment = current_line.startswith('#')
                     block_begin_pos = self._source.index(token.value, block_begin_pos + 1)
-                elif stream.current.value in ['if', 'endif']:  # {% if <condition %}, {% endif %}
+                elif stream.current.value in ['if', 'endif']:  # {% if <condition> %}, {% endif %}
                     in_condition = True
 
             if in_scenario:
@@ -264,14 +309,18 @@ class ScenarioTag(StandaloneTag):
             elif in_condition:
                 filtered_token = token
             else:
-                if token.type == 'variable_end':
+                if token.type == 'variable_begin':
+                    # Find variable start in the source
+                    variable_begin_pos = self._source.index(token.value, variable_begin_pos + 1)
+                    in_variable = True
+                    continue
+                elif token.type == 'variable_end':
                     # Find variable end in the source
                     variable_end_pos = self._source.index(token.value, variable_begin_pos)
                     # Extract the variable definition substring and use as token value
                     token_value = self._source[variable_begin_pos : variable_end_pos + len(token.value)]
-                elif token.type == 'variable_begin':
-                    # Find variable start in the source
-                    variable_begin_pos = self._source.index(token.value, variable_begin_pos + 1)
+                    in_variable = False
+                elif in_variable:  # Variable templates is yielded when the whole block has been processed
                     continue
                 else:
                     token_value = token.value
@@ -284,5 +333,5 @@ class ScenarioTag(StandaloneTag):
                 if in_scenario:
                     in_scenario = False
 
-                if stream.current.value == 'endif':  # {% endif %}
+                if in_condition:
                     in_condition = False

@@ -39,8 +39,10 @@
       "name": "Python Debugger: Attach",
       "type": "debugpy",
       "request": "attach",
-      "port": 5678,
-      "host": "localhost",
+      "connect": {
+        "port": 5678,
+        "host": "localhost",
+      },
       "pathMappings": [
         {
           "localRoot": "${workspaceFolder}",

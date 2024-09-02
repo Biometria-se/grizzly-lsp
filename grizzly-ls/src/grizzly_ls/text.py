@@ -448,3 +448,25 @@ def normalize_text(text: str) -> str:
     text = re.sub(r'[^\w\s-]', '', text)
 
     return re.sub(r'[-\s]+', '-', text).strip('-_')
+
+
+def remove_if_statements(content: str) -> str:
+    buffer: List[str] = []
+    lines = content.splitlines()
+    remove_endif = False
+
+    for line in lines:
+        stripped_line = line.strip()
+
+        if stripped_line[:2] == '{%' and stripped_line[-2:] == '%}':
+            if '{$' in stripped_line and '$}' in stripped_line and 'if' in stripped_line:
+                remove_endif = True
+                continue
+
+            if remove_endif and 'endif' in stripped_line:
+                remove_endif = False
+                continue
+
+        buffer.append(line)
+
+    return '\n'.join(buffer)
