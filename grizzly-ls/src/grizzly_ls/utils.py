@@ -5,7 +5,7 @@ import re
 import sys
 import traceback
 
-from typing import Dict, List, Optional, Tuple, Union, Iterable, Set
+from typing import Dict, List, Optional, Tuple, Union, Iterable, Set, Any
 from pathlib import Path
 from contextlib import suppress
 from textwrap import dedent
@@ -70,6 +70,20 @@ def run_command(
     process.wait()
 
     return process.returncode, output
+
+
+class MissingScenario(Exception):
+    scenario: str
+    feature: str
+
+    def __init__(self, *args: Any, scenario: str, feature: str, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+
+        self.scenario = scenario
+        self.feature = feature
+
+    def __str__(self) -> str:
+        return f'Scenario "{self.scenario}" does not exist in included feature "{self.feature}"'
 
 
 class LogOutputChannelLogger:
@@ -139,7 +153,8 @@ class ScenarioTag(StandaloneTag):
 
         return super().preprocess(source, name, filename)
 
-    def _get_scenario_text(self, name: str, file: Path) -> str:
+    @classmethod
+    def get_scenario_text(cls, name: str, file: Path) -> str:
         content = file.read_text()
 
         content_skel = re.sub(r'\{%.*%\}', '', content)
@@ -162,7 +177,7 @@ class ScenarioTag(StandaloneTag):
                 break
 
         if target_scenario is None:
-            raise ValueError(f'scenario "{name}" was not found in {file.as_posix()}')
+            raise MissingScenario(scenario=name, feature=file.as_posix())
 
         # check if there are scenarios after our scenario in the source
         next_scenario: Optional[Scenario] = None
@@ -177,16 +192,22 @@ class ScenarioTag(StandaloneTag):
                 scenario_lines.pop()
 
         # remove any scenario text/comments
-        if scenario_lines[0].strip() == '"""':
-            try:
-                offset = scenario_lines[1:].index(scenario_lines[0]) + 1 + 1
-            except:
-                offset = 0
+        if len(scenario_lines) > 0:
+            offset = 0
 
-            scenario_lines = scenario_lines[offset:]
+            if scenario_lines[0].strip() == '"""':
+                try:
+                    offset = scenario_lines[1:].index(scenario_lines[0]) + 1 + 1
+                except:
+                    offset = 0
+            elif scenario_lines[0].strip().startswith('"""') and scenario_lines[0].strip().endswith('"""'):
+                offset = 1
 
-        # first line can have incorrect indentation
-        scenario_lines[0] = dedent(scenario_lines[0])
+            if offset > 0:
+                scenario_lines = scenario_lines[offset:]
+
+            # first line can have incorrect indentation
+            scenario_lines[0] = dedent(scenario_lines[0])
 
         return '\n'.join(scenario_lines)
 
@@ -197,7 +218,7 @@ class ScenarioTag(StandaloneTag):
         if not feature_file.exists():
             feature_file = (self.environment.feature_file.parent / feature).resolve()
 
-        scenario_content = self._get_scenario_text(scenario, feature_file)
+        scenario_content = self.get_scenario_text(scenario, feature_file)
 
         ignore_errors = getattr(self.environment, 'ignore_errors', False)
 

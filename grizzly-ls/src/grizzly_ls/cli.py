@@ -82,23 +82,19 @@ def cli(ls: GrizzlyLanguageServer, args: Arguments) -> int:
         ls.language = find_language(text_document.source)
         diagnostics = validate_gherkin(ls, text_document)
 
-        for uri, _diagnostics in diagnostics.items():
-            if len(_diagnostics) < 1:
-                continue
+        if len(diagnostics) < 1:
+            continue
 
-            file = Path(uri.replace('file://', ''))
-            filename = file.as_posix().replace(Path.cwd().as_posix(), '').lstrip('/\\')
-            max_length = max(max_length, len(filename))
+        file = Path(text_document.uri.replace('file://', ''))
+        filename = file.as_posix().replace(Path.cwd().as_posix(), '').lstrip('/\\')
+        max_length = max(max_length, len(filename))
 
-            if filename not in grouped_diagnostics:
-                grouped_diagnostics.update({filename: []})
-
-            grouped_diagnostics[filename].extend(_diagnostics)
+        grouped_diagnostics.update({filename: diagnostics})
 
     if len(grouped_diagnostics) > 0:
         rc = 1
 
-    for filename, _diagnostics in grouped_diagnostics.items():
-        print('\n'.join(diagnostic_to_text(filename, diagnostic, max_length) for diagnostic in _diagnostics))
+    for filename, diagnostics in grouped_diagnostics.items():
+        print('\n'.join(diagnostic_to_text(filename, diagnostic, max_length) for diagnostic in diagnostics))
 
     return rc

@@ -372,8 +372,7 @@ def install(ls: GrizzlyLanguageServer, *args: Any) -> None:
                 continue
 
             diagnostics = validate_gherkin(ls, text_document)
-            for uri, diagnostic in diagnostics.items():
-                ls.publish_diagnostics(uri, diagnostic)  # type: ignore
+            ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
     except:
         ls.logger.exception('failed to run diagnostics on all opened files', notify=True)
 
@@ -631,8 +630,7 @@ def text_document_did_open(ls: GrizzlyLanguageServer, params: lsp.DidOpenTextDoc
     if ls.client_settings.get('diagnostics_on_save_only', True):
         try:
             diagnostics = validate_gherkin(ls, text_document)
-            for uri, diagnostic in diagnostics.items():
-                ls.publish_diagnostics(uri, diagnostic)  # type: ignore
+            ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
         except:
             ls.logger.exception('failed to run diagnostics on opened file', notify=True)
 
@@ -657,8 +655,7 @@ def text_document_did_save(ls: GrizzlyLanguageServer, params: lsp.DidSaveTextDoc
     if ls.client_settings.get('diagnostics_on_save_only', True):
         try:
             diagnostics = validate_gherkin(ls, text_document)
-            for uri, diagnostic in diagnostics.items():
-                ls.publish_diagnostics(uri, diagnostic)  # type: ignore
+            ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
         except:
             ls.logger.exception('failed to run diagnostics on save', notify=True)
 
@@ -705,8 +702,7 @@ def text_document_diagnostic(
     if not ls.client_settings.get('diagnostics_on_save_only', True):
         try:
             text_document = ls.workspace.get_text_document(params.text_document.uri)
-            diagnostics = validate_gherkin(ls, text_document)
-            items = diagnostics.get(text_document.uri, [])
+            items = validate_gherkin(ls, text_document)
         except:
             ls.logger.exception('failed to run document diagnostics', notify=True)
 
@@ -729,8 +725,7 @@ def workspace_diagnostic(
         text_document = ls.workspace.get_text_document(first_text_document)
 
         if not ls.client_settings.get('diagnostics_on_save_only', True):
-            diagnostics = validate_gherkin(ls, text_document)
-            items = diagnostics.get(text_document.uri, [])
+            items = validate_gherkin(ls, text_document)
 
         report.items = [
             lsp.WorkspaceFullDocumentDiagnosticReport(
@@ -775,8 +770,7 @@ def command_rebuild_inventory(ls: GrizzlyLanguageServer, *args: Any) -> None:
                 continue
 
             diagnostics = validate_gherkin(ls, text_document)
-            for uri, diagnostic in diagnostics.items():
-                ls.publish_diagnostics(uri, diagnostic)  # type: ignore
+            ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
     except:
         ls.logger.exception('failed to rebuild inventory', notify=True)
 
@@ -791,8 +785,7 @@ def command_run_diagnostics(ls: GrizzlyLanguageServer, *args: Any) -> None:
         text_document = ls.workspace.get_text_document(uri)
 
         diagnostics = validate_gherkin(ls, text_document)
-        for uri, diagnostic in diagnostics.items():
-            ls.publish_diagnostics(uri, diagnostic)  # type: ignore
+        ls.publish_diagnostics(text_document.uri, diagnostics)  # type: ignore
     except Exception:
         ls.logger.exception(f'failed to run diagnostics on {uri}', notify=True)
 
