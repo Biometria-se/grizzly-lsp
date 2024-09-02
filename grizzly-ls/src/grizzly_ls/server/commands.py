@@ -12,7 +12,7 @@ from grizzly_ls.utils import ScenarioTag
 def render_gherkin(path: str, content: str) -> str:
     feature_file = Path(path)
     environment = Environment(autoescape=False, extensions=[ScenarioTag])
-    environment.extend(feature_file=feature_file)
+    environment.extend(feature_file=feature_file, ignore_errors=True)
     template = environment.from_string(content)
     content = template.render()
     buffer: List[str] = []
