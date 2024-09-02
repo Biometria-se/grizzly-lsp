@@ -6,5 +6,5 @@ Feature:
 
     # <!-- conditional steps -->
     {%- if {$ condition $} %}
-    Then log message "foobar"
+    Then log message "{{ foobar }}"
     {%- endif %}

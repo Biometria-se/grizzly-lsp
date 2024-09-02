@@ -45,6 +45,6 @@ def test_render_gherkin() -> None:
       | bar | foo |
 
     # &lt;!-- conditional steps --&gt;
-    Then log message "foobar"
+    Then log message "{{ foobar }}"
 """.rstrip()
     )
