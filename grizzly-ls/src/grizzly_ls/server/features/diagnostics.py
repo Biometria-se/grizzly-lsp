@@ -52,7 +52,7 @@ class GrizzlyDiagnostic(lsp.Diagnostic):
             and self.range.end.character == other.range.end.character
         )
 
-    def __hash__(self) -> int:
+    def __hash__(self) -> int:  # type: ignore[override]
         return hash((self.range.start.line, self.range.start.character, self.range.end.line, self.range.end.character, self.message, self.severity, self.source))
 
 

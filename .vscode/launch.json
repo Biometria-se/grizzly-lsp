@@ -8,7 +8,7 @@
       "args": [
         "--profile=extension-context",
         "--extensionDevelopmentPath=${workspaceRoot}/client/vscode",
-        "${workspaceFolder}/tests/grizzly-scenarios"
+        "${workspaceFolder}/tests/project"
       ],
       "sourceMaps": true,
       "outFiles": [

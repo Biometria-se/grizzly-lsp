@@ -262,7 +262,7 @@ class ScenarioTag(StandaloneTag):
         # check if we have nested statements (`{% .. %}`), and render again if that is the case
         if '{%' in scenario_content and '%}' in scenario_content:
             environment = self.environment.overlay()
-            environment.extend(feature_file=feature_file)
+            setattr(environment, 'feature_file', feature_file)
             template = environment.from_string(scenario_content)
             scenario_content = template.render()
         # // -->
