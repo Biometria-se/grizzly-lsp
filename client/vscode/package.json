@@ -31,7 +31,7 @@
   "qna": "false",
   "engines": {
     "node": ">=18.12.1",
-    "vscode": "^1.92.0"
+    "vscode": "^1.94.0"
   },
   "extensionDependencies": [
     "ms-python.python"
