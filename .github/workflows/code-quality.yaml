@@ -79,8 +79,8 @@ jobs:
         id: install
         run: |
           bash ./script/install.sh client/vscode
-          bash ./script/install.sh server +e
           npm install -g @vscode/vsce
+          bash ./script/install.sh server +e
 
       - name: test
         id: test
@@ -102,6 +102,7 @@ jobs:
 
       - name: test package
         id: test-package
+        if: always()
         working-directory: './client/vscode'
         run: |
           vsce package
