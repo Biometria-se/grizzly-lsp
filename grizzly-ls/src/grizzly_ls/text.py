@@ -9,6 +9,7 @@ import sys
 import unicodedata
 import tokenize
 
+from contextlib import suppress
 from typing import (
     List,
     Optional,
@@ -20,6 +21,7 @@ from typing import (
     Any,
     Callable,
     cast,
+    TYPE_CHECKING,
 )
 from dataclasses import dataclass, field
 from tokenize import TokenInfo
@@ -28,6 +30,10 @@ from lsprotocol.types import Position
 from pygls.workspace import TextDocument
 
 from grizzly_ls.constants import MARKER_LANGUAGE
+
+
+if TYPE_CHECKING:  # pragma: no cover
+    from grizzly_ls.server import GrizzlyLanguageServer
 
 
 if sys.version_info >= (3, 11):
@@ -212,9 +218,11 @@ class NormalizeHolder:
 
 
 class Normalizer:
+    ls: GrizzlyLanguageServer
     custom_types: Dict[str, NormalizeHolder]
 
-    def __init__(self, custom_types: Dict[str, NormalizeHolder]) -> None:
+    def __init__(self, ls: GrizzlyLanguageServer, custom_types: Dict[str, NormalizeHolder]) -> None:
+        self.ls = ls
         self.custom_types = custom_types
 
     def __call__(self, pattern: str) -> List[str]:
@@ -244,6 +252,13 @@ class Normalizer:
                     normalize.update({variable: holder})
                 elif len(variable_type) == 1:  # native types
                     normalize.update({variable: NormalizeHolder(permutations=Coordinate(), replacements=[''])})
+                else:
+                    with suppress(Exception):
+                        start, end = match.span()
+
+                        # if custom type is quoted (e.g. input variable), replace it with nothing
+                        if pattern[start - 1] == pattern[end] == '"':
+                            normalize.update({variable: NormalizeHolder(permutations=Coordinate(), replacements=[''])})
 
             # replace variables that does not create any variations
             normalize_no_variations = {key: value for key, value in normalize.items() if not value.permutations.x and not value.permutations.y}

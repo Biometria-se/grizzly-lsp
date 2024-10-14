@@ -175,28 +175,37 @@ def test_complete_step(lsp_fixture: LspFixture, caplog: LogCaptureFixture) -> No
         ]:
             assert expected_step in matched_steps
 
-        matched_steps = normalize_completion_item(
-            complete_step(
-                ls,
-                'Then',
-                lsp.Position(line=0, character=5),
-                'save',
-                base_keyword='Then',
-            ),
-            lsp.CompletionItemKind.Function,
+        matched_steps = sorted(
+            normalize_completion_item(
+                complete_step(
+                    ls,
+                    'Then',
+                    lsp.Position(line=0, character=5),
+                    'save',
+                    base_keyword='Then',
+                ),
+                lsp.CompletionItemKind.Function,
+            )
         )
-        for expected_step in [
-            'save response metadata "" in variable ""',
-            'save response payload "" in variable ""',
-            'save response payload "" that matches "" in variable ""',
-            'save response metadata "" that matches "" in variable ""',
-            'get "" with name "" and save response payload in ""',
-            'parse date "" and save in variable ""',
-            'parse "" as "undefined" and save value of "" in variable ""',
-            'parse "" as "plain" and save value of "" in variable ""',
-            'parse "" as "xml" and save value of "" in variable ""',
-            'parse "" as "json" and save value of "" in variable ""',
-        ]:
+
+        for m in matched_steps:
+            print(f'{m=}')
+
+        for expected_step in sorted(
+            [
+                'save response metadata "" in variable ""',
+                'save response payload "" in variable ""',
+                'save response payload "" that matches "" in variable ""',
+                'save response metadata "" that matches "" in variable ""',
+                'get from "" with name "" and save response payload in ""',
+                'parse date "" and save in variable ""',
+                'parse "" as "undefined" and save value of "" in variable ""',
+                'parse "" as "plain" and save value of "" in variable ""',
+                'parse "" as "xml" and save value of "" in variable ""',
+                'parse "" as "json" and save value of "" in variable ""',
+                'parse "" as "octet_stream_utf8" and save value of "" in variable ""',
+            ]
+        ):
             assert expected_step in matched_steps
 
         suggested_steps = complete_step(

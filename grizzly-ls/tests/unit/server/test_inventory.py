@@ -26,7 +26,8 @@ from tests.helpers import (
 )
 
 
-def test_create_normalizer(mocker: MockerFixture) -> None:
+def test_create_normalizer(lsp_fixture: LspFixture, mocker: MockerFixture) -> None:
+    ls = lsp_fixture.server
     namespace = 'grizzly_ls.server.inventory'
 
     mocker.patch(
@@ -34,7 +35,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
         {},  # pyright: ignore[reportUnknownArgumentType]
     )
 
-    normalizer = create_step_normalizer()
+    normalizer = create_step_normalizer(ls)
     assert normalizer.custom_types == {}
 
     mocker.patch(
@@ -46,7 +47,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
             'EnumDirect': DummyEnum.from_string,
         },
     )
-    normalizer = create_step_normalizer()
+    normalizer = create_step_normalizer(ls)
 
     assert list(sorted(normalizer.custom_types.keys())) == sorted(
         [
@@ -87,7 +88,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
     )
 
     with pytest.raises(ValueError) as ve:
-        create_step_normalizer()
+        create_step_normalizer(ls)
     assert str(ve.value) == 'could not extract pattern from "@parse.with_pattern(\'\')" for custom type WithPattern'
 
     mocker.patch(
@@ -97,7 +98,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
         },
     )
 
-    create_step_normalizer()
+    create_step_normalizer(ls)
 
     mocker.patch(
         f'{namespace}.ParseMatcher.custom_types',
@@ -107,7 +108,7 @@ def test_create_normalizer(mocker: MockerFixture) -> None:
     )
 
     with pytest.raises(ValueError) as ve:
-        create_step_normalizer()
+        create_step_normalizer(ls)
     assert str(ve.value) == 'could not find the type that from_string method for custom type EnumError returns'
 
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import warnings
 import inspect
 import re
@@ -30,9 +29,6 @@ if TYPE_CHECKING:
     from grizzly_ls.server import GrizzlyLanguageServer
 
 
-logger = logging.getLogger(__name__)
-
-
 def load_step_registry(step_paths: List[Path]) -> Dict[str, List[ParseMatcher]]:
     from behave import step_registry
 
@@ -43,7 +39,7 @@ def load_step_registry(step_paths: List[Path]) -> Dict[str, List[ParseMatcher]]:
     return step_registry.registry.steps.copy()
 
 
-def create_step_normalizer() -> Normalizer:
+def create_step_normalizer(ls: GrizzlyLanguageServer) -> Normalizer:
     custom_type_permutations: Dict[str, NormalizeHolder] = {}
 
     for custom_type, func in ParseMatcher.custom_types.items():
@@ -90,7 +86,7 @@ def create_step_normalizer() -> Normalizer:
                     raise ValueError(f'could not find the type that from_string method for custom type {custom_type} returns')
 
             enum_class = getattr(module, enum_name)
-            replacements = [value.name.lower() for value in enum_class]
+            replacements = [value.get_value() if callable(getattr(value, 'get_value', None)) else value.name.lower() for value in enum_class]
             vector = enum_class.get_vector()
 
             if vector is None:
@@ -108,7 +104,7 @@ def create_step_normalizer() -> Normalizer:
                 }
             )
 
-    return Normalizer(custom_type_permutations)
+    return Normalizer(ls, custom_type_permutations)
 
 
 def _match_path(path: Path, pattern: str) -> bool:
@@ -128,7 +124,7 @@ def _filter_source_directories(file_ignore_patterns: List[str], source_file_path
 
 
 def compile_inventory(ls: GrizzlyLanguageServer, *, standalone: bool = False) -> None:
-    logger.debug('creating step registry')
+    ls.logger.debug('creating step registry')
     project_name = ls.root_path.stem
 
     try:
@@ -137,7 +133,7 @@ def compile_inventory(ls: GrizzlyLanguageServer, *, standalone: bool = False) ->
 
         plain_paths = [path.as_posix() for path in paths]
 
-        logger.debug(f'loading steps from {plain_paths}')
+        ls.logger.debug(f'loading steps from {plain_paths}')
         # ignore paths that contains errors
         for path in paths:
             with suppress(Exception):
@@ -153,7 +149,7 @@ def compile_inventory(ls: GrizzlyLanguageServer, *, standalone: bool = False) ->
         raise e
 
     try:
-        ls.normalizer = create_step_normalizer()
+        ls.normalizer = create_step_normalizer(ls)
     except ValueError as e:
         if not standalone:
             ls.logger.exception('unable to normalize step expression', notify=True)
