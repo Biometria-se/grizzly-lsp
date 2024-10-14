@@ -192,6 +192,10 @@ class TestGrizzlyLanguageServer:
                 'Then save metadata as "multipart_form_data" in "" for "" users',
                 'Then save payload as "multipart_form_data" in "" for "" user',
                 'Then save payload as "multipart_form_data" in "" for "" users',
+                'Then save metadata as "octet_stream_utf8" in "" for "" user',
+                'Then save metadata as "octet_stream_utf8" in "" for "" users',
+                'Then save payload as "octet_stream_utf8" in "" for "" user',
+                'Then save payload as "octet_stream_utf8" in "" for "" users',
             ]
         )
 
@@ -234,6 +238,21 @@ class TestGrizzlyLanguageServer:
                 [
                     'unhandled type {test:Unknown} for metadata',
                     'unhandled type {test:Unknown} for payload',
+                ]
+            )
+
+        assert caplog.messages == []
+        show_message_mock.assert_not_called()
+
+        with caplog.at_level(logging.ERROR):
+            assert sorted(
+                ls._normalize_step_expression(
+                    'unhandled type "{test:Unknown}" for {target:ResponseTarget}',
+                )
+            ) == sorted(
+                [
+                    'unhandled type "" for metadata',
+                    'unhandled type "" for payload',
                 ]
             )
 
