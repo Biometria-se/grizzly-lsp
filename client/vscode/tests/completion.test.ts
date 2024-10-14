@@ -141,7 +141,7 @@ describe('Should do completion on steps', () => {
             'save optional response payload "" in variable "" with default value ""',
             'save optional response payload "" that matches "" in variable "" with default value ""',
             'save optional response metadata "" that matches "" in variable "" with default value ""',
-            'get "" with name "" and save response payload in ""',
+            'get from "" with name "" and save response payload in ""',
             'get "" from keystore and save in variable ""',
             'get "" from keystore and save in variable "", with default value ""',
             'parse date "" and save in variable ""',
