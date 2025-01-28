@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import sys
+import traceback
 from typing import TYPE_CHECKING, List, Optional, Dict
 from argparse import Namespace as Arguments
 from pathlib import Path
 
 from pygls.workspace import TextDocument
 from lsprotocol.types import Diagnostic, DiagnosticSeverity
-from colorama import init, Fore
+from colorama import init as colorama_init, Fore
 
 from grizzly_ls.server.features.diagnostics import validate_gherkin
 from grizzly_ls.server.inventory import compile_inventory
 from grizzly_ls.text import find_language
+from grizzly_ls.server.commands import render_gherkin
 
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -47,11 +50,11 @@ def diagnostic_to_text(filename: str, diagnostic: Diagnostic, max_length: int) -
     return f'{message_file:<{max_length}} {message_severity:<17} {message}'
 
 
-def cli(ls: GrizzlyLanguageServer, args: Arguments) -> int:
+def lint(ls: GrizzlyLanguageServer, args: Arguments) -> int:
     files: List[Path]
 
     # init colorama for ansi colors
-    init()
+    colorama_init()
 
     # init language server
     ls.root_path = Path.cwd()
@@ -98,3 +101,17 @@ def cli(ls: GrizzlyLanguageServer, args: Arguments) -> int:
         print('\n'.join(diagnostic_to_text(filename, diagnostic, max_length) for diagnostic in diagnostics))
 
     return rc
+
+
+def render(args: Arguments) -> int:
+    feature_file = Path(args.file[0])
+    if not feature_file.exists():
+        print(f'{feature_file.as_posix()} does not exist', file=sys.stderr)
+        return 1
+    try:
+        print(render_gherkin(feature_file.as_posix(), feature_file.read_text(), raw=True))
+    except:
+        print(traceback.format_exc(), file=sys.stderr)
+        return 1
+    else:
+        return 0

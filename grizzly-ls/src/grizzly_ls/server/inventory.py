@@ -5,7 +5,7 @@ import inspect
 import re
 
 from os import sep
-from typing import Iterable, List, Dict, Optional, TYPE_CHECKING, Set
+from typing import Any, Iterable, List, Dict, Optional, TYPE_CHECKING, Set, cast
 from types import ModuleType
 from importlib import import_module
 from pathlib import Path, PurePath
@@ -86,7 +86,18 @@ def create_step_normalizer(ls: GrizzlyLanguageServer) -> Normalizer:
                     raise ValueError(f'could not find the type that from_string method for custom type {custom_type} returns')
 
             enum_class = getattr(module, enum_name)
-            replacements = [value.get_value() if callable(getattr(value, 'get_value', None)) else value.name.lower() for value in enum_class]
+
+            def enum_value_getter(v: Any) -> str:
+                try:
+                    if not callable(getattr(v, 'get_value', None)):
+                        raise NotImplementedError
+                    enum_value = v.get_value()
+                except NotImplementedError:
+                    enum_value = v.name.lower()
+
+                return cast(str, enum_value)
+
+            replacements = [enum_value_getter(value) for value in enum_class]
             vector = enum_class.get_vector()
 
             if vector is None:

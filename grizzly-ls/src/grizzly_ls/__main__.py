@@ -85,6 +85,9 @@ def parse_arguments() -> argparse.Namespace:
     lint_parser = subparsers.add_parser('lint', help='command line lint files')
     lint_parser.add_argument('files', nargs='+', type=str, help='files to lint')
 
+    render_parser = subparsers.add_parser('render', help='render a feature file')
+    render_parser.add_argument('file', type=str, nargs=1, help='feature file')
+
     args = parser.parse_args()
 
     if args.version:
@@ -157,9 +160,13 @@ def main() -> int:
     from grizzly_ls.server import server
 
     if args.command == 'lint':
-        from grizzly_ls.cli import cli
+        from grizzly_ls.cli import lint
 
-        return cli(server, args)
+        return lint(server, args)
+    elif args.command == 'render':
+        from grizzly_ls.cli import render
+
+        return render(args)
     else:
         setup_logging(args)
         err_msg = setup_debugging(args)
