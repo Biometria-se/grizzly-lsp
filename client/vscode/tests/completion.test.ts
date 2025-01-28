@@ -219,6 +219,12 @@ describe('Should do completion on steps', () => {
         const position = new vscode.Position(3, 13);
         const actual = await testCompletion(content, position);
         const expected = [
+            'a task fails restart scenario',
+            'a task fails retry task',
+            'a task fails stop user',
+            'a task fails with "" restart scenario',
+            'a task fails with "" retry task',
+            'a task fails with "" stop user',
             'condition "" with name "" is true, execute these tasks',
             'fail ratio is greater than ""% fail scenario',
             'average response time is greater than "" milliseconds fail scenario',
@@ -229,12 +235,12 @@ describe('Should do completion on steps', () => {
             'response metadata "" is "" fail request',
         ];
 
-        actual.items.forEach((item) => {
+        actual.items.forEach(async (item) => {
             expect(item.kind).to.be.equal(vscode.CompletionItemKind.Function);
             expect(expected).to.contain(item.label);
         });
 
-        await acceptAndAssertSuggestion(position, '        When average response time is greater than "" milliseconds fail scenario');
+        await acceptAndAssertSuggestion(position, '        When a task fails restart scenario');
     });
 
     it('Complete steps, keyword `When` step `<null>`, no space', async () => {
@@ -245,6 +251,12 @@ describe('Should do completion on steps', () => {
         const position = new vscode.Position(3, 12);
         const actual = await testCompletion(content, position);
         const expected = [
+            'a task fails restart scenario',
+            'a task fails retry task',
+            'a task fails stop user',
+            'a task fails with "" restart scenario',
+            'a task fails with "" retry task',
+            'a task fails with "" stop user',
             'condition "" with name "" is true, execute these tasks',
             'fail ratio is greater than ""% fail scenario',
             'average response time is greater than "" milliseconds fail scenario',
@@ -260,7 +272,7 @@ describe('Should do completion on steps', () => {
             expect(expected).to.contain(item.label);
         });
 
-        await acceptAndAssertSuggestion(position, '        When average response time is greater than "" milliseconds fail scenario');
+        await acceptAndAssertSuggestion(position, '        When a task fails restart scenario');
     });
 
     it('Complete steps, keyword `When` step `response `', async () => {

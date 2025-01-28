@@ -71,6 +71,9 @@ Args:
         expect(contents.value).to.be
             .equal(`Restart scenario, from first task, if a request fails.
 
+!!! attention
+This step is deprecated and will be removed in the future, use step_setup_failed_task_default instead.
+
 Default behavior is to continue the scenario if a request fails.
 
 Example:
