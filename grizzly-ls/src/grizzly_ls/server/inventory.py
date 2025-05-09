@@ -9,7 +9,6 @@ from typing import Any, Iterable, List, Dict, Optional, TYPE_CHECKING, Set, cast
 from types import ModuleType
 from importlib import import_module
 from pathlib import Path, PurePath
-from contextlib import suppress
 
 from behave.matchers import ParseMatcher
 from behave.runner_util import load_step_modules as behave_load_step_modules
@@ -147,8 +146,10 @@ def compile_inventory(ls: GrizzlyLanguageServer, *, standalone: bool = False) ->
         ls.logger.debug(f'loading steps from {plain_paths}')
         # ignore paths that contains errors
         for path in paths:
-            with suppress(Exception):
+            try:
                 ls.behave_steps.update(load_step_registry([path]))
+            except Exception as e:
+                ls.logger.exception(f'failed to load steps from {path}:\n{str(e)}')
     except Exception as e:
         if not standalone:
             ls.logger.exception(

@@ -58,12 +58,13 @@ export async function acceptAndAssertSuggestion(position: vscode.Position, expec
     // move cursor
     editor.selection = new vscode.Selection(position, position);
 
-    const time: number = 75;
+    const time: number = 100;
 
     vscode.commands.executeCommand('editor.action.triggerSuggest');
     await sleep(time);
     vscode.commands.executeCommand('acceptSelectedSuggestion');
     await sleep(time);
+    // wrong texteditor active sometimes?!
     const buffer = vscode.window.activeTextEditor.document.getText();
     const actual = buffer.split(/\r?\n/)[position.line];
 

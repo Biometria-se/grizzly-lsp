@@ -335,7 +335,6 @@ def validate_gherkin(ls: GrizzlyLanguageServer, text_document: TextDocument) -> 
                         language=None,
                         filename=feature_file.as_posix(),
                     )
-                    ls.logger.debug(f'included feature: {feature_file.as_uri()}#{arg_scenario.value}')
 
                     # it was possible to parse the feature file, but it didn't contain any scenarios
                     if feature is None:

@@ -53,7 +53,7 @@ grizzly-ls = 'grizzly_ls.__main__:main'
 grizzly_ls = ['py.typed']
 
 [project.urls]
-Documentation = 'https://biometria-se.github.io/grizzly/'
+Documentation = 'https://biometria-se.github.io/grizzly/editor-support/'
 Code = 'https://github.com/biometria-se/grizzly-lsp/'
 Tracker = 'https://github.com/Biometria-se/grizzly/issues'
 
@@ -91,7 +91,6 @@ root = ".."
 [tool.pytest.ini_options]
 timeout = 300
 addopts = [
-    "--rootdir=grizzly-ls/",
     "-c", "pyproject.toml",
     "--cov-reset",
     "--cov=src/grizzly_ls",
