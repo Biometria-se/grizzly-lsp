@@ -220,11 +220,15 @@ describe('Should do completion on steps', () => {
         const actual = await testCompletion(content, position);
         const expected = [
             'a task fails restart scenario',
+            'a task fails restart iteration',
             'a task fails retry task',
             'a task fails stop user',
+            'a task fails continue',
             'a task fails with "" restart scenario',
+            'a task fails with "" restart iteration',
             'a task fails with "" retry task',
             'a task fails with "" stop user',
+            'a task fails with "" continue',
             'condition "" with name "" is true, execute these tasks',
             'fail ratio is greater than ""% fail scenario',
             'average response time is greater than "" milliseconds fail scenario',
@@ -240,7 +244,7 @@ describe('Should do completion on steps', () => {
             expect(expected).to.contain(item.label);
         });
 
-        await acceptAndAssertSuggestion(position, '        When a task fails restart scenario');
+        await acceptAndAssertSuggestion(position, '        When a task fails continue');
     });
 
     it('Complete steps, keyword `When` step `<null>`, no space', async () => {
@@ -252,11 +256,15 @@ describe('Should do completion on steps', () => {
         const actual = await testCompletion(content, position);
         const expected = [
             'a task fails restart scenario',
+            'a task fails restart iteration',
             'a task fails retry task',
             'a task fails stop user',
+            'a task fails continue',
             'a task fails with "" restart scenario',
+            'a task fails with "" restart iteration',
             'a task fails with "" retry task',
             'a task fails with "" stop user',
+            'a task fails with "" continue',
             'condition "" with name "" is true, execute these tasks',
             'fail ratio is greater than ""% fail scenario',
             'average response time is greater than "" milliseconds fail scenario',
@@ -272,7 +280,7 @@ describe('Should do completion on steps', () => {
             expect(expected).to.contain(item.label);
         });
 
-        await acceptAndAssertSuggestion(position, '        When a task fails restart scenario');
+        await acceptAndAssertSuggestion(position, '        When a task fails continue');
     });
 
     it('Complete steps, keyword `When` step `response `', async () => {
