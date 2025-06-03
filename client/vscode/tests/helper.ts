@@ -33,6 +33,17 @@ export async function activate(docUri: vscode.Uri, content: string) {
         while (!ext.exports.isActivated()) {
             await sleep(1000);
         }
+
+        // show text document again after extensions has been activated, the output channel
+        // can be come the active editor after the extension has started.
+        if (editor.document.uri != vscode.window.activeTextEditor.document.uri) {
+            editor = await vscode.window.showTextDocument(doc);
+        }
+
+        while (editor.document.uri != vscode.window.activeTextEditor.document.uri) {
+            console.error(`${editor.document.uri} not open yet, active editor is ${vscode.window.activeTextEditor.document.uri}`);
+            await sleep(1000);
+        }
     } catch (e) {
         console.error(e);
     }
