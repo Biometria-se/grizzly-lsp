@@ -9,7 +9,7 @@ import gevent.monkey  # type: ignore
 # monkey patch functions to short-circuit them (causes problems in this context)
 gevent.monkey.patch_all = lambda: None
 
-from _pytest.logging import LogCaptureFixture
+from _pytest.logging import LogCaptureFixture  # type: ignore
 from pytest_mock import MockerFixture
 
 from lsprotocol import types as lsp

@@ -25,8 +25,8 @@ from venv import create as venv_create
 from tempfile import gettempdir
 from urllib.parse import urlparse, unquote
 from urllib.request import url2pathname
-from pip._internal.configuration import Configuration as PipConfiguration
-from pip._internal.exceptions import ConfigurationError as PipConfigurationError
+from pip._internal.configuration import Configuration as PipConfiguration  # type: ignore
+from pip._internal.exceptions import ConfigurationError as PipConfigurationError  # type: ignore
 from time import sleep
 from collections import deque
 from logging import ERROR
@@ -721,7 +721,11 @@ def workspace_diagnostic(
 
     try:
         items: List[lsp.Diagnostic] = []
-        first_text_document = list(ls.workspace.text_documents.keys())[0]
+        try:
+            first_text_document = list(ls.workspace.text_documents.keys())[0]
+        except:
+            raise FileNotFoundError
+
         text_document = ls.workspace.get_text_document(first_text_document)
 
         if not ls.client_settings.get('diagnostics_on_save_only', True):
@@ -734,6 +738,8 @@ def workspace_diagnostic(
                 kind=lsp.DocumentDiagnosticReportKind.Full,
             )
         ]
+    except FileNotFoundError:
+        pass
     except:
         ls.logger.exception('failed to run workspace diagnostics', notify=True)
 

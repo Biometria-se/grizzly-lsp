@@ -4,7 +4,7 @@ from itertools import product
 
 from pygls.workspace import TextDocument
 from lsprotocol import types as lsp
-from _pytest.logging import LogCaptureFixture
+from _pytest.logging import LogCaptureFixture  # type: ignore
 
 from grizzly_ls.server.features.diagnostics import validate_gherkin
 from grizzly_ls.model import Step
